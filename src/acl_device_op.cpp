@@ -461,6 +461,8 @@ static unsigned
 l_get_devices_affected_for_op(acl_device_op_t *op, unsigned int physical_ids[],
                               acl_device_op_conflict_type_t conflicts[]) {
   unsigned int num_devices_affected = 0;
+  // The precondition of the function is device op must be active
+  assert(op);
   cl_event event = op->info.event;
   acl_assert_locked();
 
