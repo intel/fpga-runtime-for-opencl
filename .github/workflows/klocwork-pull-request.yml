@@ -1,0 +1,84 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: Klocwork pull request scan
+on:
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/klocwork-pull-request.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    container:
+      image: amr-registry.caas.intel.com/fpga-runtime-for-opencl/ubuntu-20.04-klocwork-desktop-tools:main
+
+    steps:
+      - name: change ownership of workspace to current user
+        run: sudo chown -R klocwork:klocwork .
+
+      - name: create local Klocwork project
+        run: kwcheck create --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+
+      - name: checkout base ref
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.base_ref }}
+
+      - name: create build files of base ref
+        run: |
+          mkdir build
+          cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: create build specification of base ref
+        run: kwinject --output kwinject.out ninja -C build -v -k0
+
+      - name: fully analyze build of base ref
+        run: kwcheck run --build-spec kwinject.out -F scriptable --report issues.txt --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+
+      - name: ignore issues of base ref
+        run: |
+          count=$(wc -l < issues.txt)
+          test "$count" = "0" || kwcheck set-status 1-"$count" --status ignore --project-dir /home/klocwork/.kwlp
+
+      - name: checkout head ref
+        uses: actions/checkout@v2
+
+      - name: create build files of head ref
+        run: |
+          mkdir build
+          cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: create build specification of head ref
+        run: kwinject --output kwinject.out ninja -C build -v -k0
+
+      - name: incrementally analyze build of head ref
+        run: kwcheck run --build-spec kwinject.out -F scriptable --report issues.txt --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+
+      - name: ensure no new issues have been found in head ref
+        run: |
+          kwcheck list -F detailed --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+          size=$(stat --printf=%s issues.txt)
+          test "$size" = "0"
+
+      - name: revert ownership of workspace to root
+        run: sudo chown -R root:root .
+        if: always()
