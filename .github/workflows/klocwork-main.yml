@@ -1,0 +1,75 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: Klocwork main branch scan
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/klocwork-main.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    container:
+      image: amr-registry.caas.intel.com/fpga-runtime-for-opencl/ubuntu-20.04-klocwork-build-tools:main
+
+    # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
+    environment: klocwork
+
+    env:
+      KLOCWORK_URL: ${{ secrets.KLOCWORK_URL }}
+      KLOCWORK_PROJECT: ${{ secrets.KLOCWORK_PROJECT }}
+
+    steps:
+      - name: change ownership of workspace to current user
+        run: sudo chown -R klocwork:klocwork .
+
+      - name: checkout code
+        uses: actions/checkout@v2
+
+      - name: configure Klocwork token
+        run: |
+          mkdir -p /home/klocwork/.klocwork
+          echo "$KLOCWORK_TOKEN" > /home/klocwork/.klocwork/ltoken
+        env:
+          KLOCWORK_TOKEN: ${{ secrets.KLOCWORK_TOKEN }}
+
+      - name: create build files
+        run: |
+          mkdir build
+          cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+
+      - name: create build specification
+        run: kwinject --output kwinject.out ninja -C build -v -j1 -k0
+
+      - name: analyze build
+        run: |
+          mkdir kwtables
+          kwbuildproject kwinject.out --url "$KLOCWORK_URL/$KLOCWORK_PROJECT" --tables-directory kwtables
+
+      - name: publish issues to Klocwork server
+        run: kwadmin --url "$KLOCWORK_URL" load "$KLOCWORK_PROJECT" kwtables
+
+      - name: revert ownership of workspace to root
+        run: sudo chown -R root:root .
+        if: always()
