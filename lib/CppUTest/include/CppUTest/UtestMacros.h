@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,6 +29,8 @@
 #ifndef D_UTestMacros_h
 #define D_UTestMacros_h
 
+#include <cassert>
+
 /*! \brief Define a group of tests
  *
  * All tests in a TEST_GROUP share the same setup
@@ -47,32 +50,61 @@
 #define TEST_GROUP(testGroup) \
   TEST_GROUP_BASE(testGroup, Utest)
 
+#define MT_TEST_GROUP(testGroup) \
+  TEST_GROUP_BASE(testGroup, MtUtest)
+
+#define TEST_GROUP_STATIC(testGroup, type, name) \
+  type CppUTestGroup##testGroup::name
+
 #define TEST_SETUP() \
   virtual void setup()
 
 #define TEST_TEARDOWN() \
   virtual void teardown()
 
-#define TEST(testGroup, testName) \
-  class testGroup##_##testName##_Test : public CppUTestGroup##testGroup \
-{ public: testGroup##_##testName##_Test () : CppUTestGroup##testGroup () {} \
-       void testBody(); } \
-    testGroup##_##testName##_Instance; \
+#define TEST_WITH_TYPE(testGroup, testName, testType) \
+  class testGroup##_##testName##_Test : public CppUTestGroup##testGroup { \
+    public: testGroup##_##testName##_Test () : CppUTestGroup##testGroup () {} \
+    virtual UtestType getType() const { \
+        if (testType == TEST_TYPE_MT) { \
+            assert(CppUTestGroup##testGroup::getType() == TEST_TYPE_MT); \
+        } \
+        return testType; \
+    } \
+    virtual void runInThreadOnCopy() { \
+        testGroup##_##testName##_Test* localCopy = new testGroup##_##testName##_Test(*this); \
+        localCopy->runInThread(); \
+        delete localCopy; \
+    } \
+    void testBody(); \
+  } testGroup##_##testName##_Instance; \
   TestInstaller testGroup##_##testName##_Installer(&testGroup##_##testName##_Instance, #testGroup, #testName, __FILE__,__LINE__); \
 	void testGroup##_##testName##_Test::testBody()
 
-#define IGNORE_TEST(testGroup, testName)\
+#define TEST(testGroup, testName)    TEST_WITH_TYPE(testGroup, testName, TEST_TYPE_ST)
+#define MT_TEST(testGroup, testName) TEST_WITH_TYPE(testGroup, testName, TEST_TYPE_MT)
+
+#define IGNORE_TEST_WITH_TYPE(testGroup, testName, testType)\
   class testGroup##testName##Test : public CppUTestGroup##testGroup \
 { public: testGroup##testName##Test () : CppUTestGroup##testGroup () {} \
     virtual void run (TestResult& result) { \
     	result.countIgnored(); } \
     virtual const char* getProgressIndicator() const {return "!";} \
+    virtual UtestType getType() const { \
+        if (testType == TEST_TYPE_MT) { \
+            assert(CppUTestGroup##testGroup::getType() == TEST_TYPE_MT); \
+        } \
+        return testType; \
+    } \
   protected:  virtual SimpleString getMacroName() const \
-      { return "IGNORE_TEST"; } \
+      { return (testType == TEST_TYPE_MT) ? "IGNORE_MT_TEST" : "IGNORE_TEST"; } \
   public: void testBodyThatNeverRuns (); } \
     testGroup##testName##Instance; \
   TestInstaller testGroup##testName##Installer(&testGroup##testName##Instance, #testGroup, #testName, __FILE__,__LINE__); \
 	void testGroup##testName##Test::testBodyThatNeverRuns ()
+
+#define IGNORE_TEST(testGroup, testName)    IGNORE_TEST_WITH_TYPE(testGroup, testName, TEST_TYPE_ST)
+#define IGNORE_MT_TEST(testGroup, testName) IGNORE_TEST_WITH_TYPE(testGroup, testName, TEST_TYPE_MT)
 
 #define IMPORT_TEST_GROUP(testGroup) \
   extern int externTestGroup##testGroup;\
@@ -161,5 +193,8 @@
 
 #define UT_PRINT(text) \
    UT_PRINT_LOCATION(text, __FILE__, __LINE__)
+
+#define UT_PRINTF(...) \
+   UT_PRINT(StringFromFormat(__VA_ARGS__))
 
 #endif /*D_UTestMacros_h*/

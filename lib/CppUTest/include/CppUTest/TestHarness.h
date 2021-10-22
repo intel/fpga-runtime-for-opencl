@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,4 +80,5 @@
 #include "Failure.h"
 #include "TestPlugin.h"
 #include "MemoryLeakWarningPlugin.h"
+#include "Synchronization.h"
 #endif

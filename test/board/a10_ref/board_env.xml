@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<!--
+Copyright (C) 2014-2021 Intel Corporation
+SPDX-License-Identifier: BSD-3-Clause
+-->
+
+<board_env version="21.1" name="a10_ref">
+  <hardware dir="hardware" default="a10_ref_small"></hardware>
+  <platform name="linux64">
+    <mmdlib>%b/linux64/lib/libaltera_a10_ref_mmd.so</mmdlib>
+    <linkflags>-L%b/linux64/lib</linkflags>
+    <linklibs>-laltera_a10_ref_mmd</linklibs>
+    <utilbindir>%b/linux64/libexec</utilbindir>
+  </platform>
+
+  <platform name="windows64">
+    <mmdlib>%b/windows64/bin/altera_a10_ref_mmd.dll</mmdlib>
+    <linkflags>/libpath:%b/windows64/lib</linkflags>
+    <linklibs>altera_a10_ref_mmd.lib</linklibs>
+    <utilbindir>%b/windows64/libexec</utilbindir>
+  </platform>
+</board_env>

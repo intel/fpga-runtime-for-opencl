@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -88,6 +89,7 @@ void CommandLineTestRunner::initializeTestRun()
 	TestRegistry::getCurrentRegistry()->groupFilter(arguments->getGroupFilter());
 	TestRegistry::getCurrentRegistry()->nameFilter(arguments->getNameFilter());
 	if (arguments->isVerbose()) output_->verbose();
+	MtUtest::initialize(arguments->getNumThreads());
 }
 
 int CommandLineTestRunner::runAllTests()

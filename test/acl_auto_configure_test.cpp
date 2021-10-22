@@ -1,0 +1,1204 @@
+// Copyright (C) 2011-2021 Intel Corporation
+// SPDX-License-Identifier: BSD-3-Clause
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4100) // unreferenced formal parameter
+#endif
+#include <CppUTest/TestHarness.h>
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
+#include <iostream>
+#include <stdlib.h>
+#include <string>
+
+#include <acl_auto.h>
+#include <acl_auto_configure.h>
+#include <acl_auto_configure_version.h>
+#include <acl_thread.h>
+#include <acl_version.h>
+
+#include "acl_test.h"
+
+TEST_GROUP(auto_configure) {
+public:
+  void setup() {}
+  void teardown() { acl_test_run_standard_teardown_checks(); }
+
+protected:
+  acl_device_def_t m_device_def;
+};
+
+TEST(auto_configure, simple) {
+
+#define VERSIONIDSTRINGIFY(x) #x
+#define VERSIONIDTOSTR(x) VERSIONIDSTRINGIFY(x)
+#define DEVICE_FIELDS " 23"
+#define DEVICE_FIELDS_OLD " 18"
+#define BOARDNAME "de4_gen2x4_swdimm"
+#define BOARDNAME2 "pcie385_a7"
+#define RANDOM_HASH " sample40byterandomhash000000000000000000"
+#define IS_BIG_ENDIAN " 1"
+#define IS_NOT_BIG_ENDIAN " 0"
+#define MEM_BACKWARDS_COMP " 1 6 DDR 2 1 2 0 2048"
+#define MEM " 1 10 DDR 2 1 2 0 2048 0 - 0 0"
+#define HOSTPIPE " 1 5 pipe_name 1 0 32 32768"
+#define KERNEL_ARG_INFO_NONE " 0"
+#define ARG_INT " 6 0 0 4 1 0 0"
+#define ARG_LONG " 6 0 0 8 1 0 0"
+#define ARG_LOCAL " 8 1 1 4 1024 0 5 16768 0"
+#define ARG_GLOBAL " 6 2 1 4 1024 0 0"
+#define ARG_CONST " 6 3 1 4 1024 0 0"
+#define ARG_PROF ARG_GLOBAL
+#define ARGS_LOCAL_GLOBAL_INT " 3" ARG_LOCAL ARG_GLOBAL ARG_INT
+  // the last four args are for printf(2) and profiling(2)
+#define ARGS_LOCAL_GLOBAL_LONG_PROF                                            \
+  " 7" ARG_LOCAL ARG_GLOBAL ARG_LONG ARG_GLOBAL ARG_INT ARG_PROF ARG_PROF
+
+#define KERNEL_FIELDS " 72"
+#define KERNEL_CRA " 64 128" // Address(offset) and number of bytes
+#define KERNEL_FAST_LAUNCH_DEPTH " 0"
+#define KERNEL_PERF_MON " 192 256" // Address(offset) and number of bytes
+#define KERNEL_WORKGROUP_INVARIANT " 1"
+#define KERNEL_WORKITEM_INVARIANT " 1"
+#define KERNEL_WORKGROUP_VARIANT " 0"
+#define KERNEL_WORKITEM_VARIANT " 0"
+#define KERNEL_NUM_VECTOR_LANES1 " 1"
+#define KERNEL_NUM_VECTOR_LANES2 " 2"
+
+#define KERNEL_PRINTF_FORMAT1 " 0 d"
+#define KERNEL_PRINTF_FORMAT2 " 1 d"
+#define KERNEL_PRINTF_FORMATSTRINGS                                            \
+  " 2 2" KERNEL_PRINTF_FORMAT1 KERNEL_PRINTF_FORMAT2
+#define KERNEL_PROFILE_SCANCHAIN_LENGTH " 5"
+
+// statically determined demand for local memory
+#define LD_1024 " 2 2 5 1024 6 2048"
+#define LD_0 " 0 0"
+
+// kernel attribute reqd_work_group_size(x,y,z). 0,0,0 means not specified.
+#define KERNEL_REQD_WORK_GROUP_SIZE_NONE " 0 0 0"
+#define KERNEL_REQD_WORK_GROUP_SIZE_235 " 2 3 5"
+
+// kernel attribute max_work_group_size(x). 0 means not specified.
+#define KERNEL_MAX_WORK_GROUP_SIZE_NONE " 1 0"
+#define KERNEL_MAX_WORK_GROUP_SIZE_1024 " 3 32 8 4"
+
+// kernel attribute max_global_work_dim(n). 3 means not specified (or 3).
+#define KERNEL_MAX_GLOBAL_WORK_DIM_NONE " 3"
+#define KERNEL_MAX_GLOBAL_WORK_DIM_ZERO " 0"
+#define KERNEL_USES_GLOBAL_WORK_OFFSET_ENABLED " 1"
+#define KERNEL_USES_GLOBAL_WORK_OFFSET_DISABLED " 0"
+
+// sycl compile
+#define IS_SYCL_COMPILE " 1"
+#define IS_NOT_SYCL_COMPILE " 0"
+
+  int parsed;
+  std::string err_str;
+  ACL_LOCKED(
+      parsed = acl_load_device_def_from_str(
+          std::string(
+              VERSIONIDTOSTR(ACL_AUTO_CONFIGURE_VERSIONID)
+                  DEVICE_FIELDS RANDOM_HASH
+              " " BOARDNAME IS_NOT_BIG_ENDIAN MEM HOSTPIPE KERNEL_ARG_INFO_NONE
+              " 1 82 foo" KERNEL_CRA KERNEL_FAST_LAUNCH_DEPTH KERNEL_PERF_MON
+                  KERNEL_WORKGROUP_VARIANT KERNEL_WORKITEM_VARIANT
+                      KERNEL_NUM_VECTOR_LANES1 KERNEL_PROFILE_SCANCHAIN_LENGTH
+                          ARGS_LOCAL_GLOBAL_LONG_PROF KERNEL_PRINTF_FORMATSTRINGS
+                              LD_1024 KERNEL_REQD_WORK_GROUP_SIZE_NONE
+                                  KERNEL_MAX_WORK_GROUP_SIZE_NONE
+                                      KERNEL_MAX_GLOBAL_WORK_DIM_NONE
+                                          KERNEL_USES_GLOBAL_WORK_OFFSET_ENABLED
+                                              IS_SYCL_COMPILE),
+          m_device_def.autodiscovery_def, err_str));
+  CHECK_EQUAL(1, parsed);
+
+  CHECK_EQUAL(1, m_device_def.autodiscovery_def.num_global_mem_systems);
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.global_mem_defs[0].range.begin);
+  CHECK_EQUAL((void *)2048,
+              m_device_def.autodiscovery_def.global_mem_defs[0].range.next);
+  CHECK_EQUAL(
+      (acl_system_global_mem_allocation_type_t)0,
+      m_device_def.autodiscovery_def.global_mem_defs[0].allocation_type);
+  CHECK("" ==
+        m_device_def.autodiscovery_def.global_mem_defs[0].primary_interface);
+  CHECK_EQUAL(
+      0,
+      m_device_def.autodiscovery_def.global_mem_defs[0].can_access_list.size());
+
+  CHECK(BOARDNAME == m_device_def.autodiscovery_def.name);
+
+  CHECK_EQUAL(0, (int)m_device_def.autodiscovery_def.is_big_endian);
+
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel.size());
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.hal_info.size());
+
+  // Check HAL's view
+  CHECK("foo" == m_device_def.autodiscovery_def.hal_info[0].name);
+  CHECK_EQUAL(64, (int)m_device_def.autodiscovery_def.hal_info[0].csr.address);
+  CHECK_EQUAL(128,
+              (int)m_device_def.autodiscovery_def.hal_info[0].csr.num_bytes);
+  CHECK_EQUAL(192,
+              (int)m_device_def.autodiscovery_def.hal_info[0].perf_mon.address);
+  CHECK_EQUAL(
+      256, (int)m_device_def.autodiscovery_def.hal_info[0].perf_mon.num_bytes);
+
+  // Check hostpipe info
+  CHECK_EQUAL(1, m_device_def.autodiscovery_def.acl_hostpipe_info.size());
+  CHECK("pipe_name" ==
+        m_device_def.autodiscovery_def.acl_hostpipe_info[0].name);
+  CHECK_EQUAL(
+      true, m_device_def.autodiscovery_def.acl_hostpipe_info[0].is_host_to_dev);
+  CHECK_EQUAL(
+      false,
+      m_device_def.autodiscovery_def.acl_hostpipe_info[0].is_dev_to_host);
+  CHECK_EQUAL(32,
+              m_device_def.autodiscovery_def.acl_hostpipe_info[0].data_width);
+  CHECK_EQUAL(
+      32768,
+      m_device_def.autodiscovery_def.acl_hostpipe_info[0].max_buffer_depth);
+
+  // Check ACL's view
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.accel[0].id);
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.accel[0].mem.begin);
+  CHECK_EQUAL(
+      (void *)0x020000,
+      m_device_def.autodiscovery_def.accel[0]
+          .mem.next); // Not sure why this isn't 16KB like OpenCL spec minimum
+
+  CHECK_EQUAL(
+      2, (int)m_device_def.autodiscovery_def.accel[0].local_aspaces.size());
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].local_aspaces[0].aspace_id);
+  CHECK_EQUAL(1024, (int)m_device_def.autodiscovery_def.accel[0]
+                        .local_aspaces[0]
+                        .static_demand);
+  CHECK_EQUAL(
+      6,
+      (int)m_device_def.autodiscovery_def.accel[0].local_aspaces[1].aspace_id);
+  CHECK_EQUAL(2048, (int)m_device_def.autodiscovery_def.accel[0]
+                        .local_aspaces[1]
+                        .static_demand);
+
+  CHECK("foo" == m_device_def.autodiscovery_def.accel[0].iface.name);
+  CHECK_EQUAL(
+      0, (int)m_device_def.autodiscovery_def.accel[0].is_workgroup_invariant);
+  CHECK_EQUAL(
+      0, (int)m_device_def.autodiscovery_def.accel[0].is_workitem_invariant);
+  CHECK_EQUAL(3,
+              (int)m_device_def.autodiscovery_def.accel[0].max_global_work_dim);
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].profiling_words_to_readback);
+  CHECK_EQUAL(7,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args.size());
+
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[0].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[0].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[0].size);
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].iface.args[0].aspace_number);
+  CHECK_EQUAL(16768, (int)m_device_def.autodiscovery_def.accel[0]
+                         .iface.args[0]
+                         .lmem_size_bytes);
+
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[1].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[1].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[1].size);
+
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[2].addr_space);
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[2].category);
+  CHECK_EQUAL(8,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[2].size);
+
+  // printf buffer start address
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[3].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[3].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[3].size);
+
+  // printf buffer size
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[4].addr_space);
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[4].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[4].size);
+
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[5].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[5].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[5].size);
+
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[0]);
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[1]);
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[2]);
+
+  CHECK_EQUAL(0,
+              (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel[0].is_sycl_compile);
+
+  // Check a second parsing.
+  // It should allocate a new string for the name.
+  ACL_LOCKED(
+      parsed = acl_load_device_def_from_str(
+          std::string(
+              VERSIONIDTOSTR(ACL_AUTO_CONFIGURE_VERSIONID)
+                  DEVICE_FIELDS RANDOM_HASH
+              " " BOARDNAME2 IS_BIG_ENDIAN MEM HOSTPIPE KERNEL_ARG_INFO_NONE
+              " 1 52 bar" KERNEL_CRA KERNEL_FAST_LAUNCH_DEPTH KERNEL_PERF_MON
+                  KERNEL_WORKGROUP_INVARIANT KERNEL_WORKITEM_INVARIANT
+                      KERNEL_NUM_VECTOR_LANES2 KERNEL_PROFILE_SCANCHAIN_LENGTH
+                          ARGS_LOCAL_GLOBAL_INT KERNEL_PRINTF_FORMATSTRINGS LD_0
+                              KERNEL_REQD_WORK_GROUP_SIZE_235
+                                  KERNEL_MAX_WORK_GROUP_SIZE_1024
+                                      KERNEL_MAX_GLOBAL_WORK_DIM_ZERO
+                                          KERNEL_USES_GLOBAL_WORK_OFFSET_DISABLED
+                                              IS_NOT_SYCL_COMPILE),
+          m_device_def.autodiscovery_def, err_str));
+  CHECK_EQUAL(1, parsed);
+
+  CHECK(BOARDNAME2 == m_device_def.autodiscovery_def.name);
+
+  CHECK_EQUAL(
+      1, (int)m_device_def.autodiscovery_def.accel[0].is_workgroup_invariant);
+  CHECK_EQUAL(
+      1, (int)m_device_def.autodiscovery_def.accel[0].is_workitem_invariant);
+  CHECK("bar" == m_device_def.autodiscovery_def.hal_info[0].name);
+
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.is_big_endian);
+
+  CHECK_EQUAL(
+      0, (int)m_device_def.autodiscovery_def.accel[0].local_aspaces.size());
+
+  CHECK_EQUAL(
+      2,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[0]);
+  CHECK_EQUAL(
+      3,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[1]);
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[2]);
+
+  CHECK_EQUAL(1024,
+              (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
+  CHECK_EQUAL(
+      32,
+      (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size_arr[0]);
+  CHECK_EQUAL(
+      8,
+      (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size_arr[1]);
+  CHECK_EQUAL(
+      4,
+      (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size_arr[2]);
+
+  CHECK_EQUAL(0,
+              (int)m_device_def.autodiscovery_def.accel[0].max_global_work_dim);
+  CHECK_EQUAL(0, (int)m_device_def.autodiscovery_def.accel[0].is_sycl_compile);
+
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].profiling_words_to_readback);
+
+  // Backwards-compatibility test (last backward compatible aoc version: 20.1,
+  // version id: 23)
+  ACL_LOCKED(
+      parsed = acl_load_device_def_from_str(
+          std::string(
+              VERSIONIDTOSTR(
+                  ACL_AUTO_CONFIGURE_BACKWARDS_COMPATIBLE_WITH_VERSIONID) " " DEVICE_FIELDS_OLD
+                  RANDOM_HASH " " BOARDNAME IS_NOT_BIG_ENDIAN MEM_BACKWARDS_COMP
+                      HOSTPIPE " 1 81 foo" KERNEL_CRA KERNEL_FAST_LAUNCH_DEPTH
+                          KERNEL_PERF_MON KERNEL_WORKGROUP_VARIANT KERNEL_WORKITEM_VARIANT
+                              KERNEL_NUM_VECTOR_LANES1 KERNEL_PROFILE_SCANCHAIN_LENGTH
+                                  ARGS_LOCAL_GLOBAL_LONG_PROF KERNEL_PRINTF_FORMATSTRINGS
+                                      LD_1024 KERNEL_REQD_WORK_GROUP_SIZE_NONE
+                                          KERNEL_MAX_WORK_GROUP_SIZE_NONE
+                                              KERNEL_MAX_GLOBAL_WORK_DIM_NONE
+                                                  KERNEL_USES_GLOBAL_WORK_OFFSET_ENABLED),
+          m_device_def.autodiscovery_def, err_str));
+  CHECK_EQUAL(1, parsed);
+
+  CHECK_EQUAL(1, m_device_def.autodiscovery_def.num_global_mem_systems);
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.global_mem_defs[0].range.begin);
+  CHECK_EQUAL((void *)2048,
+              m_device_def.autodiscovery_def.global_mem_defs[0].range.next);
+
+  CHECK(BOARDNAME == m_device_def.autodiscovery_def.name);
+
+  CHECK_EQUAL(0, (int)m_device_def.autodiscovery_def.is_big_endian);
+
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel.size());
+  CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.hal_info.size());
+
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.accel[0].id);
+  CHECK_EQUAL(0, m_device_def.autodiscovery_def.accel[0].mem.begin);
+  CHECK_EQUAL(
+      (void *)0x020000,
+      m_device_def.autodiscovery_def.accel[0]
+          .mem.next); // Not sure why this isn't 16KB like OpenCL spec minimum
+
+  CHECK_EQUAL(
+      2, (int)m_device_def.autodiscovery_def.accel[0].local_aspaces.size());
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].local_aspaces[0].aspace_id);
+  CHECK_EQUAL(1024, (int)m_device_def.autodiscovery_def.accel[0]
+                        .local_aspaces[0]
+                        .static_demand);
+  CHECK_EQUAL(
+      6,
+      (int)m_device_def.autodiscovery_def.accel[0].local_aspaces[1].aspace_id);
+  CHECK_EQUAL(2048, (int)m_device_def.autodiscovery_def.accel[0]
+                        .local_aspaces[1]
+                        .static_demand);
+
+  CHECK("foo" == m_device_def.autodiscovery_def.accel[0].iface.name);
+  CHECK_EQUAL(
+      0, (int)m_device_def.autodiscovery_def.accel[0].is_workgroup_invariant);
+  CHECK_EQUAL(
+      0, (int)m_device_def.autodiscovery_def.accel[0].is_workitem_invariant);
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].profiling_words_to_readback);
+  CHECK_EQUAL(7,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args.size());
+
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[0].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[0].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[0].size);
+  CHECK_EQUAL(
+      5,
+      (int)m_device_def.autodiscovery_def.accel[0].iface.args[0].aspace_number);
+  CHECK_EQUAL(16768, (int)m_device_def.autodiscovery_def.accel[0]
+                         .iface.args[0]
+                         .lmem_size_bytes);
+
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[1].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[1].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[1].size);
+
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[2].addr_space);
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[2].category);
+  CHECK_EQUAL(8,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[2].size);
+
+  // printf buffer start address
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[3].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[3].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[3].size);
+
+  // printf buffer size
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[4].addr_space);
+  CHECK_EQUAL(0,
+              m_device_def.autodiscovery_def.accel[0].iface.args[4].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[4].size);
+
+  CHECK_EQUAL(2,
+              m_device_def.autodiscovery_def.accel[0].iface.args[5].addr_space);
+  CHECK_EQUAL(1,
+              m_device_def.autodiscovery_def.accel[0].iface.args[5].category);
+  CHECK_EQUAL(4,
+              (int)m_device_def.autodiscovery_def.accel[0].iface.args[5].size);
+
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[0]);
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[1]);
+  CHECK_EQUAL(
+      0,
+      (int)m_device_def.autodiscovery_def.accel[0].compile_work_group_size[2]);
+
+  CHECK_EQUAL(0,
+              (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
+}
+
+TEST(auto_configure, many_ok_forward_compatibility) {
+  // From example_designs/merge_sort with extra fields at the end of each
+  // sections and subsections to check forward compatibility
+
+  std::string str(VERSIONIDTOSTR(
+      ACL_AUTO_CONFIGURE_VERSIONID) " 28 "
+                                    "sample40byterandomhash000000000000000000 "
+                                    "a10gx 0 1 15 DDR 2 1 6 0 2147483648 100 "
+                                    "100 100 100 200 200 200 200 0 0 0 0 400 "
+                                    "400 400 400 400 47 "
+                                    "40 external_sort_stage_0 0 128 1 0 0 1 0 "
+                                    "1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 0 "
+                                    "0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 external_sort_stage_1 256 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 external_sort_stage_2 512 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 external_sort_stage_3 768 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 external_sort_stage_4 1024 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 external_sort_stage_5 1280 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 external_sort_stage_6 1536 128 1 0 0 1 "
+                                    "0 1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 "
+                                    "0 0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 "
+                                    "800 "
+                                    "38 external_stream_writer0 1792 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer1 2048 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer2 2304 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer3 2560 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer4 2816 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer5 3072 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 external_stream_writer6 3328 256 1 0 0 "
+                                    "0 0 1 0 1 10 2 1 8 1024 0 0 500 500 500 "
+                                    "500 0 0 0 0 0 0 0 1 2147483647 3 1 800 "
+                                    "800 800 800 800 "
+                                    "38 input_reader 3584 256 1 0 0 0 0 1 0 1 "
+                                    "10 2 1 8 1024 0 0 500 500 500 500 0 0 0 0 "
+                                    "0 0 0 1 2147483647 3 1 800 800 800 800 "
+                                    "800 "
+                                    "38 output_writer 3840 256 1 0 0 0 0 1 0 1 "
+                                    "10 2 1 8 1024 0 0 500 500 500 500 0 0 0 0 "
+                                    "0 0 0 1 2147483647 3 1 800 800 800 800 "
+                                    "800 "
+                                    "40 sort_stage_1 4096 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_10 4352 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_11 4608 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_12 4864 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_13 5120 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_14 5376 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_15 5632 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_16 5888 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_17 6144 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_2 6400 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_3 6656 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_4 6912 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_5 7168 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_6 7424 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_7 7680 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_8 7936 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "40 sort_stage_9 8192 128 1 0 0 1 0 1 0 1 "
+                                    "10 0 0 4 1 0 0 500 500 500 500 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 "
+                                    "38 stream_reader_A0 8448 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A1 8704 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A2 8960 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A3 9216 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A4 9472 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A5 9728 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_A6 9984 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B0 10240 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B1 10496 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B2 10752 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B3 11008 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B4 11264 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B5 11520 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 "
+                                    "38 stream_reader_B6 11776 256 1 0 0 0 0 1 "
+                                    "0 1 10 2 1 8 1024 0 0 500 500 500 500 0 0 "
+                                    "0 0 0 0 0 1 2147483647 3 1 800 800 800 "
+                                    "800 800 900 900 900 900 900");
+
+  std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+  for (auto &device_def : device_defs) {
+    int parsed;
+    std::string err_str;
+    ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                   str, device_def.autodiscovery_def, err_str));
+    CHECK_EQUAL(1, parsed);
+
+    CHECK("a10gx" == device_def.autodiscovery_def.name);
+    CHECK("sample40byterandomhash000000000000000000" ==
+          device_def.autodiscovery_def.binary_rand_hash);
+
+    CHECK_EQUAL(47, (int)device_def.autodiscovery_def.accel.size());
+    CHECK_EQUAL(47, (int)device_def.autodiscovery_def.hal_info.size());
+  }
+}
+
+TEST(auto_configure, many_limit_check) {
+  std::string str(VERSIONIDTOSTR(
+      ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+                                    "sample40byterandomhash000000000000000000 "
+                                    "a10gx 0 1 7 DDR 2 1 2 0 2147483648 0 0 0 "
+                                    "0 75 "
+                                    "31 external_sort_stage_0 0 128 1 0 0 1 0 "
+                                    "1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 "
+                                    "3 1 "
+                                    "31 external_sort_stage_1 256 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_2 512 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_3 768 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_4 1024 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_5 1280 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_6 1536 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "29 external_stream_writer0 1792 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer1 2048 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer2 2304 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer3 2560 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer4 2816 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer5 3072 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer6 3328 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 input_reader 3584 256 1 0 0 0 0 1 0 1 "
+                                    "6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 output_writer 2931 256 1 0 0 0 0 1 0 1 "
+                                    "6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "31 sort_stage_1 3196 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_10 4352 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_11 4608 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_12 4864 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_13 5120 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_14 5376 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_15 5632 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_16 5888 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_17 6144 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_2 6310 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_3 6656 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_4 6912 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_5 7168 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_6 7424 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_7 7680 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_8 7936 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_9 8192 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "29 stream_reader_A0 8448 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A1 8704 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A2 8960 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A3 9216 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A4 9472 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A5 9728 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_A6 9984 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B0 10231 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B1 10496 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B2 10752 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B3 11008 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B4 11264 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B5 11520 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 stream_reader_B6 11776 256 1 0 0 0 0 1 "
+                                    "0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "31 external_sort_stage_0 0 128 1 0 0 1 0 "
+                                    "1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 "
+                                    "3 1 "
+                                    "31 external_sort_stage_1 256 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_2 512 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_3 768 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_4 1024 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_5 1280 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "31 external_sort_stage_6 1536 128 1 0 0 1 "
+                                    "0 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 "
+                                    "1 3 1 "
+                                    "29 external_stream_writer0 1792 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer1 2048 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer2 2304 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer3 2560 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer4 2816 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer5 3072 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 external_stream_writer6 3328 256 1 0 0 "
+                                    "0 0 1 0 1 6 2 1 8 1024 0 0 0 0 0 0 0 0 0 "
+                                    "1 2147483647 3 1 "
+                                    "29 input_reader 3584 256 1 0 0 0 0 1 0 1 "
+                                    "6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "29 output_writer 2931 256 1 0 0 0 0 1 0 1 "
+                                    "6 2 1 8 1024 0 0 0 0 0 0 0 0 0 1 "
+                                    "2147483647 3 1 "
+                                    "31 sort_stage_1 3196 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_10 4352 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_11 4608 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_12 4864 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_13 5120 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_14 5376 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_15 5632 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_16 5888 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_17 6144 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_2 6310 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_3 6656 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_4 6912 128 1 0 0 1 0 1 0 1 "
+                                    "6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1");
+
+  // Verify that we can handle 75 kernels
+  std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+  for (auto &device_def : device_defs) {
+    int parsed;
+    std::string err;
+    ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                   str, device_def.autodiscovery_def, err));
+    CHECK_EQUAL(1, parsed);
+
+    // But we should write 75 kernels to the requested physical_device_id entry.
+    CHECK_EQUAL(75, (int)device_def.autodiscovery_def.accel.size());
+    CHECK_EQUAL(75, (int)device_def.autodiscovery_def.hal_info.size());
+  }
+}
+
+TEST(auto_configure, bad_config) {
+  std::vector<std::string> strs = {
+      std::string(
+          "0 pcie385n_a7 0 0 2 1024 0 2147483648 2147483648 4294967296 0 0 0 2 "
+          "sort_stage_1 0 128 0 0 0 1 0 1 0 1 0 0 4 1 0 0 1 1 1 1 "
+          "sort_stage_2 128 128 0 0 0 1 0 1 0 1 0 0 4 1 0 0 1 1 1 1"),
+      std::string("Error: The accelerator hardware currently programmed is "
+                  "incompatible with this\nversion of the runtime (" ACL_VERSION
+                  " Commit " ACL_GIT_COMMIT
+                  "). Please recompile the hardware with\nthe same version of "
+                  "the compiler and program that onto the board.\n"),
+
+      // Bad workgroup/workitem_invariant combination
+      std::string(VERSIONIDTOSTR(
+          ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+                                        "sample40byterandomhash0000000000000000"
+                                        "00 a10gx 0 1 7 DDR 2 1 2 0 2147483648 "
+                                        "0 0 0 0 1 "
+                                        "31 external_sort_stage_0 0 128 1 0 0 "
+                                        "0 1" /*workgroup_invariant = 0,
+                                                 workitem_invariant =1 */
+                                        " 1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 "
+                                        "1 1 1 3 1"),
+      std::string(
+          "FAILED to read auto-discovery string at byte 132: kernel cannot be "
+          "workitem-invariant while it is workgroup-variant. Full "
+          "auto-discovery string value is " VERSIONIDTOSTR(
+              ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+                                            "sample40byterandomhash000000000000"
+                                            "000000 a10gx 0 1 7 DDR 2 1 2 0 "
+                                            "2147483648 0 0 0 0 1 "
+                                            "31 external_sort_stage_0 0 128 1 "
+                                            "0 0 0 1 1 0 1 6 0 0 4 1 0 0 0 0 0 "
+                                            "0 1 1 1 3 1 1 1 3 1\n")};
+
+  for (unsigned istr = 0; istr < strs.size(); istr += 2) {
+    int parsed;
+    std::string err;
+    ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                   strs[istr], m_device_def.autodiscovery_def, err));
+    CHECK_EQUAL(0, parsed);
+
+    const auto &expect = strs[istr + 1];
+    for (unsigned ichar = 0; err[ichar] && expect[ichar] &&
+                             ichar < err.length() && ichar < expect.length();
+         ichar++) {
+      if (err[ichar] != expect[ichar]) {
+        std::cout << "Failed at char " << ichar << " '" << err[ichar]
+                  << "' vs '" << expect[ichar] << "'\n";
+      }
+    }
+
+    if (expect != err) {
+      std::cout << istr / 2 << ": err string is " << err << "\n";
+      std::cout << istr / 2 << ": exp string is " << expect << "\n";
+    }
+
+    CHECK(expect == err);
+
+    CHECK_EQUAL(0, (int)m_device_def.autodiscovery_def.accel.size());
+    CHECK_EQUAL(0, (int)m_device_def.autodiscovery_def.hal_info.size());
+  }
+}
+
+TEST(auto_configure, multi_mem_config) {
+  std::string str(VERSIONIDTOSTR(
+      ACL_AUTO_CONFIGURE_VERSIONID) " 56 "
+                                    "sample40byterandomhash000000000000000000 "
+                                    "pcie385n_a7 0 "
+                                    "4 "
+                                    "10 SVM 0 1 2 0 1073741824 0 - 1 SVM2 "
+                                    "11 DDR 2 2 24 1 2 1073741824 3221225472 "
+                                    "3221225472 5368709120 0 "
+                                    "15 QDR 2 4 48 0 2 5368709120 5369757696 "
+                                    "5369757696 5370806272 5370806272 "
+                                    "5371854848 5371854848 5372903424 4 "
+                                    "9 SVM2 0 1 2 0 1073741824 0 SVM 0 "
+                                    "0 0 0 2 "
+                                    "31 sort_stage_1 0 128 1 0 0 1 0 1 0 1 6 0 "
+                                    "0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                    "31 sort_stage_2 128 128 1 0 0 1 0 1 0 1 6 "
+                                    "0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 3 1");
+
+  std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+  for (auto &device_def : device_defs) {
+    int parsed;
+    std::string err_str;
+    ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                   str, device_def.autodiscovery_def, err_str));
+    CHECK_EQUAL(1, parsed);
+
+    CHECK("pcie385n_a7" == device_def.autodiscovery_def.name);
+    CHECK("sample40byterandomhash000000000000000000" ==
+          device_def.autodiscovery_def.binary_rand_hash);
+
+    CHECK_EQUAL(4, device_def.autodiscovery_def.num_global_mem_systems);
+
+    CHECK("SVM" == device_def.autodiscovery_def.global_mem_defs[0].name);
+    CHECK_EQUAL(ACL_GLOBAL_MEM_SHARED_VIRTUAL,
+                device_def.autodiscovery_def.global_mem_defs[0].type);
+    CHECK_EQUAL(
+        1, device_def.autodiscovery_def.global_mem_defs[0].burst_interleaved);
+    CHECK_EQUAL(0, device_def.autodiscovery_def.global_mem_defs[0].config_addr);
+    CHECK_EQUAL(
+        1, device_def.autodiscovery_def.global_mem_defs[0].num_global_banks);
+    CHECK("" ==
+          device_def.autodiscovery_def.global_mem_defs[0].primary_interface);
+    CHECK_EQUAL(
+        1,
+        device_def.autodiscovery_def.global_mem_defs[0].can_access_list.size());
+    CHECK(
+        "SVM2" ==
+        device_def.autodiscovery_def.global_mem_defs[0].can_access_list.at(0));
+
+    CHECK("DDR" == device_def.autodiscovery_def.global_mem_defs[1].name);
+    CHECK_EQUAL(ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                device_def.autodiscovery_def.global_mem_defs[1].type);
+    CHECK_EQUAL(
+        1, device_def.autodiscovery_def.global_mem_defs[1].burst_interleaved);
+    CHECK_EQUAL(0x18,
+                device_def.autodiscovery_def.global_mem_defs[1].config_addr);
+    CHECK_EQUAL(
+        2, device_def.autodiscovery_def.global_mem_defs[1].num_global_banks);
+    CHECK(ACL_GLOBAL_MEM_UNDEFINED_ALLOCATION ==
+          device_def.autodiscovery_def.global_mem_defs[1].allocation_type);
+
+    CHECK("QDR" == device_def.autodiscovery_def.global_mem_defs[2].name);
+    CHECK_EQUAL(ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                device_def.autodiscovery_def.global_mem_defs[2].type);
+    CHECK_EQUAL(
+        0, device_def.autodiscovery_def.global_mem_defs[2].burst_interleaved);
+    CHECK_EQUAL(0x30,
+                device_def.autodiscovery_def.global_mem_defs[2].config_addr);
+    CHECK_EQUAL(
+        4, device_def.autodiscovery_def.global_mem_defs[2].num_global_banks);
+    CHECK(ACL_GLOBAL_MEM_DEVICE_ALLOCATION ==
+          device_def.autodiscovery_def.global_mem_defs[2].allocation_type);
+
+    CHECK("SVM2" == device_def.autodiscovery_def.global_mem_defs[3].name);
+    CHECK_EQUAL(ACL_GLOBAL_MEM_SHARED_VIRTUAL,
+                device_def.autodiscovery_def.global_mem_defs[3].type);
+    CHECK_EQUAL(
+        1, device_def.autodiscovery_def.global_mem_defs[3].burst_interleaved);
+    CHECK_EQUAL(0, device_def.autodiscovery_def.global_mem_defs[3].config_addr);
+    CHECK_EQUAL(
+        1, device_def.autodiscovery_def.global_mem_defs[3].num_global_banks);
+    CHECK("SVM" ==
+          device_def.autodiscovery_def.global_mem_defs[3].primary_interface);
+    CHECK_EQUAL(
+        0,
+        device_def.autodiscovery_def.global_mem_defs[3].can_access_list.size());
+
+    CHECK_EQUAL(2, (int)device_def.autodiscovery_def.accel.size());
+    CHECK_EQUAL(2, (int)device_def.autodiscovery_def.hal_info.size());
+  }
+}
+
+TEST(auto_configure, kernel_arg_info) {
+  std::vector<std::string> strs = {
+      std::string(VERSIONIDTOSTR(
+          ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+                                        "sample40byterandomhash0000000000000000"
+                                        "00 a10gx 0 1 7 DDR 2 1 2 0 2147483648 "
+                                        "0 0 0 1 2 "
+                                        "34 external_sort_stage_0 0 128 1 0 0 "
+                                        "1 0 1 0 2 9 0 0 4 1 0 0 arg_one "
+                                        "type_one 1 9 0 0 4 1 0 0 arg_two "
+                                        "type_two 2 0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                        "34 external_sort_stage_1 256 128 1 0 "
+                                        "0 1 0 1 0 2 9 0 0 4 1 0 0 arg_three "
+                                        "type_three 1 9 0 0 4 1 0 0 arg_four "
+                                        "type_four 2 0 0 0 0 1 1 1 3 1 1 1 3 "
+                                        "1 "),
+      std::string(VERSIONIDTOSTR(
+          ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+                                        "sample40byterandomhash0000000000000000"
+                                        "00 a10gx 0 1 7 DDR 2 1 2 0 2147483648 "
+                                        "0 0 0 0 2 "
+                                        "34 external_sort_stage_0 0 128 1 0 0 "
+                                        "1 0 1 0 2 6 0 0 4 1 0 0 6 0 0 4 1 0 0 "
+                                        "0 0 0 0 1 1 1 3 1 1 1 3 1 "
+                                        "34 external_sort_stage_1 256 128 1 0 "
+                                        "0 1 0 1 0 2 6 0 0 4 1 0 0 6 0 0 4 1 0 "
+                                        "0 0 0 0 0 1 1 1 3 1 1 1 3 1 ")};
+
+  // kernel arg info available
+  {
+    std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+    for (auto &device_def : device_defs) {
+      int parsed;
+      std::string err_str;
+      ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                     strs[0], device_def.autodiscovery_def, err_str));
+      CHECK_EQUAL(1, parsed);
+
+      CHECK("a10gx" == device_def.autodiscovery_def.name);
+      CHECK("sample40byterandomhash000000000000000000" ==
+            device_def.autodiscovery_def.binary_rand_hash);
+
+      CHECK_EQUAL(1, device_def.autodiscovery_def.num_global_mem_systems);
+      CHECK("DDR" == device_def.autodiscovery_def.global_mem_defs[0].name);
+
+      CHECK_EQUAL(2, (int)device_def.autodiscovery_def.accel.size());
+      CHECK_EQUAL(2, (int)device_def.autodiscovery_def.hal_info.size());
+      CHECK_EQUAL(2,
+                  (int)device_def.autodiscovery_def.accel[0].iface.args.size());
+      CHECK_EQUAL(2,
+                  (int)device_def.autodiscovery_def.accel[1].iface.args.size());
+
+      CHECK("arg_one" ==
+            device_def.autodiscovery_def.accel[0].iface.args[0].name);
+      CHECK("type_one" ==
+            device_def.autodiscovery_def.accel[0].iface.args[0].type_name);
+      CHECK_EQUAL(
+          1,
+          device_def.autodiscovery_def.accel[0].iface.args[0].access_qualifier);
+
+      CHECK("arg_two" ==
+            device_def.autodiscovery_def.accel[0].iface.args[1].name);
+      CHECK("type_two" ==
+            device_def.autodiscovery_def.accel[0].iface.args[1].type_name);
+      CHECK_EQUAL(
+          2,
+          device_def.autodiscovery_def.accel[0].iface.args[1].access_qualifier);
+
+      CHECK("arg_three" ==
+            device_def.autodiscovery_def.accel[1].iface.args[0].name);
+      CHECK("type_three" ==
+            device_def.autodiscovery_def.accel[1].iface.args[0].type_name);
+      CHECK_EQUAL(
+          1,
+          device_def.autodiscovery_def.accel[1].iface.args[0].access_qualifier);
+
+      CHECK("arg_four" ==
+            device_def.autodiscovery_def.accel[1].iface.args[1].name);
+      CHECK("type_four" ==
+            device_def.autodiscovery_def.accel[1].iface.args[1].type_name);
+      CHECK_EQUAL(
+          2,
+          device_def.autodiscovery_def.accel[1].iface.args[1].access_qualifier);
+    }
+  }
+
+  // kernel arg info not available
+  {
+    std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+    for (auto &device_def : device_defs) {
+      int parsed;
+      std::string err_str;
+      ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                     strs[1], device_def.autodiscovery_def, err_str));
+      CHECK_EQUAL(1, parsed);
+
+      CHECK("a10gx" == device_def.autodiscovery_def.name);
+      CHECK("sample40byterandomhash000000000000000000" ==
+            device_def.autodiscovery_def.binary_rand_hash);
+
+      CHECK_EQUAL(1, device_def.autodiscovery_def.num_global_mem_systems);
+      CHECK("DDR" == device_def.autodiscovery_def.global_mem_defs[0].name);
+
+      CHECK_EQUAL(2, (int)device_def.autodiscovery_def.accel.size());
+      CHECK_EQUAL(2, (int)device_def.autodiscovery_def.hal_info.size());
+      CHECK_EQUAL(2,
+                  (int)device_def.autodiscovery_def.accel[0].iface.args.size());
+      CHECK_EQUAL(2,
+                  (int)device_def.autodiscovery_def.accel[1].iface.args.size());
+
+      CHECK("" == device_def.autodiscovery_def.accel[0].iface.args[0].name);
+      CHECK("" ==
+            device_def.autodiscovery_def.accel[0].iface.args[0].type_name);
+      CHECK_EQUAL(
+          0,
+          device_def.autodiscovery_def.accel[0].iface.args[0].access_qualifier);
+
+      CHECK("" == device_def.autodiscovery_def.accel[0].iface.args[1].name);
+      CHECK("" ==
+            device_def.autodiscovery_def.accel[0].iface.args[1].type_name);
+      CHECK_EQUAL(
+          0,
+          device_def.autodiscovery_def.accel[0].iface.args[1].access_qualifier);
+
+      CHECK("" == device_def.autodiscovery_def.accel[1].iface.args[0].name);
+      CHECK("" ==
+            device_def.autodiscovery_def.accel[1].iface.args[0].type_name);
+      CHECK_EQUAL(
+          0,
+          device_def.autodiscovery_def.accel[1].iface.args[0].access_qualifier);
+
+      CHECK("" == device_def.autodiscovery_def.accel[1].iface.args[1].name);
+      CHECK("" ==
+            device_def.autodiscovery_def.accel[1].iface.args[1].type_name);
+      CHECK_EQUAL(
+          0,
+          device_def.autodiscovery_def.accel[1].iface.args[1].access_qualifier);
+    }
+  }
+}
+
+TEST(auto_configure, hostpipe) {
+  std::string str(VERSIONIDTOSTR(
+      ACL_AUTO_CONFIGURE_VERSIONID) " 46 "
+                                    "sample40byterandomhash000000000000000000 "
+                                    "a10gx_hostpipe 0 1 15 DDR 2 1 6 0 "
+                                    "2147483648 0 100 100 100 100 200 200 200 "
+                                    "200 "
+                                    "2 9 host_to_dev 1 0 32 32768 300 300 300 "
+                                    "300 dev_to_host 0 1 32 32768 300 300 300 "
+                                    "300 400 400 400 400 400 0 "
+                                    "1 29 foo 0 128 1 0 0 1 0 1 0 0 0 0 0 0 1 "
+                                    "1 1 3 1 1 1 3 1 800 800 800 800 800 900 "
+                                    "900"
+
+  );
+
+  std::vector<acl_device_def_t> device_defs(ACL_MAX_DEVICE);
+  for (auto &device_def : device_defs) {
+    int parsed;
+    std::string err_str;
+    ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                   str, device_def.autodiscovery_def, err_str));
+    CHECK_EQUAL(1, parsed);
+
+    CHECK("a10gx_hostpipe" == device_def.autodiscovery_def.name);
+    CHECK("sample40byterandomhash000000000000000000" ==
+          device_def.autodiscovery_def.binary_rand_hash);
+
+    CHECK_EQUAL(1, device_def.autodiscovery_def.num_global_mem_systems);
+    CHECK("foo" == device_def.autodiscovery_def.hal_info[0].name);
+    CHECK("DDR" == device_def.autodiscovery_def.global_mem_defs[0].name);
+
+    CHECK_EQUAL(1, (int)device_def.autodiscovery_def.accel.size());
+    CHECK_EQUAL(1, (int)device_def.autodiscovery_def.hal_info.size());
+  }
+}

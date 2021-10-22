@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -31,8 +32,8 @@
 
 CommandLineArguments::CommandLineArguments(int ac, const char** av,
 		TestPlugin* plugin) :
-	ac(ac), av(av), plugin_(plugin), verbose_(false), repeat_(1), groupFilter_(
-			""), nameFilter_(""), outputType_(OUTPUT_ECLIPSE)
+	ac(ac), av(av), plugin_(plugin), verbose_(false), numThreads_(1), repeat_(1),
+	groupFilter_(""), nameFilter_(""), outputType_(OUTPUT_ECLIPSE)
 {
 }
 
@@ -46,6 +47,7 @@ bool CommandLineArguments::parse()
 	for (int i = 1; i < ac; i++) {
 		SimpleString argument = av[i];
 		if (argument == "-v") verbose_ = true;
+		else if (argument.startsWith("-t")) SetNumThreads(ac, av, i);
 		else if (argument.startsWith("-r")) SetRepeatCount(ac, av, i);
 		else if (argument.startsWith("-g")) SetGroupFilter(ac, av, i);
 		else if (argument.startsWith("-n")) SetNameFilter(ac, av, i);
@@ -64,12 +66,17 @@ bool CommandLineArguments::parse()
 
 const char* CommandLineArguments::usage() const
 {
-	return "usage [-v] [-r#] [-g groupName] [-n testName] [-o{normal, junit}]\n";
+	return "usage [-v] [-t#] [-r#] [-g groupName] [-n testName] [-o{normal, junit}]\n";
 }
 
 bool CommandLineArguments::isVerbose() const
 {
 	return verbose_;
+}
+
+int CommandLineArguments::getNumThreads() const
+{
+	return numThreads_;
 }
 
 int CommandLineArguments::getRepeatCount() const
@@ -85,6 +92,21 @@ SimpleString CommandLineArguments::getGroupFilter() const
 SimpleString CommandLineArguments::getNameFilter() const
 {
 	return nameFilter_;
+}
+
+void CommandLineArguments::SetNumThreads(int ac, const char** av, int& i)
+{
+	numThreads_ = 0;
+
+	SimpleString numThreadsParameter(av[i]);
+	if (numThreadsParameter.size() > 2) numThreads_ = PlatformSpecificAtoI(av[i] + 2);
+	else if (i + 1 < ac) {
+		numThreads_ = PlatformSpecificAtoI(av[i + 1]);
+		if (numThreads_ != 0) i++;
+	}
+
+	if (numThreads_ < 1) numThreads_ = 1;
+
 }
 
 void CommandLineArguments::SetRepeatCount(int ac, const char** av, int& i)

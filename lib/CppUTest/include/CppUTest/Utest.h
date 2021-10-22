@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,6 +33,7 @@
 #define D_UTest_h
 
 #include "SimpleString.h"
+#include "Synchronization.h"
 
 /*! \brief UTest.h
  * \ingroup someGroup
@@ -42,8 +44,20 @@
  * \see TEST
  */
 
+#ifdef _MSC_VER
+#define TLS __declspec(thread)
+#else
+#define TLS __thread
+#endif
+
 class TestResult;
 class TestPlugin;
+
+enum UtestType
+{
+	TEST_TYPE_ST,
+	TEST_TYPE_MT,
+};
 
 class Utest
 {
@@ -60,8 +74,11 @@ public:
 	;
 
 	virtual void run(TestResult& result);
+	virtual void runInThreadOnCopy();
+	virtual void runInThread();
 	virtual void runOneTestWithPlugins(TestPlugin* plugin, TestResult& result);
 	virtual SimpleString getFormattedName() const;
+	virtual UtestType getType() const;
 
 	virtual Utest* addTest(Utest* test);
 	virtual Utest *getNext() const;
@@ -114,6 +131,7 @@ protected:
 	virtual void executePlatformSpecificTestBody();
 	virtual void executePlatformSpecificTeardown();
 	virtual void executePlatformSpecificExitCurrentTest();
+	virtual void executePlatformSpecificRunInThreads();
 
 	Utest();
 
@@ -131,6 +149,27 @@ private:
 	Utest *next_;
 	static TestResult* testResult_;
 	static Utest* currentTest_;
+};
+
+class MtUtest : public Utest {
+public:
+	virtual UtestType getType() const;
+
+	static void initialize(int numThreads);
+	static int numThreads();
+	static int threadNum();
+
+	static void syncThreads() {
+		threadBarrier_.wait();
+	}
+
+	static Mutex& testMutex() {
+		return mutex_;
+	}
+
+private:
+	static ThreadBarrier threadBarrier_;
+	static Mutex mutex_;
 };
 
 //////////////////// NulLTest

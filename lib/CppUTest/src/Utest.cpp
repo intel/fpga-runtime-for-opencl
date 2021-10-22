@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -79,14 +80,25 @@ void Utest::run(TestResult& result)
 	testResult_ = &result;
 	currentTest_ = this;
 
-	if (executePlatformSpecificSetup()) {
-		executePlatformSpecificTestBody();
-	}
-	executePlatformSpecificTeardown();
+	executePlatformSpecificRunInThreads();
 
 	//restore
 	currentTest_ = savedTest;
 	testResult_ = savedResult;
+}
+
+void Utest::runInThreadOnCopy()
+{
+	assert(PlatformSpecificGetThreadPoolSize() == 1);
+	runInThread();
+}
+
+void Utest::runInThread()
+{
+	if (executePlatformSpecificSetup()) {
+		executePlatformSpecificTestBody();
+	}
+	executePlatformSpecificTeardown();
 }
 
 void Utest::exitCurrentTest()
@@ -140,6 +152,11 @@ SimpleString Utest::getFormattedName() const
 	formattedName += ")";
 
 	return formattedName;
+}
+
+UtestType Utest::getType() const
+{
+	return TEST_TYPE_ST;
 }
 
 const char* Utest::getProgressIndicator() const
@@ -333,6 +350,9 @@ void Utest::fail(const char *text, const char* fileName, int lineNumber)
 void Utest::print(const char *text, const char* fileName, int lineNumber)
 {
 	SimpleString stringToPrint = "\n";
+	stringToPrint += "(";
+	stringToPrint += StringFrom(PlatformSpecificGetThreadId());
+	stringToPrint += ") ";
 	stringToPrint += fileName;
 	stringToPrint += ":";
 	stringToPrint += StringFrom(lineNumber);
@@ -355,6 +375,29 @@ TestResult* Utest::getTestResult()
 Utest* Utest::getCurrent()
 {
 	return currentTest_;
+}
+
+////////////// MtUtest ////////////
+
+ThreadBarrier MtUtest::threadBarrier_;
+Mutex MtUtest::mutex_;
+
+UtestType MtUtest::getType() const
+{
+	return TEST_TYPE_MT;
+}
+
+void MtUtest::initialize(int numThreads) {
+	PlatformSpecificStartThreadPool(numThreads);
+	threadBarrier_.setNumThreads(numThreads);
+}
+
+int MtUtest::numThreads() {
+	return PlatformSpecificGetThreadPoolSize();
+}
+
+int MtUtest::threadNum() {
+	return PlatformSpecificGetThreadNum();
 }
 
 ////////////// NullTest ////////////

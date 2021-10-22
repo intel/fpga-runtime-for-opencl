@@ -42,6 +42,12 @@
  *  void Utest::executePlatformSpecificExitCurrentTest()
  */
 
+/* Thread pool */
+void PlatformSpecificStartThreadPool(int numThreads);
+int PlatformSpecificGetThreadPoolSize();
+int PlatformSpecificGetThreadId();
+int PlatformSpecificGetThreadNum();
+
 /* Time operations */
 long GetPlatformSpecificTimeInMillis();
 void SetPlatformSpecificTimeInMillisMethod(long(*platformSpecific)());

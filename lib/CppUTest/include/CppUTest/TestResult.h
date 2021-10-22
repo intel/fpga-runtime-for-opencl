@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -95,7 +96,11 @@ public:
 	long getCurrentTestTotalExecutionTime() const;
 	long getCurrentGroupTotalExecutionTime() const;
 private:
+	// non-copyable due to the mutex
+	TestResult(const TestResult&);
+	TestResult& operator=(const TestResult&);
 
+	Mutex mutex;
 	TestOutput& output;
 	int testCount;
 	int runCount;

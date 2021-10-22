@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -133,6 +134,12 @@ SimpleString TestRegistry::getNameFilter()
 
 bool TestRegistry::testShouldRun(Utest* test, TestResult& result)
 {
+	bool multithreadedRun = (MtUtest::numThreads() > 1);
+	if (multithreadedRun && test->getType() == TEST_TYPE_ST) {
+		result.countFilteredOut();
+		return false;
+	}
+
 	if (groupFilter_ == 0) groupFilter_ = new SimpleString();
 	if (nameFilter_ == 0) nameFilter_ = new SimpleString();
 	if (test->shouldRun(*groupFilter_, *nameFilter_)) return true;

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +43,7 @@ TestResult::TestResult(TestOutput& p) :
 
 void TestResult::setProgressIndicator(const char* indicator)
 {
+	ScopedLock lock(mutex);
 	output.setProgressIndicator(indicator);
 }
 
@@ -51,12 +53,14 @@ TestResult::~TestResult()
 
 void TestResult::currentGroupStarted(Utest* test)
 {
+	ScopedLock lock(mutex);
 	output.printCurrentGroupStarted(*test);
 	currentGroupTimeStarted = GetPlatformSpecificTimeInMillis();
 }
 
 void TestResult::currentGroupEnded(Utest* test)
 {
+	ScopedLock lock(mutex);
 	currentGroupTotalExecutionTime = GetPlatformSpecificTimeInMillis()
 			- currentGroupTimeStarted;
 	output.printCurrentGroupEnded(*this);
@@ -64,17 +68,20 @@ void TestResult::currentGroupEnded(Utest* test)
 
 void TestResult::currentTestStarted(Utest* test)
 {
+	ScopedLock lock(mutex);
 	output.printCurrentTestStarted(*test);
 	currentTestTimeStarted = GetPlatformSpecificTimeInMillis();
 }
 
 void TestResult::print(const char* text)
 {
+	ScopedLock lock(mutex);
 	output.print(text);
 }
 
 void TestResult::currentTestEnded(Utest* test)
 {
+	ScopedLock lock(mutex);
 	currentTestTotalExecutionTime = GetPlatformSpecificTimeInMillis()
 			- currentTestTimeStarted;
 	output.printCurrentTestEnded(*this);
@@ -83,43 +90,51 @@ void TestResult::currentTestEnded(Utest* test)
 
 void TestResult::addFailure(const Failure& failure)
 {
+	ScopedLock lock(mutex);
 	output.print(failure);
 	failureCount++;
 }
 
 void TestResult::countTest()
 {
+	ScopedLock lock(mutex);
 	testCount++;
 }
 
 void TestResult::countRun()
 {
+	ScopedLock lock(mutex);
 	runCount++;
 }
 
 void TestResult::countCheck()
 {
+	ScopedLock lock(mutex);
 	checkCount++;
 }
 
 void TestResult::countFilteredOut()
 {
+	ScopedLock lock(mutex);
 	filteredOutCount++;
 }
 
 void TestResult::countIgnored()
 {
+	ScopedLock lock(mutex);
 	ignoredCount++;
 }
 
 void TestResult::testsStarted()
 {
+	ScopedLock lock(mutex);
 	timeStarted = GetPlatformSpecificTimeInMillis();
 	output.printTestsStarted();
 }
 
 void TestResult::testsEnded()
 {
+	ScopedLock lock(mutex);
 	long timeEnded = GetPlatformSpecificTimeInMillis();
 	totalExecutionTime = timeEnded - timeStarted;
 	output.printTestsEnded(*this);
@@ -132,6 +147,7 @@ long TestResult::getTotalExecutionTime() const
 
 void TestResult::setTotalExecutionTime(long exTime)
 {
+	ScopedLock lock(mutex);
 	totalExecutionTime = exTime;
 }
 

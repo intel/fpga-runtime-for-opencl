@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, 2017, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -138,10 +139,11 @@ void CppUTestStore(void**function, void*value)
 {
 	if (index >= SetPointerPlugin::MAX_SET) {
 		FAIL("Maximum number of function pointers installed!");
-	}
-	setlist[index].orig_value = value;
-	setlist[index].orig = function;
-	index++;
+	} else {
+	        setlist[index].orig_value = value;
+	        setlist[index].orig = function;
+	        index++;
+        }
 }
 
 void SetPointerPlugin::postTestAction(Utest& test, TestResult& result)

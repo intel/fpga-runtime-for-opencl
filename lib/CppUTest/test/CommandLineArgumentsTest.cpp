@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -180,7 +181,7 @@ TEST(CommandLineArguments, weirdParamatersPrintsUsageAndReturnsFalse)
 	int argc = 2;
 	const char* argv[] = { "tests.exe", "-SomethingWeird" };
 	CHECK(!newArgumentParser(argc, argv));
-	STRCMP_EQUAL("usage [-v] [-r#] [-g groupName] [-n testName] [-o{normal, junit}]\n",
+	STRCMP_EQUAL("usage [-v] [-t#] [-r#] [-g groupName] [-n testName] [-o{normal, junit}]\n",
 			args->usage());
 }
 

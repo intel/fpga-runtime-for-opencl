@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2007, Michael Feathers, James Grenning and Bas Vodde
+ * Copyright (c) 2015, 2021, Intel Corporation
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,6 +26,8 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#ifdef __GNUC__ // this file is only used with gcc
+
 #include <stdlib.h>
 #include "CppUTest/TestHarness.h"
 #undef malloc
@@ -40,11 +43,26 @@
 #include <setjmp.h>
 #include <string.h>
 #include <math.h>
+#include <assert.h>
+#include <pthread.h>
+
+#include <linux/unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#if !defined(__GLIBC_PREREQ) || !__GLIBC_PREREQ(2, 30)
+// From gettid(2): The gettid() system call first appeared on Linux in
+// kernel 2.4.11. Library support was added in glibc 2.30. (Earlier
+// glibc versions did not provide a wrapper for this system call,
+// necessitating the use of syscall(2).)
+static inline pid_t gettid(void) { return syscall( __NR_gettid ); }
+#endif
 
 #include "CppUTest/PlatformSpecificFunctions.h"
 
-static jmp_buf test_exit_jmp_buf[10];
-static int jmp_buf_index = 0;
+static __thread jmp_buf test_exit_jmp_buf[10];
+static __thread int jmp_buf_index = 0;
 
 bool Utest::executePlatformSpecificSetup()
 {
@@ -88,6 +106,183 @@ void Utest::executePlatformSpecificExitCurrentTest()
 {
    jmp_buf_index--;
    longjmp(test_exit_jmp_buf[jmp_buf_index], 1);
+}
+
+
+///////////// Thread pool
+
+static pthread_barrier_t l_threadPoolBarrier;
+static Utest*            l_currentTest = NULL;
+static int               l_numThreads = 0;
+static __thread int      l_currentThreadNum;
+
+static void* l_PlatformSpecificThreadEntry(void* arg)
+{
+    int ret;
+    l_currentThreadNum = (int)(intptr_t)arg;
+
+    while (true) {
+        ret = pthread_barrier_wait(&l_threadPoolBarrier);
+        assert(ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD);
+
+        l_currentTest->runInThreadOnCopy();
+
+        ret = pthread_barrier_wait(&l_threadPoolBarrier);
+        assert(ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD);
+    }
+
+    return NULL;
+}
+
+void PlatformSpecificStartThreadPool(int numThreads)
+{
+    l_numThreads = numThreads;
+
+    if (l_numThreads > 1) {
+        int ret;
+        ret = pthread_barrier_init(&l_threadPoolBarrier, 0, l_numThreads+1);
+        assert(ret == 0);
+
+        for (int i = 0; i < l_numThreads; ++i) {
+            pthread_t thread;
+            ret = pthread_create(&thread, 0, l_PlatformSpecificThreadEntry,
+                    (void*)(intptr_t)i);
+            assert(ret == 0);
+        }
+    }
+}
+
+int PlatformSpecificGetThreadPoolSize()
+{
+    return l_numThreads;
+}
+
+int PlatformSpecificGetThreadId()
+{
+    return (int)gettid();
+}
+
+int PlatformSpecificGetThreadNum()
+{
+    return l_numThreads > 1 ? l_currentThreadNum : 0;
+}
+
+void Utest::executePlatformSpecificRunInThreads()
+{
+    assert(l_numThreads >= 1);
+
+    if (l_numThreads == 1) {
+        runInThreadOnCopy();
+    }
+    else {
+        l_currentTest = this;
+
+        int ret;
+        ret = pthread_barrier_wait(&l_threadPoolBarrier);
+        assert(ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD);
+
+        ret = pthread_barrier_wait(&l_threadPoolBarrier);
+        assert(ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD);
+    }
+}
+
+///////////// Mutex
+
+struct Mutex::Impl {
+    pthread_mutex_t pthreadMutex;
+};
+
+Mutex::Mutex()
+{
+    impl_ = new Impl;
+
+    int ret = pthread_mutex_init(&(impl_->pthreadMutex), 0);
+    assert(ret == 0);
+}
+
+Mutex::~Mutex()
+{
+    int ret = pthread_mutex_destroy(&(impl_->pthreadMutex));
+    assert(ret == 0);
+    delete impl_;
+}
+
+void Mutex::lock()
+{
+    int ret = pthread_mutex_lock(&(impl_->pthreadMutex));
+    assert(ret == 0);
+}
+
+void Mutex::unlock()
+{
+    int ret = pthread_mutex_unlock(&(impl_->pthreadMutex));
+    assert(ret == 0);
+}
+
+///////////// AtomicUInt
+
+unsigned int AtomicUInt::fetchAndAdd(unsigned int add_value)
+{
+    return __sync_fetch_and_add(&value_, add_value);
+}
+
+///////////// ThreadBarrier
+
+struct ThreadBarrier::Impl
+{
+    pthread_barrier_t pthreadBarrier;
+    int numThreads;
+};
+
+ThreadBarrier::ThreadBarrier()
+{
+    impl_ = new Impl;
+    impl_->numThreads = 0;
+}
+
+ThreadBarrier::ThreadBarrier(int numThreads)
+{
+    impl_ = new Impl;
+    impl_->numThreads = numThreads;
+
+    if (numThreads > 1) {
+        int ret = pthread_barrier_init(&(impl_->pthreadBarrier), NULL, numThreads);
+        assert(ret == 0);
+    }
+}
+
+ThreadBarrier::~ThreadBarrier()
+{
+    delete impl_;
+}
+
+int ThreadBarrier::numThreads()
+{
+    return impl_->numThreads;
+}
+
+void ThreadBarrier::setNumThreads(int numThreads) {
+    if (impl_->numThreads != numThreads) {
+        if (impl_->numThreads > 1) {
+            int ret = pthread_barrier_destroy(&(impl_->pthreadBarrier));
+            assert(ret == 0);
+        }
+        if (numThreads > 1) {
+            int ret = pthread_barrier_init(&(impl_->pthreadBarrier), NULL, numThreads);
+            assert(ret == 0);
+        }
+        impl_->numThreads = numThreads;
+    }
+}
+
+void ThreadBarrier::wait()
+{
+    assert(impl_->numThreads > 0);
+
+    if (impl_->numThreads > 1) {
+        int ret = pthread_barrier_wait(&(impl_->pthreadBarrier));
+        assert(ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD);
+    }
 }
 
 ///////////// Time in millis
@@ -230,3 +425,5 @@ double PlatformSpecificFabs(double d)
 {
    return fabs(d);
 }
+
+#endif // __GNUC__
