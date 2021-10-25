@@ -134,6 +134,7 @@ add_custom_command(
     -D "GIT_FOUND=${GIT_FOUND}"
     -D "GIT_EXECUTABLE=${GIT_EXECUTABLE}"
     -P "${CMAKE_CURRENT_LIST_DIR}/cmake/scripts/version.cmake"
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
 
 add_library(acl_objs OBJECT
