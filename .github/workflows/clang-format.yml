@@ -1,0 +1,47 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: run clang-format
+
+on:
+  push:
+    paths:
+      - '.github/workflows/clang-format.yml'
+      - '**.c'
+      - '**.cpp'
+      - '**.h'
+      - '**.hpp'
+
+  pull_request:
+    paths:
+      - '.github/workflows/clang-format.yml'
+      - '**.c'
+      - '**.cpp'
+      - '**.h'
+      - '**.hpp'
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    container:
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-clang:main
+
+    steps:
+      - name: change ownership of workspace to current user
+        run: sudo chown -R build:build .
+
+      - name: checkout code
+        uses: actions/checkout@v2
+
+      - name: run clang-format on source files
+        run: find . -regex '.*\.\(c\|cpp\|h\|hpp\)' | sort | xargs clang-format --verbose -i
+
+      - name: ensure source files are unchanged
+        run: git diff --exit-code
+
+      - name: revert ownership of workspace to root
+        run: sudo chown -R root:root .
+        if: always()
