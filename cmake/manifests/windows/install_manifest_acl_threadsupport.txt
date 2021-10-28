@@ -1,0 +1,2 @@
+C:/fpga-runtime-for-opencl/lib/acl_threadsupport.lib
+C:/fpga-runtime-for-opencl/include/acl_threadsupport/acl_threadsupport.h
