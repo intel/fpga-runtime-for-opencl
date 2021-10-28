@@ -1,0 +1,2 @@
+C:/fpga-runtime-for-opencl/lib/acl_check_sys_cmd.lib
+C:/fpga-runtime-for-opencl/include/acl_check_sys_cmd/acl_check_sys_cmd.h

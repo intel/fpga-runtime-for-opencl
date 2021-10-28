@@ -1,0 +1,2 @@
+C:/fpga-runtime-for-opencl/include/MMD/aocl_mmd.h
+C:/fpga-runtime-for-opencl/include/MMD/aocl_mmd_deprecated.h

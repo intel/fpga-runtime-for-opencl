@@ -1,0 +1,186 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: build on Windows
+
+on:
+  push:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/build-windows.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - 'cmake/manifests/windows/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+      - 'scripts/install_*.ps1'
+
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/build-windows.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - 'cmake/manifests/windows/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+      - 'scripts/install_*.ps1'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.image }}
+
+    strategy:
+      matrix:
+        image:
+          - windows-2019
+
+        config:
+          - Debug
+          - Release
+
+    continue-on-error: true
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v2
+
+      - name: query path of compiler setup script
+        id: msvc
+        run: |
+          $installationPath = & vswhere -latest -property installationPath
+          echo "::set-output name=path::$installationPath\vc\auxiliary\build\vcvars64.bat"
+
+      - name: cache libelf
+        id: cache-libelf
+        uses: actions/cache@v2
+        with:
+          path: c:\libelf
+          key: libelf-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_libelf.ps1') }}
+
+      - name: install libelf
+        if: ${{ !steps.cache-libelf.outputs.cache-hit }}
+        shell: cmd
+        run: |
+          call "${{ steps.msvc.outputs.path }}"
+          pwsh .\scripts\install_libelf.ps1 -installdir C:\libelf
+
+      - name: add libelf to path
+        run: echo c:\libelf\lib | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: cache zlib
+        id: cache-zlib
+        uses: actions/cache@v2
+        with:
+          path: c:\zlib
+          key: zlib-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_zlib.ps1') }}
+
+      - name: install zlib
+        if: ${{ !steps.cache-zlib.outputs.cache-hit }}
+        shell: cmd
+        run: |
+          call "${{ steps.msvc.outputs.path }}"
+          pwsh .\scripts\install_zlib.ps1 -installdir C:\zlib
+
+      - name: add zlib to path
+        run: echo c:\zlib\lib | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: cache ninja
+        id: cache-ninja
+        uses: actions/cache@v2
+        with:
+          path: c:\ninja
+          key: ninja-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_ninja.ps1') }}
+
+      - name: install ninja
+        if: ${{ !steps.cache-ninja.outputs.cache-hit }}
+        run: pwsh .\scripts\install_ninja.ps1 -installdir C:\ninja
+
+      - name: add ninja to path
+        run: echo c:\ninja | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: query ninja version
+        run: ninja --version
+
+      - name: create build directory
+        run: mkdir build
+
+      - name: create build files
+        shell: cmd
+        run: |
+          call "${{ steps.msvc.outputs.path }}"
+          cd build
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=c:\fpga-runtime-for-opencl -DCMAKE_PREFIX_PATH=c:\libelf;c:\zlib
+
+      - name: build runtime
+        shell: cmd
+        run: |
+          call "${{ steps.msvc.outputs.path }}"
+          cd build
+          ninja -v -k0
+
+      - name: cache aocl
+        id: cache-aocl
+        uses: actions/cache@v2
+        with:
+          path: c:\aocl
+          key: aocl-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_aocl.ps1') }}
+
+      - name: install aocl
+        if: ${{ !steps.cache-aocl.outputs.cache-hit }}
+        run: pwsh .\scripts\install_aocl.ps1 -installdir C:\aocl
+
+      - name: add aocl to path
+        run: echo c:\aocl\hld\bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: query aocl version
+        run: aoc -version
+
+      - name: test runtime
+        run: |
+          cd build
+          ctest -V
+
+      - name: install runtime
+        run: |
+          cd build
+          cmake -P cmake_install.cmake
+          cmake -DCOMPONENT=CL -P cmake_install.cmake
+          cmake -DCOMPONENT=CppUTest -P cmake_install.cmake
+          cmake -DCOMPONENT=MMD -P cmake_install.cmake
+          cmake -DCOMPONENT=acl -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_check_sys_cmd -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_hash -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_threadsupport -P cmake_install.cmake
+          cmake -DCOMPONENT=pkg_editor -P cmake_install.cmake
+
+      - name: ensure manifests of installed components are unchanged
+        run: |
+          Get-ChildItem $env:manifests -Recurse | Remove-Item -Force
+          Copy-Item build\install_manifest*.txt $env:manifests
+          git add $env:manifests
+          git diff --cached --exit-code
+        env:
+          manifests: cmake\manifests\windows
+
+      - name: upload manifests if installed components changed
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: manifests-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
+          path: build/install_manifest*.txt
+          if-no-files-found: error
