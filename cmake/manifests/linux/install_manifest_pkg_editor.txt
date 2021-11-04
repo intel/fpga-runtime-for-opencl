@@ -1,0 +1,2 @@
+/fpga-runtime-for-opencl/lib/libpkg_editor.a
+/fpga-runtime-for-opencl/include/pkg_editor/pkg_editor.h
