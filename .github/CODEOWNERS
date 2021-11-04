@@ -1,0 +1,13 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax
+#
+# Note the required access permissions for users and teams to the repository.
+
+# The runtime maintainers are the default owners of all files
+# in this repository, unless a later match takes precedence.
+* @intel/fpga-runtime-for-opencl-maintain
+
+# Profiler
+acl_profiler* @intel/fpga-runtime-for-opencl-maintain @smffraser
