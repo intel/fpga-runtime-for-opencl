@@ -127,6 +127,13 @@ include(CTest)
 # See https://cmake.org/cmake/help/latest/module/GNUInstallDirs.html
 include(GNUInstallDirs)
 
+# Windows defines its own versions of min() and max() which conflict with the
+# versions from the standard library.  Disable the Windows versions by defining
+# the NOMINMAX macro.  This must be set before including acl.h, which
+# eventually leads to the inclusion of windows.h, where the min and max macros
+# are defined.
+set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS NOMINMAX)
+
 # acl_hostxml includes acl.h, but we don't want to create a cyclic dependency,
 # so we create a header only library here
 add_library(acl_headers INTERFACE)
