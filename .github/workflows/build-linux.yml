@@ -1,0 +1,132 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: build on Linux
+
+on:
+  push:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/build-linux.yml'
+      - '!.gitignore'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/build-linux.yml'
+      - '!.gitignore'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    container:
+      image: ghcr.io/intel/fpga-runtime-for-opencl/${{ matrix.image }}:main
+
+    strategy:
+      matrix:
+        image:
+          - centos-8-dev
+          - opensuse-leap-15-dev
+          - ubuntu-18.04-dev
+          - ubuntu-20.04-dev
+
+        config:
+          - Debug
+          - Release
+
+        include:
+          - cross: arm-linux-gnueabihf-
+            image: debian-11-arm-dev
+            config: Debug
+
+          - cross: arm-linux-gnueabihf-
+            image: debian-11-arm-dev
+            config: Release
+
+    continue-on-error: true
+
+    steps:
+      - name: change ownership of workspace to current user
+        run: sudo chown -R build:build .
+
+      - name: checkout code
+        uses: actions/checkout@v2
+
+      - name: query distribution
+        run: cat /etc/os-release
+
+      - name: create build directory
+        run: mkdir build
+
+      - name: create build files
+        run: |
+          cd build
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=/fpga-runtime-for-opencl -DCMAKE_INSTALL_LIBDIR=lib
+        env:
+          CC: ${{ matrix.cross }}gcc
+          CXX: ${{ matrix.cross }}g++
+
+      - name: build runtime
+        run: |
+          cd build
+          ninja -v -k0
+
+      - name: test runtime
+        if: ${{ !matrix.cross }}
+        run: |
+          cd build
+          ctest -V
+
+      - name: install runtime
+        run: |
+          cd build
+          sudo cmake -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=CL -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=CppUTest -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=MMD -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=acl -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=acl_check_sys_cmd -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=acl_hash -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=acl_threadsupport -P cmake_install.cmake
+          sudo cmake -DCOMPONENT=pkg_editor -P cmake_install.cmake
+
+      - name: ensure manifests of installed components are unchanged
+        run: |
+          rm -rf "$manifests"
+          mkdir -p "$manifests"
+          cp -t "$manifests" build/install_manifest*.txt
+          git add "$manifests"
+          git diff --cached --exit-code
+        env:
+          manifests: cmake/manifests/linux
+
+      - name: upload manifests if installed components changed
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: manifests-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
+          path: build/install_manifest*.txt
+          if-no-files-found: error
+
+      - name: revert ownership of workspace to root
+        run: sudo chown -R root:root .
+        if: always()
