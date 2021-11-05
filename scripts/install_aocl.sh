@@ -19,4 +19,3 @@ installer_url="https://download.altera.com/akdlm/software/acdsinst/$major.$minor
 curl -L -o "$installer" "$installer_url"
 chmod +x "$installer"
 ./"$installer" --mode unattended --installdir "$installdir" --accept_eula 1
-rm "$installer"
