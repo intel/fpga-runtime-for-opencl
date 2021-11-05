@@ -60,6 +60,8 @@ jobs:
     env:
       image: ghcr.io/${{ github.repository }}/${{ matrix.container }}
 
+    continue-on-error: true
+
     steps:
       - name: checkout code
         uses: actions/checkout@v2
