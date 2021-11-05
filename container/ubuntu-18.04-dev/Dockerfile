@@ -11,7 +11,20 @@ WORKDIR /work
 # to extend the `paths` on which the workflow runs.
 COPY scripts/. ./
 
+# Ubuntu 18.04 ships with Git 2.17.1 [1] while actions/checkout@v2
+# requires Git 2.18 or newer [2, 3]. Install the latest stable release
+# from the PPA [4] maintained by Anders Kaseorg <andersk@mit.edu> [5],
+# who has previously co-maintained the official Debian git package [6].
+#
+# [1] https://packages.ubuntu.com/bionic/git
+# [2] https://github.com/rocker-org/rocker-versioned2/issues/52
+# [3] https://github.com/actions/checkout/issues/238
+# [4] https://launchpad.net/~git-core/+archive/ubuntu/ppa
+# [5] https://launchpad.net/~andersk
+# [6] https://tracker.debian.org/pkg/git
 RUN apt-get -y update \
+  && apt-get -y install software-properties-common \
+  && add-apt-repository ppa:git-core/ppa \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   build-essential \
   ca-certificates \
