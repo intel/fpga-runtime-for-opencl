@@ -94,4 +94,6 @@ jobs:
 
       - name: push image to registry
         if: github.event_name == 'push'
-        run: docker image push --all-tags "$image"
+        run: docker image push "$image:$tag"
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
