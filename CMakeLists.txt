@@ -3,7 +3,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-project(fpga-runtime C CXX)
+project(fpga-runtime-for-opencl C CXX)
 
 # https://gitlab.kitware.com/cmake/community/-/wikis/doc/cpack/Packaging-With-CPack
 # https://cmake.org/cmake/help/v3.10/module/CPack.html
