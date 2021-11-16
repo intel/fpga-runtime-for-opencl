@@ -19,6 +19,7 @@ RUN zypper -n update \
   gcc-c++ \
   git \
   gzip \
+  jq \
   libelf-devel \
   libncurses5 \
   make \

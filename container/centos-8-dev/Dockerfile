@@ -21,6 +21,7 @@ RUN sed -i '/^enabled=/s#0#1#' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo \
   gcc \
   gcc-c++ \
   git \
+  jq \
   libasan \
   liblsan \
   libnsl \

@@ -31,6 +31,7 @@ RUN apt-get -y update \
   cmake \
   curl \
   git \
+  jq \
   libelf-dev \
   libtinfo5 \
   libxml2 \
