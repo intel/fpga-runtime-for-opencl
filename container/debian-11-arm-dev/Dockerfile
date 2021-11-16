@@ -20,6 +20,7 @@ RUN dpkg --add-architecture armhf \
   cmake \
   curl \
   git \
+  jq \
   libtinfo5 \
   libxml2 \
   ninja-build \
