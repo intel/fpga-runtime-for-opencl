@@ -1,0 +1,81 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: delta valgrind checks
+
+permissions:
+  # Grant read permissions to repository in case it is not a forked public
+  # repository, but a private repository that was created manually.
+  contents: read
+
+  # Grant read permissions to private container images.
+  packages: read
+
+on:
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/coverage.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - 'cmake/manifests/linux/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    container:
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-dev:main
+
+    env:
+      TMP_DIR: /home/build
+
+    steps:
+      - name: change ownership of workspace to current user
+        run: sudo chown -R build:build .
+      
+      - name: checkout main branch
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.base_ref }}
+      
+      - name: create build directories
+        run: mkdir "$TMP_DIR/child_build" "$TMP_DIR/parent_build"
+
+      - name: create parent build files
+        run: cd "$TMP_DIR/parent_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON
+
+      - name: build parent runtime
+        run: cd "$TMP_DIR/parent_build" && ninja -v -k0
+
+      - name: parent runtime coverage scan
+        run: cd "$TMP_DIR/parent_build" && ctest -T Test -T Coverage
+
+      - name: checkout current branch
+        uses: actions/checkout@v2
+
+      - name: create child build files
+        run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON
+
+      - name: build child runtime
+        run: cd "$TMP_DIR/child_build" && ninja -v -k0
+
+      - name: child runtime coverage scan
+        run: cd "$TMP_DIR/child_build" && ctest -T Test -T Coverage
+      
+      - name: coverage status
+        run: ./scripts/coverage_diff.py "$TMP_DIR/child_build" "$TMP_DIR/parent_build"
+
+      - name: revert ownership of workspace to root
+        run: sudo chown -R root:root .
+        if: always()
