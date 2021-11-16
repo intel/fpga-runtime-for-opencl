@@ -5,6 +5,16 @@ cmake_minimum_required(VERSION 3.10)
 
 project(fpga-runtime C CXX)
 
+# https://gitlab.kitware.com/cmake/community/-/wikis/doc/cpack/Packaging-With-CPack
+# https://cmake.org/cmake/help/v3.10/module/CPack.html
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Intel(R) FPGA Runtime for OpenCL(TM) Software Technology")
+set(CPACK_PACKAGE_VENDOR "Intel Corporation")
+set(CPACK_PACKAGE_VERSION_MAJOR "2022")
+set(CPACK_PACKAGE_VERSION_MINOR "1")
+set(CPACK_PACKAGE_VERSION_PATCH "0")
+set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+
 # Enforce keeping the source directory clean by building in a separate
 # directory. This avoids unnecessary corner cases, e.g., copying files
 # from source to binary directory with identical relative paths.
@@ -110,6 +120,7 @@ if(ACL_WITH_ASAN)
   endforeach()
 endif()
 
+include(CPack)
 include(CTest)
 
 # Get CMAKE_INSTALL_<dir> variables to enable custom library, binary, and include paths
