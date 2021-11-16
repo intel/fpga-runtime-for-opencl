@@ -35,6 +35,7 @@ RUN apt-get -y update \
   libtinfo5 \
   libxml2 \
   ninja-build \
+  python3 \
   sudo \
   zlib1g-dev \
   && apt-get -y clean \
