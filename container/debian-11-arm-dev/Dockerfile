@@ -23,6 +23,7 @@ RUN dpkg --add-architecture armhf \
   libtinfo5 \
   libxml2 \
   ninja-build \
+  python3 \
   sudo \
   # Install cross-compile toolchain and libraries
   g++-arm-linux-gnueabihf \

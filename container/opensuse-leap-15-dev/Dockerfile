@@ -24,6 +24,7 @@ RUN zypper -n update \
   make \
   ninja \
   perl \
+  python3 \
   sudo \
   tar \
   which \

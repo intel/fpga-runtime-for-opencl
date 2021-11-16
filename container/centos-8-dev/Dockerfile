@@ -30,6 +30,7 @@ RUN sed -i '/^enabled=/s#0#1#' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo \
   ncurses-compat-libs-6.1 \
   ninja-build \
   perl \
+  python3 \
   sudo \
   which \
   zlib-devel \
