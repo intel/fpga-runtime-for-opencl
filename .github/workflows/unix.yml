@@ -1,0 +1,33 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+# While mixing files with DOS or Unix line endings in the same project is
+# usually not an issue, DOS line endings may cause unexpected surprises, e.g.,
+# hash-bangs in scripts do not work with DOS line endings. For consistency,
+# enforce UNIX line endings for all except Windows-specific text files.
+name: ensure UNIX line endings
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v2
+
+      # See Git Glossary for pathspec patterns
+      # https://git-scm.com/docs/gitglossary#Documentation/gitglossary.txt-aiddefpathspecapathspec
+      - name: ensure text files do not contain DOS line endings
+        run: |
+          status=0
+          git grep -I --files-with-matches --perl-regexp '\r' -- \
+            ':/' \
+            ':/!cmake/manifests/windows' \
+            || status=$?
+          test $status -eq 1
