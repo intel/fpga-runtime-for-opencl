@@ -3,7 +3,11 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
+FROM ghcr.io/intel/fpga-runtime-for-opencl/certificates AS certificates
+
 FROM ubuntu:20.04
+
+COPY --from=certificates /*.crt /usr/local/share/ca-certificates/
 
 ARG clang_installdir=/opt/clang
 ARG clang_version=13.0.0
@@ -26,6 +30,7 @@ RUN apt-get -y update \
   sudo \
   xz-utils \
   && apt-get -y clean \
+  && update-ca-certificates \
   && curl -L -o "$clang_archive" "$clang_archive_url" \
   && curl -L -o "$clang_archive_sig" "$clang_archive_sig_url" \
   && gpgv --keyring "$PWD/tstellar.gpg" "$clang_archive_sig" "$clang_archive" \

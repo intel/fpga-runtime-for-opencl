@@ -3,7 +3,11 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
+FROM ghcr.io/intel/fpga-runtime-for-opencl/certificates AS certificates
+
 FROM opensuse/leap:15
+
+COPY --from=certificates /*.crt /etc/pki/trust/anchors/
 
 WORKDIR /work
 
@@ -31,6 +35,7 @@ RUN zypper -n update \
   which \
   zlib-devel \
   && zypper -n clean \
+  && update-ca-certificates \
   && ./install_aocl.sh /opt/aocl \
   && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \

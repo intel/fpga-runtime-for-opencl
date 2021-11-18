@@ -3,7 +3,11 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
+FROM ghcr.io/intel/fpga-runtime-for-opencl/certificates AS certificates
+
 FROM ubuntu:20.04
+
+COPY --from=certificates /*.crt /usr/local/share/ca-certificates/
 
 WORKDIR /work
 
@@ -27,6 +31,7 @@ RUN apt-get -y update \
   sudo \
   zlib1g-dev \
   && apt-get -y clean \
+  && update-ca-certificates \
   && ./install_aocl.sh /opt/aocl \
   && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
