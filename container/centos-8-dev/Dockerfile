@@ -3,7 +3,11 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
+FROM ghcr.io/intel/fpga-runtime-for-opencl/certificates AS certificates
+
 FROM centos:8
+
+COPY --from=certificates /*.crt /etc/pki/ca-trust/source/anchors/
 
 WORKDIR /work
 
@@ -36,6 +40,7 @@ RUN sed -i '/^enabled=/s#0#1#' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo \
   which \
   zlib-devel \
   && yum -y clean all \
+  && update-ca-trust \
   && ./install_aocl.sh /opt/aocl \
   && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \

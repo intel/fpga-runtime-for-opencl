@@ -3,7 +3,11 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
+FROM ghcr.io/intel/fpga-runtime-for-opencl/certificates AS certificates
+
 FROM debian:11
+
+COPY --from=certificates /*.crt /usr/local/share/ca-certificates/
 
 WORKDIR /work
 
@@ -32,6 +36,7 @@ RUN dpkg --add-architecture armhf \
   libelf-dev:armhf \
   zlib1g-dev:armhf \
   && apt-get -y clean \
+  && update-ca-certificates \
   && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
   && rm -rf "$PWD"
