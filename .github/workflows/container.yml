@@ -80,17 +80,16 @@ jobs:
         env:
           ref: ${{ github.ref }}
 
-      - name: build image
-        run: docker build -t "$image:$tag" -f container/${{ matrix.container }}/Dockerfile .
-        env:
-          tag: ${{ steps.tag.outputs.tag }}
-
       - name: login to registry
-        if: github.event_name == 'push'
         run: echo "$token" | docker login ghcr.io -u "$user" --password-stdin
         env:
           user: ${{ github.repository_owner }}
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build image
+        run: docker build -t "$image:$tag" -f container/${{ matrix.container }}/Dockerfile .
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
 
       - name: push image to registry
         if: github.event_name == 'push'
