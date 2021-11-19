@@ -3,7 +3,7 @@
 
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 
-name: delta coverage checks
+name: valgrind incremental checks
 
 permissions:
   # Grant read permissions to repository in case it is not a forked public
@@ -72,6 +72,12 @@ jobs:
 
       - name: child runtime valgrind scan
         run: cd "$TMP_DIR/child_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$GITHUB_WORKSPACE/scripts/valgrind_suppression.supp" -T memcheck
+
+      - name: upload valgrind report as manifest
+        uses: actions/upload-artifact@v2
+        with:
+          name: valgrind-${{ github.run_id }}
+          path: "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
 
       - name: valgrind incremental
         run: ./delta_valgrind.sh "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"

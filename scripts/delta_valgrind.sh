@@ -19,6 +19,9 @@ sed -i -E "s/0x.*: //" ${child_valgrind_report}
 # remove file header
 sed -i -e '1,/Parent PID/ d' ${parent_valgrind_report}
 sed -i -e '1,/Parent PID/ d' ${child_valgrind_report}
+# remove source code line number
+sed -i -E "s/\(([^)]*)\)[^(]*$//" ${parent_valgrind_report}
+sed -i -E "s/\(([^)]*)\)[^(]*$//" ${child_valgrind_report}
 # remove file ending
 sed -i -e '/LEAK SUMMARY/Q' ${parent_valgrind_report}
 sed -i -e '/LEAK SUMMARY/Q' ${child_valgrind_report}
