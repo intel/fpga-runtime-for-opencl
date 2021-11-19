@@ -19,36 +19,6 @@ def txt_table(matrix):
     table = [fmt.format(*row) for row in s]
     return '\n'.join(table)
 
-def markdown_table(array):
-    """ Input: Python list with rows of table as lists
-               First element as header. 
-        Output: String to put into a .md file 
-        
-    Ex Input: 
-        [["File Name", "Coverage (%)", "Delta Coverage"],
-         ["filename1",  80           ,  10             ],
-         ["filename2",  70           ,  -5             ]] 
-    """
-
-    markdown = "\n" + "| "
-
-    for e in array[0]:
-        markdown += " " + str(e) + " |"
-    markdown += "\n"
-
-    markdown += '|'
-    for i in range(len(array[0])):
-        markdown += "-------------- | "
-    markdown += "\n"
-
-    for entry in array[1:]:
-        markdown += "| "
-        for e in entry:
-            markdown += str(e) + " | "
-        markdown += "\n"
-
-    return markdown + "\n"
-
 def parse_coverage(child_data, parent_data):
     """
     child_data: xml file string of coverage scan result for child build
@@ -100,7 +70,7 @@ def parse_coverage_status(coverage):
             return {"exit_code":0, "message":"Coverage decreased slightly for less than 20%"} 
     return {"exit_code":0, "message":"Coverage non decreasing."} 
 
-def coverage_table(coverage, format='txt'):
+def coverage_table(coverage):
     """Return the exit code and exit message for given coverage
     coverage: {filename: {parent_cov: float, child_cov: float, delta_cov: float, new_file: bool}}
     output: None
@@ -108,7 +78,7 @@ def coverage_table(coverage, format='txt'):
     columns = ["File Name", "Coverage (%)", "Delta Coverage"]
     separator = ['-'*len(cn) for cn in columns]
     result = [columns, separator] + [[fn, coverage[fn]["child_cov"], coverage[fn]["delta_cov"]] for fn in coverage]
-    return txt_table(result) if format == 'txt' else markdown_table(result)
+    return txt_table(result)
 
 def main():
     parser = argparse.ArgumentParser(description='Optional app description')
@@ -127,7 +97,7 @@ def main():
         parent_data = f.read()
 
     aggregated_coverage = parse_coverage(child_data, parent_data)
-    txt_coverage_table = coverage_table(aggregated_coverage, format='txt')
+    txt_coverage_table = coverage_table(aggregated_coverage)
     exit_result = parse_coverage_status(aggregated_coverage)
 
     print(txt_coverage_table)
