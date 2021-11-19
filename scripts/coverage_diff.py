@@ -56,19 +56,22 @@ def parse_coverage(child_data, parent_data):
     return coverage    
 
 def parse_coverage_status(coverage):
-    """Return the exit code and exit message for given coverage
+    """Return the exit code and exit message for given coverage, also annotate the source files for changed coverage
     coverage: {filename: {parent_cov: float, child_cov: float, delta_cov: float, new_file: bool}}
     output: {"exit_code":int, "message":str} 
     """
-    for fn in coverage:
-        if coverage[fn]["new_file"] and coverage[fn]["delta_cov"] <= 20:
-            # New files need to have at least 20% coverage
-            return {"exit_code":1, "message":"New files need at least 20% coverage."} 
-        elif coverage[fn]["delta_cov"] < 0 and abs(coverage[fn]["delta_cov"]) >= min(20, coverage[fn]["parent_cov"]):
-            return {"exit_code":1, "message":"Coverage decreased severely for more than 20% or a file lost coverage."} 
-        elif coverage[fn]["delta_cov"] < 0:
-            return {"exit_code":0, "message":"Coverage decreased slightly for less than 20%"} 
-    return {"exit_code":0, "message":"Coverage non decreasing."} 
+    file_status = []
+    for fn, fn_coverage in coverage.items():
+        exit_status = file_coverage_status(fn, fn_coverage)
+        if abs(fn_coverage['delta_cov']) > 1:
+            # Annotate files
+            print(f"::{exit_status['log_level']} file={fn},line=1,endLine=1,title=Coverage::{fn_coverage['child_cov']:.1f}% ({fn_coverage['delta_cov']:+.1f}%)")
+        file_status.append(exit_status)
+    # Take the max exit code for all processed file (which is 1 if any of the file has failing condition)
+    exit_code = max([status['exit_code'] for status in file_status])
+    # Join the warning and error message by newlines
+    message = '\n'.join([status['message'] for status in file_status if status['message'] != ""])
+    return {"exit_code":exit_code, "message":message} 
 
 def coverage_table(coverage):
     """Return the exit code and exit message for given coverage
@@ -77,9 +80,20 @@ def coverage_table(coverage):
     """
     columns = ["File Name", "Coverage (%)", "Delta Coverage"]
     separator = ['-'*len(cn) for cn in columns]
-    result = [columns, separator] + [[fn, coverage[fn]["child_cov"], coverage[fn]["delta_cov"]] for fn in coverage]
+    result = [columns, separator] + [[fn, coverage[fn]['child_cov'], coverage[fn]['delta_cov']] for fn in coverage]
     return txt_table(result)
 
+def file_coverage_status(fn, fn_coverage):
+    if fn_coverage["new_file"] and fn_coverage["delta_cov"] <= 20:
+        # New files need to have at least 20% coverage
+        return {"exit_code":1, "message":f"{fn}: New files need at least 20% coverage.", "log_level":"error"} 
+    elif fn_coverage["delta_cov"] < 0 and abs(fn_coverage["delta_cov"]) >= min(20, fn_coverage["parent_cov"]):
+        return {"exit_code":1, "message":f"{fn}: Coverage decreased severely for more than 20% or a file lost coverage.", "log_level":"error"} 
+    elif fn_coverage["delta_cov"] < 0:
+        return {"exit_code":0, "message":f"{fn}: Coverage decreased slightly for less than 20%", "log_level":"warning"} 
+    else:
+        return {"exit_code":0, "message":"", "log_level":"notice"}
+    
 def main():
     parser = argparse.ArgumentParser(description='Optional app description')
     parser.add_argument('child_coverage', type=str,
