@@ -47,10 +47,21 @@ jobs:
       - name: install valgrind
         run: sudo apt-get install -y valgrind
 
+      - name: checkout current branch
+        uses: actions/checkout@v2
+
+      # Remove after merged into main
+      - name: copy suppression file to tmp
+        run: cp scripts/valgrind_suppression.supp $TMP_DIR/valgrind_suppression.supp
+
       - name: checkout main branch
         uses: actions/checkout@v2
         with:
           ref: ${{ github.base_ref }}
+
+      # Remove after merged into main
+      - name: copy suppression file to scripts
+        run: cp $TMP_DIR/valgrind_suppression.supp scripts/valgrind_suppression.supp
       
       - name: create build directories
         run: mkdir "$TMP_DIR/child_build" "$TMP_DIR/parent_build"
