@@ -3,7 +3,7 @@
 
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 
-name: delta valgrind checks
+name: delta coverage checks
 
 permissions:
   # Grant read permissions to repository in case it is not a forked public
