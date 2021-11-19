@@ -1,0 +1,28 @@
+{
+   getenv-Cond
+   Memcheck:Cond
+   ...
+   fun:getenv
+   ...
+}
+{
+   getenv-Addr2
+   Memcheck:Addr2
+   ...
+   fun:getenv
+   ...
+}
+{
+   setenv
+   Memcheck:Cond
+   ...
+   fun:setenv
+   ...
+}
+{
+   unsetenv
+   Memcheck:Cond
+   ...
+   fun:unsetenv
+   ...
+}
