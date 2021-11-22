@@ -41,7 +41,7 @@ jobs:
       - container
 
     container:
-      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-dev:main
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-bdba:main
 
     # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
     environment: bdba
