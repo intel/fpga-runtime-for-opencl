@@ -30,6 +30,8 @@ permissions:
 
 on:
   push:
+    branches:
+      - main
     paths:
       - '.github/workflows/container.yml'
       - 'container/**'
