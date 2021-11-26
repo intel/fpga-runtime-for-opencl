@@ -87,6 +87,9 @@ jobs:
       - name: child runtime valgrind scan
         run: cd "$TMP_DIR/child_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$GITHUB_WORKSPACE/scripts/valgrind_suppression.supp" -T memcheck
 
+      - name: list files
+        run: ls "$TMP_DIR/child_build/Testing/Temporary"
+
       - name: upload valgrind report as manifest
         uses: actions/upload-artifact@v2
         with:
