@@ -289,7 +289,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
   // release them until our own reference count is 0.
 
   if (acl_ref_count(context) > context->num_automatic_references) {
-    acl_release(context);
+    // acl_release(context);
   } else {
     // num_automatic_references is the ref count the context had when it was
     // given to the user. So, if we have a ref count equal to that, the user
@@ -302,7 +302,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
     // they're gonna call clReleaseContext themselves. This stops us from
     // recursively trying to delete them again.
     if (context->is_being_freed) {
-      acl_release(context);
+      // acl_release(context);
       UNLOCK_RETURN(CL_SUCCESS);
     }
     context->is_being_freed = 1;

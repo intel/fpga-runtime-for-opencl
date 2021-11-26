@@ -94,7 +94,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           name: valgrind-${{ github.run_id }}
-          path: "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
+          path: /home/build/child_build/Testing/Temporary/MemoryChecker.6.log
 
       - name: valgrind incremental
         run: ./scripts/delta_valgrind.sh "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
