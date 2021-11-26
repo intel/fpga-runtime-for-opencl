@@ -50,18 +50,10 @@ jobs:
       - name: checkout current branch
         uses: actions/checkout@v2
 
-      # Remove after merged into main
-      - name: copy suppression file to tmp
-        run: cp scripts/valgrind_suppression.supp $TMP_DIR/valgrind_suppression.supp
-
       - name: checkout main branch
         uses: actions/checkout@v2
         with:
           ref: ${{ github.base_ref }}
-
-      # Remove after merged into main
-      - name: copy suppression file to scripts
-        run: cp $TMP_DIR/valgrind_suppression.supp scripts/valgrind_suppression.supp
       
       - name: create build directories
         run: mkdir "$TMP_DIR/child_build" "$TMP_DIR/parent_build"
@@ -73,10 +65,13 @@ jobs:
         run: cd "$TMP_DIR/parent_build" && ninja -v -k0
 
       - name: parent runtime valgrind scan
-        run: cd "$TMP_DIR/parent_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$GITHUB_WORKSPACE/scripts/valgrind_suppression.supp" -T memcheck
+        run: cd "$TMP_DIR/parent_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no --gen-suppressions=all" -T memcheck
 
       - name: checkout current branch
         uses: actions/checkout@v2
+
+      - name: get parent valgrind suppression file
+        run: cat "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" | scripts/parse_valgrind_suppressions.sh > "$TMP_DIR/valgrind_suppression.supp"
 
       - name: create child build files
         run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug
@@ -85,10 +80,7 @@ jobs:
         run: cd "$TMP_DIR/child_build" && ninja -v -k0
 
       - name: child runtime valgrind scan
-        run: cd "$TMP_DIR/child_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$GITHUB_WORKSPACE/scripts/valgrind_suppression.supp" -T memcheck
-
-      - name: list files
-        run: ls "$TMP_DIR/child_build/Testing/Temporary"
+        run: cd "$TMP_DIR/child_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$TMP_DIR/valgrind_suppression.supp" -T memcheck
 
       - name: upload valgrind report as manifest
         uses: actions/upload-artifact@v2
@@ -97,7 +89,13 @@ jobs:
           path: /home/build/child_build/Testing/Temporary/MemoryChecker.6.log
 
       - name: valgrind incremental
-        run: ./scripts/delta_valgrind.sh "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
+        run: |
+          if [ -s "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log" ]; then
+            # The valgrind log after suppressing all parent log is not empty
+            cat "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
+            exit 1
+          fi
+          
 
       - name: revert ownership of workspace to root
         run: sudo chown -R root:root .
