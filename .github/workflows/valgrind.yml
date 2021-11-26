@@ -94,7 +94,7 @@ jobs:
           path: "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
 
       - name: valgrind incremental
-        run: ./delta_valgrind.sh "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
+        run: ./scripts/delta_valgrind.sh "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" "$TMP_DIR/child_build/Testing/Temporary/MemoryChecker.6.log"
 
       - name: revert ownership of workspace to root
         run: sudo chown -R root:root .
