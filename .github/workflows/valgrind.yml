@@ -72,7 +72,7 @@ jobs:
 
       - name: get parent valgrind suppression file
         run: |
-          cat "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" | ./scripts/parse_valgrind_suppressions.sh > "$TMP_DIR/valgrind_suppression.supp"
+          cat "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" | gawk ./scripts/parse_valgrind_suppressions.sh > "$TMP_DIR/valgrind_suppression.supp"
 
       - name: create child build files
         run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug
