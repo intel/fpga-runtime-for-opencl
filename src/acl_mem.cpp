@@ -228,7 +228,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObjectIntelFPGA(cl_mem mem) {
           }
         }
         acl_mutex_destroy(&(mem->host_pipe_info->m_lock));
-        // acl_delete(mem->host_pipe_info);
+        acl_delete(mem->host_pipe_info);
         context->pipe_vec.erase(std::remove(context->pipe_vec.begin(),
                                             context->pipe_vec.end(), mem));
       }
