@@ -32,11 +32,7 @@ on:
 
 jobs:
   build:
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - container
+    runs-on: ubuntu-20.04
 
     container:
       image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-klocwork-desktop-tools:main
