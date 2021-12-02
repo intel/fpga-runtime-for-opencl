@@ -48,6 +48,7 @@ jobs:
       matrix:
         image:
           - windows-2019
+          - windows-2022
 
         config:
           - Debug
