@@ -50,6 +50,9 @@ jobs:
       - name: checkout current branch
         uses: actions/checkout@v2
 
+      - name: copy necessary suppression files
+        run: cp ./scripts/valgrind_suppression.supp "$TMP_DIR/valgrind_suppression_base.supp"
+
       - name: checkout main branch
         uses: actions/checkout@v2
         with:
@@ -73,6 +76,7 @@ jobs:
       - name: get parent valgrind suppression file
         run: |
           cat "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" | ./scripts/parse_valgrind_suppressions.sh > "$TMP_DIR/valgrind_suppression.supp"
+          cat "$TMP_DIR/valgrind_suppression_base.supp" >> "$TMP_DIR/valgrind_suppression.supp"
       
       - name: cat valgrind suppresion file
         run: |
