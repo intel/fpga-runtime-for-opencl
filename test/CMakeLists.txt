@@ -15,7 +15,6 @@ add_executable(acl_test
   acl_globals_test.cpp
   acl_hal_mmd_test.cpp
   acl_hal_test.cpp
-  acl_hash_test.cpp
   acl_kernel_test.cpp
   acl_mem_test.cpp
   acl_platform_test.cpp
