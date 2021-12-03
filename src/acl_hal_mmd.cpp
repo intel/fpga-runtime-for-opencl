@@ -763,7 +763,7 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
 cl_bool l_load_board_libraries(cl_bool load_libraries) {
   // Keeping the old path for backward compatibility
   std::string board_vendor_path_old = "/opt/Intel/OpenCL_boards/";
-  std::string board_vendor_path;
+  std::string board_vendor_path = "/opt/Intel/OpenCL/Boards/";
   auto *customer_board_vendor_path = acl_getenv("ACL_BOARD_VENDOR_PATH");
   acl_assert_locked();
 
@@ -774,9 +774,6 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
     // append the '/' to the end of the customer_board_vendor_path
     // and load it to board_vendor_path
     board_vendor_path = customer_board_vendor_path + std::string("/");
-  } else {
-    // use the default path
-    board_vendor_path = "/opt/Intel/OpenCL/Boards/";
   }
 
   ACL_HAL_DEBUG_MSG_VERBOSE(1, "Intel(R) FPGA Board Vendor Path: %s\n",
