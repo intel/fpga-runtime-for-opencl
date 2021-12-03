@@ -2799,6 +2799,52 @@ TEST(acl_mem, case_205751_overlapping_alloc) {
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(c));
 }
 
+TEST(acl_mem, buffer_location_property) {
+  ACL_LOCKED(acl_print_debug_msg("begin buffer_location_property\n"));
+  // Test assumes more than 1 global memory space
+  // Allocate a small buffer (a), then try to allocate two buffers (b, c) of
+  // size bank_size.  Expect the second allocation to fail.
+  cl_mem a;
+  cl_int status = CL_SUCCESS;
+  size_t total_size = ACL_RANGE_SIZE(
+      m_device[0]->def.autodiscovery_def.global_mem_defs[0].range);
+  size_t bank_size = total_size / 2;
+  size_t small_size = bank_size / 1024;
+
+  cl_mem_properties_intel props[] = {CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, 0, 0};
+  a = clCreateBufferWithPropertiesINTEL(m_context, props, 0, bank_size, 0,
+                                        &status);
+  ACL_LOCKED(CHECK(acl_mem_is_valid(a)));
+  CHECK_EQUAL(CL_SUCCESS, status);
+  assert(a);
+  CHECK_EQUAL(1, acl_ref_count(a));
+  cl_uint read_mem_id = 4;
+  size_t size_ret;
+  CHECK_EQUAL(CL_SUCCESS,
+              clGetMemObjectInfo(a, CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                 sizeof(cl_uint), &read_mem_id, &size_ret));
+  CHECK_EQUAL(0, read_mem_id);
+
+  cl_buffer_region test_region = {0, 2};
+  cl_mem subbuffer =
+      clCreateSubBuffer(a, CL_MEM_READ_WRITE, CL_BUFFER_CREATE_TYPE_REGION,
+                        &test_region, &status);
+  ACL_LOCKED(CHECK(acl_mem_is_valid(subbuffer)));
+  CHECK_EQUAL(CL_SUCCESS, status);
+  assert(subbuffer);
+  CHECK_EQUAL(2, acl_ref_count(a));
+  read_mem_id = 4;
+  CHECK_EQUAL(CL_SUCCESS,
+              clGetMemObjectInfo(subbuffer, CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                 sizeof(cl_uint), &read_mem_id, &size_ret));
+  CHECK_EQUAL(0, read_mem_id);
+
+  ACL_LOCKED(CHECK_EQUAL(acl_bind_buffer_to_device(m_cq->device, a), 1));
+
+  CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(subbuffer));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(a));
+}
+
 MT_TEST(acl_mem, map_buf_bad_flags) {
   ACL_LOCKED(acl_print_debug_msg("begin buf_bad_flags\n"));
   cl_int status = CL_SUCCESS;

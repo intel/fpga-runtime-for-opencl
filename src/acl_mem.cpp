@@ -416,6 +416,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
   cl_bool context_has_device_with_physical_mem;
   unsigned int idevice;
   cl_uint bank_id = 0;
+  cl_uint tmp_mem_id = 0;
   acl_lock();
 
 #ifdef MEM_DEBUG_MSG
@@ -430,6 +431,9 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
                          "Both channel flag and channel property are set");
       }
       bank_id = (cl_uint) * (properties + 1);
+    } break;
+    case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+      tmp_mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
       UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
@@ -553,6 +557,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
     UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
                      "Could not allocate a cl_mem object");
   }
+  mem->mem_id = tmp_mem_id;
 
   mem->block_allocation = new_block;
   mem->block_allocation->mem_obj = mem;
@@ -784,7 +789,6 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
     mem->context = context;
     mem->flags = flags;
     mem->size = size;
-    mem->mem_id = 0;
 
     mem->bank_id = 0;
     if (is_SOC_device()) {
@@ -1254,7 +1258,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
 
     mem->context = context;
     mem->flags = sub_flags;
-    mem->mem_id = 0;
+    mem->mem_id = buffer->mem_id;
 
     if (is_SOC_device()) {
       // HPS DDR is system managed for SoC.
@@ -1372,6 +1376,9 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfoIntelFPGA(
   context = mem->context;
 
   switch (param_name) {
+  case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL:
+    RESULT_UINT(mem->mem_id);
+    break;
   case CL_MEM_TYPE:
     RESULT_ENUM(mem->mem_object_type);
     break;
@@ -4416,6 +4423,10 @@ void acl_resize_reserved_allocations_for_device(cl_mem mem,
   unsigned int physical_device_id = def.physical_device_id;
   unsigned int num_global_mem_systems =
       def.autodiscovery_def.num_global_mem_systems;
+
+  // When we don't know how many memory systems will exist
+  // Load as much as needed.
+  num_global_mem_systems = std::max(num_global_mem_systems, mem->mem_id + 1);
 
   // For the simulation flow we don't know how many memory systems will exist
   // until we load the .aocx, which may not happen until somewhat later.
