@@ -160,6 +160,24 @@ ctest -V
 
 -   Running unit tests is not supported for ARM cross compilation.
 
+-   To run unit tests individually, first set the board package directory:
+
+    ```
+    export AOCL_BOARD_PACKAGE_ROOT="$(git rev-parse --show-toplevel)/test/board/a10_ref"
+    ```
+
+    Switch to the directory containing the test executable:
+
+    ```
+    cd build/test
+    ```
+
+    Run the tests whose [group and name contain the given substrings](https://github.com/cpputest/cpputest/blob/master/README.md#command-line-switches):
+
+    ```
+    ./acl_test -v -g acl_mem -n create_buffer
+    ```
+
 ## Using the Runtime
 
 ### With IntelⓇ FPGA SDK for OpenCL™ or IntelⓇ FPGA RTE for OpenCL™ 
