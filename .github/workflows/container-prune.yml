@@ -1,0 +1,37 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+# https://docs.docker.com/config/pruning/
+name: prune container images on self-hosted runners
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/container-prune.yml'
+
+  # https://docs.github.com/en/actions/learn-github-actions/events-that-trigger-workflows#scheduled-events-schedule
+  schedule:
+    # UTC time of midnight in Pacific Standard Time
+    - cron: '0 8 * * *'
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    steps:
+      # https://pkg.go.dev/time#ParseDuration
+      - name: prune stopped containers, unused networks, unused untagged images, and build cache older than a day
+        run: docker system prune --force --filter 'until=24h'
+
+      - name: prune unused tagged images older than a week
+        run: docker system prune --force --all --filter 'until=168h'
