@@ -255,8 +255,8 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
   cl_int status;
 
   // Use cl_mem for convenience
-  cl_mem usm_device_buffer =
-      clCreateBufferIntelFPGA(context, CL_MEM_READ_WRITE, size, NULL, &status);
+  cl_mem usm_device_buffer = clCreateBufferWithPropertiesINTEL(
+      context, NULL, CL_MEM_READ_WRITE, size, NULL, &status);
   if (status != CL_SUCCESS) {
     UNLOCK_BAIL_INFO(status, context, "Failed to allocate device memory");
   }
