@@ -9,9 +9,6 @@
 #include "acl_hash/acl_hash.h"
 #include "acl_test.h"
 
-static void debug_more() {}
-static void debug_less() {}
-
 TEST_GROUP(Hash) {
   enum { DIGEST_SIZE = 41 };
   void setup() { acl_hash_init_sha1(&m_ctx); }
@@ -129,7 +126,6 @@ TEST(Hash, hexdigest_short) {
 
 TEST(Hash, hexdigest_long_parts) {
   // Long string, in small parts.
-  debug_more();
   CHECK_EQUAL(1, acl_hash_init_sha1(&m_ctx));
   for (unsigned i = 0; i < 500; i++) {
     CHECK_EQUAL(6 * i, m_ctx.alg.sha1.len);
@@ -141,7 +137,6 @@ TEST(Hash, hexdigest_long_parts) {
   CHECK_EQUAL(1, acl_hash_hexdigest(&m_ctx, m_digest, DIGEST_SIZE));
   CHECK_EQUAL(0, strcmp(m_digest, "86613b0ff1c3ec6415c40b6638a4b56d73baa800"));
   CHECK_EQUAL(0, m_ctx.is_open);
-  debug_less();
 }
 
 TEST(Hash, hexdigest_str64) {
