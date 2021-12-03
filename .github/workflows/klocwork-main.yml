@@ -5,6 +5,11 @@
 
 name: Klocwork main branch scan
 
+# Limit to single workflow run at any given time.
+# kwadmin cannot load the same Klocwork project multiple times in parallel.
+# https://github.blog/changelog/2021-04-19-github-actions-limit-workflow-run-or-job-concurrency/
+concurrency: klocwork
+
 # https://github.blog/changelog/2021-04-20-github-actions-control-permissions-for-github_token/
 permissions:
   # Grant read permissions to repository in case it is not a forked public
