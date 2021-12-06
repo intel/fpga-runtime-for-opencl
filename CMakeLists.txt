@@ -196,6 +196,7 @@ set_target_properties(acl_objs PROPERTIES
 target_compile_features(acl_objs PRIVATE cxx_std_11)
 # These compile_definitions need to be public, since we're building an OBJECT library (?)
 target_compile_definitions(acl_objs PUBLIC
+  _GLIBCXX_USE_CXX11_ABI=0
   ACL_SUPPORT_DOUBLE=0
   ACL_HAS_STDLIB_STDIO
   CL_USE_DEPRECATED_OPENCL_1_0_APIS=1
