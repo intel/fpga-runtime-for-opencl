@@ -196,6 +196,11 @@ set_target_properties(acl_objs PROPERTIES
 target_compile_features(acl_objs PRIVATE cxx_std_11)
 # These compile_definitions need to be public, since we're building an OBJECT library (?)
 target_compile_definitions(acl_objs PUBLIC
+  # Revert to old pre-C++11 ABI for std::string and std::list in libstdc++.
+  # This is needed for ABI compatibility with the Intel® FPGA Add-On for
+  # oneAPI Base Toolkit, particularly the simulation flow, which accesses
+  # the internal runtime API that exposes C++ structures and functions.
+  # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html
   _GLIBCXX_USE_CXX11_ABI=0
   ACL_SUPPORT_DOUBLE=0
   ACL_HAS_STDLIB_STDIO
