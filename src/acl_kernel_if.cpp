@@ -1415,9 +1415,6 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                           &finish_counter);
       ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d has %d finishes.\n", k,
                               finish_counter);
-      // At this point, this kernel has finish bit set on CSR
-      // Finish counter should be > 0
-      assert(finish_counter > 0);
     }
 
     for (i = 0; i < finish_counter; i++) {
