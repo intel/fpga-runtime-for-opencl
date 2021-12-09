@@ -78,9 +78,11 @@ jobs:
           cat "$TMP_DIR/parent_build/Testing/Temporary/MemoryChecker.6.log" | ./scripts/parse_valgrind_suppressions.sh > "$TMP_DIR/valgrind_suppression.supp"
           cat "$TMP_DIR/valgrind_suppression_base.supp" >> "$TMP_DIR/valgrind_suppression.supp"
       
-      - name: cat valgrind suppresion file
-        run: |
-          cat "$TMP_DIR/valgrind_suppression.supp"
+      - name: upload valgrind report as manifest
+        uses: actions/upload-artifact@v2
+        with:
+          name: suppression-${{ github.run_id }}
+          path: /home/build/valgrind_suppression.supp
 
       - name: create child build files
         run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug
@@ -91,7 +93,13 @@ jobs:
       - name: child runtime valgrind scan
         run: cd "$TMP_DIR/child_build" && ctest --overwrite MemoryCheckCommandOptions="--leak-check=full --show-reachable=yes --error-limit=no" --overwrite MemoryCheckSuppressionFile="$TMP_DIR/valgrind_suppression.supp" -T memcheck
 
-      - name: upload valgrind report as manifest
+      - name: upload parent valgrind report as manifest
+        uses: actions/upload-artifact@v2
+        with:
+          name: parent-valgrind-${{ github.run_id }}
+          path: /home/build/parent_build/Testing/Temporary/MemoryChecker.6.log
+
+      - name: upload child valgrind report as manifest
         uses: actions/upload-artifact@v2
         with:
           name: valgrind-${{ github.run_id }}

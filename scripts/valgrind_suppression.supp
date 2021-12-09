@@ -6,8 +6,36 @@
    ...
 }
 {
+   getenv-Addr1
+   Memcheck:Addr1
+   ...
+   fun:getenv
+   ...
+}
+{
    getenv-Addr2
    Memcheck:Addr2
+   ...
+   fun:getenv
+   ...
+}
+{
+   getenv-Addr4
+   Memcheck:Addr4
+   ...
+   fun:getenv
+   ...
+}
+{
+   getenv-Addr8
+   Memcheck:Addr8
+   ...
+   fun:getenv
+   ...
+}
+{
+   getenv-Addr16
+   Memcheck:Addr16
    ...
    fun:getenv
    ...
