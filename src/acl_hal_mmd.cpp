@@ -22,6 +22,7 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <link.h>
+#include <chrono>
 #endif
 
 #ifdef _MSC_VER
@@ -2401,24 +2402,9 @@ cl_ulong acl_hal_mmd_get_timestamp() {
 
 // Query the system timer, return a timer value in ns
 cl_ulong acl_hal_mmd_get_timestamp() {
-  struct timespec a;
-  const cl_ulong NS_PER_S = 1000000000;
   acl_assert_locked_or_sig();
-  // Must use the MONOTONIC clock because the REALTIME clock
-  // can go backwards due to adjustments by NTP for clock drift.
-  // The MONOTONIC clock provides a timestamp since some fixed point in
-  // the past, which might be system boot time or the start of the Unix
-  // epoch.  This matches the Windows QueryPerformanceCounter semantics.
-  // The MONOTONIC clock is to be used for measuring time intervals, and
-  // fits the semantics of timestamps from the *device* perspective as defined
-  // in OpenCL for clGetEventProfilingInfo.
-#ifdef CLOCK_MONOTONIC_RAW
-  clock_gettime(CLOCK_MONOTONIC_RAW, &a);
-#else
-  clock_gettime(CLOCK_MONOTONIC, &a);
-#endif
-
-  return (cl_ulong)(a.tv_nsec) + (cl_ulong)(a.tv_sec * NS_PER_S);
+  unsigned long nano_timestamp = std::chrono::steady_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
+  return (cl_ulong)nano_timestamp;
 }
 #endif
 
