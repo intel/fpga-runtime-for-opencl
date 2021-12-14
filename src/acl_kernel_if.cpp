@@ -880,6 +880,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
     assert(kern->accel_perf_mon);
     kern->accel_num_printfs =
         (unsigned int *)acl_malloc(kern->num_accel * sizeof(unsigned int));
+    assert(kern->accel_num_printfs);
 
     // The Kernel CSR registers
     // The new and improved config ROM give us the address *offsets* from
