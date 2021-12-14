@@ -953,6 +953,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
 
     kern->accel_invoc_queue_depth =
         (unsigned int *)acl_malloc(kern->num_accel * sizeof(unsigned int));
+    assert(kern->accel_invoc_queue_depth);
 
     // Kernel IRQ is a separate thread. Need to use circular buffer to make this
     // multithread safe.
