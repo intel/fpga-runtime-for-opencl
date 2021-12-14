@@ -874,6 +874,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
     // Allocations for each kernel
     kern->accel_csr = (acl_kernel_if_addr_range *)acl_malloc(
         kern->num_accel * sizeof(acl_kernel_if_addr_range));
+    assert(kern->accel_csr);
     kern->accel_perf_mon = (acl_kernel_if_addr_range *)acl_malloc(
         kern->num_accel * sizeof(acl_kernel_if_addr_range));
     kern->accel_num_printfs =
