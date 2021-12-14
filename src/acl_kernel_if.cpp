@@ -960,6 +960,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
     kern->accel_queue_front = (int *)acl_malloc(kern->num_accel * sizeof(int));
     assert(kern->accel_queue_front);
     kern->accel_queue_back = (int *)acl_malloc(kern->num_accel * sizeof(int));
+    assert(kern->accel_queue_back);
 
     for (unsigned a = 0; a < kern->num_accel; ++a) {
       unsigned int max_same_accel_launches =
