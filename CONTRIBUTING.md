@@ -18,6 +18,16 @@ your proposed changes.
 1.  Browse to the [runtime repository] and [create a forked repository] under
     your GitHub username.
 
+    In your forked repository, under *Settings* → *Actions* set the *Actions
+    permissions* to **Disable Actions** to avoid triggering workflow runs in
+    your own repository, which will fail to fetch the required container
+    images.
+
+    Under *Settings* → *Merge button* select **Automatically delete head
+    branches** to have your pull-request branches automatically deleted
+    when the respective pull request is merged.
+
+
 2.  Clone the [runtime repository]:
 
     ```
