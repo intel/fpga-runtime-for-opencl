@@ -46,7 +46,9 @@ jobs:
         run: sudo chown -R klocwork:klocwork .
 
       - name: create local Klocwork project
-        run: kwcheck create --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+        run: |
+          mkdir -p /home/klocwork/parent
+          kwcheck create --project-dir /home/klocwork/parent/.kwlp --settings-dir /home/klocwork/parent/.kwps
 
       - name: checkout base ref
         uses: actions/checkout@v2
@@ -62,12 +64,16 @@ jobs:
         run: kwinject --output kwinject.out ninja -C build -v -k0
 
       - name: fully analyze build of base ref
-        run: kwcheck run --build-spec kwinject.out -F scriptable --report issues.txt --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+        run: kwcheck run --build-spec kwinject.out -F scriptable --report /home/klocwork/parent_issues.txt --project-dir /home/klocwork/parent/.kwlp --settings-dir /home/klocwork/parent/.kwps
 
-      - name: ignore issues of base ref
+      # Use non numeric sort because `comm` expects default sorting order
+      - name: get parent issue ids
+        run: awk -F ';' '{print $1}' /home/klocwork/parent_issues.txt | sort > /home/klocwork/parent_issues_ids.txt
+      
+      - name: copy parent klocwork project
         run: |
-          count=$(wc -l < issues.txt)
-          test "$count" = "0" || kwcheck set-status 1-"$count" --status ignore --project-dir /home/klocwork/.kwlp
+          mkdir -p /home/klocwork/child
+          cp -r /home/klocwork/parent/.kwlp /home/klocwork/parent/.kwps /home/klocwork/child
 
       - name: checkout head ref
         uses: actions/checkout@v2
@@ -81,13 +87,31 @@ jobs:
         run: kwinject --output kwinject.out ninja -C build -v -k0
 
       - name: incrementally analyze build of head ref
-        run: kwcheck run --build-spec kwinject.out -F scriptable --report issues.txt --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
+        run: kwcheck run --build-spec kwinject.out -F scriptable --report /home/klocwork/child_issues.txt --project-dir /home/klocwork/child/.kwlp --settings-dir /home/klocwork/child/.kwps
+
+      # Klocwork incremental scans will suppress the issues that were fixed in head ref (while preserving their issue id)
+      # Any new issue will have id will be larger than the max id in scan of base ref.
+      # For example, if base ref scan produced issue ids 1-5, and in head ref issue 4 was resolved but also introduced a new issue
+      # then the resulting issue ids for head ref scan will be 1,2,3,5,6.
+      - name: get child issue ids
+        run: awk -F ';' '{print $1}' /home/klocwork/child_issues.txt | sort > /home/klocwork/child_issues_ids.txt
+      
+      - name: list issues fixed in head ref
+        run: |
+          FIXED_ISSUE_ID=$(comm -13 /home/klocwork/child_issues_ids.txt /home/klocwork/parent_issues_ids.txt | paste -sd,)
+          if [ -n "$FIXED_ISSUE_ID" ]
+          then
+            kwcheck list --id "$FIXED_ISSUE_ID" -F detailed --project-dir /home/klocwork/parent/.kwlp --settings-dir /home/klocwork/parent/.kwps
+          fi
 
       - name: ensure no new issues have been found in head ref
         run: |
-          kwcheck list -F detailed --project-dir /home/klocwork/.kwlp --settings-dir /home/klocwork/.kwps
-          size=$(stat --printf=%s issues.txt)
-          test "$size" = "0"
+          NEW_ISSUE_ID=$(comm -13 /home/klocwork/parent_issues_ids.txt /home/klocwork/child_issues_ids.txt | paste -sd,)
+          if [ -n "$NEW_ISSUE_ID" ]
+          then
+            kwcheck list --id "$NEW_ISSUE_ID" -F detailed --project-dir /home/klocwork/child/.kwlp --settings-dir /home/klocwork/child/.kwps
+          fi
+          test -z "$NEW_ISSUE_ID"
 
       - name: revert ownership of workspace to root
         run: sudo chown -R root:root .
