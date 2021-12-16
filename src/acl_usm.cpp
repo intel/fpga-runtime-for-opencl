@@ -239,10 +239,14 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
   // Iterate over properties.
   // The end of the properties list is specified with a zero.
   cl_mem_alloc_flags_intel alloc_flags = 0;
+  cl_uint mem_id = acl_get_default_memory(device->def);
   while (properties != NULL && *properties != 0) {
     switch (*properties) {
     case CL_MEM_ALLOC_FLAGS_INTEL: {
       alloc_flags = *(properties + 1);
+    } break;
+    case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+      mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
       UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
@@ -254,8 +258,10 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
   cl_int status;
 
   // Use cl_mem for convenience
+  cl_mem_properties_intel props[] = {CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, mem_id,
+                                     0};
   cl_mem usm_device_buffer = clCreateBufferWithPropertiesINTEL(
-      context, NULL, CL_MEM_READ_WRITE, size, NULL, &status);
+      context, props, CL_MEM_READ_WRITE, size, NULL, &status);
   if (status != CL_SUCCESS) {
     UNLOCK_BAIL_INFO(status, context, "Failed to allocate device memory");
   }
@@ -602,6 +608,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
       RESULT_UINT(usm_alloc->type);
     } else {
       RESULT_UINT(CL_MEM_TYPE_UNKNOWN_INTEL);
+    }
+  } break;
+
+  case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+    if (usm_alloc) {
+      RESULT_UINT(usm_alloc->mem->mem_id);
+    } else {
+      RESULT_UINT(0);
     }
   } break;
 
