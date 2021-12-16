@@ -5,6 +5,10 @@ cmake_minimum_required(VERSION 3.10)
 
 project(fpga-runtime-for-opencl C CXX)
 
+# Set default C++ standard property of targets.
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # https://gitlab.kitware.com/cmake/community/-/wikis/doc/cpack/Packaging-With-CPack
 # https://cmake.org/cmake/help/v3.10/module/CPack.html
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Intel(R) FPGA Runtime for OpenCL(TM) Software Technology")
