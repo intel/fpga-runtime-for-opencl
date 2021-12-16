@@ -388,6 +388,62 @@ MT_TEST(acl_usm, alloc_and_free_device_usm) {
   ACL_LOCKED(acl_print_debug_msg("end alloc_and_free_device_usm\n"));
 }
 
+MT_TEST(acl_usm, buffer_location_usm) {
+  ACL_LOCKED(acl_print_debug_msg("begin buffer_location_usm\n"));
+  const int alignment = ACL_MEM_ALIGN;
+  cl_int status;
+  this->yeah = true;
+
+  acl_usm_allocation_t *test_device_alloc;
+
+  cl_mem_properties_intel good_property[3] = {
+      CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, 0, 0};
+
+  ACL_LOCKED(CHECK(acl_context_is_valid(m_context)));
+
+  // Correct USM buffer allocation
+  void *test_ptr = clDeviceMemAllocINTEL(
+      m_context, m_device[0], &(good_property[0]), 8, alignment, &status);
+  CHECK_EQUAL(status, CL_SUCCESS);
+  CHECK(ACL_DEVICE_ALLOCATION(test_ptr));
+  CHECK(test_ptr != NULL);
+  CHECK(!m_context->usm_allocation.empty());
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(m_context, test_ptr),
+                         CL_TRUE));
+  ACL_LOCKED(test_device_alloc =
+                 acl_get_usm_alloc_from_ptr(m_context, test_ptr));
+  assert(test_device_alloc);
+  CHECK_EQUAL(test_device_alloc->range.begin, test_ptr);
+
+  // Check alloc information
+  cl_uint read_mem_id = 4;
+  size_t ret_size = 9;
+  status = clGetMemAllocInfoINTEL(m_context, test_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+
+  status = clMemFreeINTEL(m_context, test_ptr);
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(m_context, test_ptr),
+                         CL_FALSE));
+  CHECK(m_context->usm_allocation.empty());
+
+  // Check when given pointer is already freed
+  status = clGetMemAllocInfoINTEL(m_context, test_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+  CHECK_EQUAL(status, CL_SUCCESS);
+
+  ACL_LOCKED(acl_print_debug_msg("end buffer_location_usm\n"));
+}
+
 MT_TEST(acl_usm, alloc_and_free_shared_usm) {
   ACL_LOCKED(acl_print_debug_msg("begin alloc_and_free_shared_usm\n"));
   const int alignment = 16;
