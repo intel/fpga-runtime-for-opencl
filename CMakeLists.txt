@@ -111,6 +111,43 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   endforeach()
 endif()
 
+# Add compiler-specific hardening flags.
+if(CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|GNU)$")
+  add_compile_options(
+    # Warn about potentially unsafe code.
+    -Wall
+    # Warn about implicit conversions that potentially alter a value.
+    -Wconversion
+    # Check argument types of format string function calls, e.g., printf.
+    -Wformat
+    # Check for potential security issues in format string function calls.
+    -Wformat-security
+    # Revert strict aliasing enabled at optimization levels -O2, -O3, -Os.
+    -fno-strict-aliasing
+    # Check for buffer overflows such as stack smashing attacks.
+    -fstack-protector
+    # Enable fortified wrappers of GNU C library functions.
+    -D_FORTIFY_SOURCE=2
+    # Optimize debugging experience, required for _FORTIFY_SOURCE.
+    # https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-Og
+    $<$<CONFIG:Debug>:-Og>
+    )
+
+  # We need to support CMake 3.10, add_link_options() was added in CMake 3.13.
+  # link_libraries() passes flags through as long as they do not contain spaces.
+  # https://cmake.org/cmake/help/v3.13/command/add_link_options.html
+  link_libraries(
+    # Check objects for unresolved symbol references.
+    -Wl,--no-undefined
+    # Mark library as not requiring executable stack.
+    -Wl,-z,noexecstack
+    # Resolve all symbols when program is started, instead of on first use.
+    -Wl,-z,now
+    # Mark Global Offset Table read-only after resolving symbols.
+    -Wl,-z,relro
+    )
+endif()
+
 # https://clang.llvm.org/docs/AddressSanitizer.html
 option(ACL_WITH_ASAN "Build with address sanitizer" OFF)
 message(STATUS "Build with address sanitizer: ${ACL_WITH_ASAN}")
