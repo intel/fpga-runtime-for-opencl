@@ -231,7 +231,13 @@ target_include_directories(acl_objs PRIVATE
 
 add_library(acl SHARED $<TARGET_OBJECTS:acl_objs>)
 set_property(TARGET acl PROPERTY OUTPUT_NAME "alteracl")
-target_link_libraries(acl PRIVATE acl_check_sys_cmd acl_hash acl_threadsupport pkg_editor)
+target_link_libraries(acl PRIVATE
+  acl_check_sys_cmd
+  acl_hash
+  acl_threadsupport
+  pkg_editor
+  Threads::Threads
+  )
 if(UNIX)
   # we need this flag to expose symbols, otherwise linking will fail with:
   # "relocation against protected symbol X can not be used when making a shared object"
