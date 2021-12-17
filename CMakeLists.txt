@@ -146,6 +146,45 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|GNU)$")
     # Mark Global Offset Table read-only after resolving symbols.
     -Wl,-z,relro
     )
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+  add_compile_options(
+    # Enable compiler warnings.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/compiler-option-warning-level
+    /Wall
+    # Enable buffer security check.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/gs-buffer-security-check
+    /GS
+    # Enable additional security shecks.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/sdl-enable-additional-security-checks
+    /sdl
+    # Disable warnings about the use of safe C library functions, which
+    # suggest the use of proprietary, non-portable alternatives.
+    # https://gitlab.gnome.org/GNOME/glib/-/issues/2357
+    # https://github.com/GNOME/glib/blob/49ec7f18e3fd1070a8d546ae6cc4acbea8055dbc/msvc_recommended_pragmas.h#L39-L41
+    -D_CRT_SECURE_NO_WARNINGS
+    -D_CRT_NONSTDC_NO_WARNINGS
+    )
+
+  # We need to support CMake 3.10, add_link_options() was added in CMake 3.13.
+  # link_libraries() passes flags through as long as they do not contain spaces.
+  # https://cmake.org/cmake/help/v3.13/command/add_link_options.html
+  link_libraries(
+    # Enable address space layout randomization.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/dynamicbase-use-address-space-layout-randomization
+    -DYNAMICBASE
+    # Always generate relocation section.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/fixed-fixed-base-address
+    -FIXED:NO
+    # Disable unneeded incremental linking for better performance and smaller size.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/incremental-link-incrementally
+    -INCREMENTAL:NO
+    # Enable compatibility with data execution prevention.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/nxcompat-compatible-with-data-execution-prevention
+    -NXCOMPAT
+    # Keep unreferenced symbols.
+    # https://docs.microsoft.com/en-us/cpp/build/reference/opt-optimizations
+    -OPT:NOREF
+    )
 endif()
 
 # https://clang.llvm.org/docs/AddressSanitizer.html
