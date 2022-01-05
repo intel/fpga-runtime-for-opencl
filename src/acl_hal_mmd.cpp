@@ -302,47 +302,49 @@ acl_kernel_update_callback acl_kernel_update_fn = NULL;
 acl_profile_callback acl_profile_fn = NULL;
 acl_device_update_callback acl_device_update_fn = NULL;
 
-static acl_hal_t acl_hal_mmd = {acl_hal_mmd_init_device,
-                                NULL, // Populated based on MMD property
-                                acl_hal_mmd_get_timestamp,
-                                acl_hal_mmd_copy_hostmem_to_hostmem,
-                                acl_hal_mmd_copy_hostmem_to_globalmem,
-                                acl_hal_mmd_copy_globalmem_to_hostmem,
-                                acl_hal_mmd_copy_globalmem_to_globalmem,
-                                acl_hal_mmd_register_callbacks,
-                                acl_hal_mmd_launch_kernel,
-                                acl_hal_mmd_unstall_kernel,
-                                acl_hal_mmd_program_device,
-                                acl_hal_mmd_query_temperature,
-                                acl_hal_mmd_get_device_official_name,
-                                acl_hal_mmd_get_device_vendor_name,
-                                acl_hal_mmd_legacy_shared_alloc,
-                                acl_hal_mmd_legacy_shared_free,
-                                acl_hal_mmd_get_profile_data,
-                                acl_hal_mmd_reset_profile_counters,
-                                acl_hal_mmd_disable_profile_counters,
-                                acl_hal_mmd_enable_profile_counters,
-                                acl_hal_mmd_set_profile_shared_control,
-                                acl_hal_mmd_set_profile_start_count,
-                                acl_hal_mmd_set_profile_stop_count,
-                                acl_hal_mmd_has_svm_support,
-                                acl_hal_mmd_has_physical_mem,
-                                acl_hal_get_board_extension_function_address,
-                                acl_hal_mmd_pll_reconfigure,
-                                acl_hal_mmd_reset_kernels,
-                                acl_hal_mmd_hostchannel_create,
-                                acl_hal_mmd_hostchannel_destroy,
-                                acl_hal_mmd_hostchannel_pull,
-                                acl_hal_mmd_hostchannel_push,
-                                acl_hal_mmd_hostchannel_get_buffer,
-                                acl_hal_mmd_hostchannel_ack_buffer,
-                                acl_hal_mmd_get_device_status,
-                                acl_hal_mmd_get_debug_verbosity,
-                                acl_hal_mmd_try_devices,
-                                acl_hal_mmd_close_devices,
-                                acl_hal_mmd_host_alloc,
-                                acl_hal_mmd_free,
-                                acl_hal_mmd_shared_alloc};
+static acl_hal_t acl_hal_mmd = {
+    acl_hal_mmd_init_device,   // init_device
+    NULL,                      // yield: Populated based on MMD property
+    acl_hal_mmd_get_timestamp, // get_timestamp
+    acl_hal_mmd_copy_hostmem_to_hostmem,     // copy_hostmem_to_hostmem
+    acl_hal_mmd_copy_hostmem_to_globalmem,   // copy_hostmem_to_globalmem
+    acl_hal_mmd_copy_globalmem_to_hostmem,   // copy_globalmem_to_hostmem
+    acl_hal_mmd_copy_globalmem_to_globalmem, // copy_globalmem_to_globalmem
+    acl_hal_mmd_register_callbacks,          // register_callbacks
+    acl_hal_mmd_launch_kernel,               // launch_kernel
+    acl_hal_mmd_unstall_kernel,              // unstall_kernel
+    acl_hal_mmd_program_device,              // program_device
+    acl_hal_mmd_query_temperature,           // query_temperature
+    acl_hal_mmd_get_device_official_name,    // get_device_official_name
+    acl_hal_mmd_get_device_vendor_name,      // get_device_vendor_name
+    acl_hal_mmd_legacy_shared_alloc,         // legacy_shared_alloc
+    acl_hal_mmd_legacy_shared_free,          // legacy_shared_free
+    acl_hal_mmd_get_profile_data,            // get_profile_data
+    acl_hal_mmd_reset_profile_counters,      // reset_profile_counters
+    acl_hal_mmd_disable_profile_counters,    // disable_profile_counters
+    acl_hal_mmd_enable_profile_counters,     // enable_profile_counters
+    acl_hal_mmd_set_profile_shared_control,  // set_profile_shared_control
+    acl_hal_mmd_set_profile_start_count,     // set_profile_start_cycle
+    acl_hal_mmd_set_profile_stop_count,      // set_profile_stop_cycle
+    acl_hal_mmd_has_svm_support,             // has_svm_memory_support
+    acl_hal_mmd_has_physical_mem,            // has_physical_mem
+    acl_hal_get_board_extension_function_address, // get_board_extension_function_address
+    acl_hal_mmd_pll_reconfigure,                  // pll_reconfigure
+    acl_hal_mmd_reset_kernels,                    // reset_kernels
+    acl_hal_mmd_hostchannel_create,               // hostchannel_create
+    acl_hal_mmd_hostchannel_destroy,              // hostchannel_destroy
+    acl_hal_mmd_hostchannel_pull,                 // hostchannel_pull
+    acl_hal_mmd_hostchannel_push,                 // hostchannel_push
+    acl_hal_mmd_hostchannel_get_buffer,           // hostchannel_get_buffer
+    acl_hal_mmd_hostchannel_ack_buffer,           // hostchannel_ack_buffer
+    acl_hal_mmd_get_device_status,                // get_device_status
+    acl_hal_mmd_get_debug_verbosity,              // get_debug_verbosity
+    acl_hal_mmd_try_devices,                      // try_devices
+    acl_hal_mmd_close_devices,                    // close_devices
+    acl_hal_mmd_host_alloc,                       // host_alloc
+    acl_hal_mmd_free,                             // free
+    acl_hal_mmd_shared_alloc                      // shared_alloc
+};
 
 // This will contain the device physical id to tell us which device across all
 // loaded BSPs (even with the same handle numbers) is calling the interrupt
