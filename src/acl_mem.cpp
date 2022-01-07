@@ -965,6 +965,15 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateBufferIntelFPGA(cl_context context,
                                            errcode_ret);
 }
 
+// Create a buffer with additional properties
+ACL_EXPORT
+CL_API_ENTRY cl_mem CL_API_CALL clCreateBufferWithProperties(
+    cl_context context, const cl_mem_properties *properties, cl_mem_flags flags,
+    size_t size, void *host_ptr, cl_int *errcode_ret) {
+  return clCreateBufferWithPropertiesINTEL(context, properties, flags, size,
+                                           host_ptr, errcode_ret);
+}
+
 ACL_EXPORT
 CL_API_ENTRY cl_mem CL_API_CALL clCreateBuffer(cl_context context,
                                                cl_mem_flags flags, size_t size,

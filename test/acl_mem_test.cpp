@@ -1381,7 +1381,7 @@ TEST(acl_mem, exhaustion) {
         (mem[0]->block_allocation->range).begin);
 
   props[1] = 2;
-  mem[3] = clCreateBufferWithPropertiesINTEL(
+  mem[3] = clCreateBufferWithProperties(
       m_context, props, 0, (size_t)m_context->max_mem_alloc_size / 4, 0,
       &status);
   sofar2 += m_context->max_mem_alloc_size / 4;
@@ -1394,8 +1394,7 @@ TEST(acl_mem, exhaustion) {
   props[1] = 2;
   // the size of dimm#2 is m_context->max_mem_alloc_size/2
   // mem[1] and mem[3] already exhausted dimm#2
-  mem[4] =
-      clCreateBufferWithPropertiesINTEL(m_context, props, 0, 128, 0, &status);
+  mem[4] = clCreateBufferWithProperties(m_context, props, 0, 128, 0, &status);
   CHECK_EQUAL(
       CL_SUCCESS,
       status); // Buffer allocation should always succeed (allocation deferred)
