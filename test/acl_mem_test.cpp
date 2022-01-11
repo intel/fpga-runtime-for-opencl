@@ -281,9 +281,10 @@ MT_TEST(acl_mem, create_image_align) {
     CHECK_EQUAL(0, addr & (align_req - 1));
     clReleaseMemObject(image);
 
-    image = clCreateImage(m_context, CL_MEM_ALLOC_HOST_PTR, &image_format,
-                          &image_desc, 0, &status);
+    image = clCreateImageWithProperties(m_context, NULL, CL_MEM_ALLOC_HOST_PTR,
+                                        &image_format, &image_desc, 0, &status);
     CHECK_EQUAL(CL_SUCCESS, status);
+    assert(image);
     addr = (uintptr_t)image->block_allocation->range.begin;
     CHECK_EQUAL(0, addr & (align_req - 1));
     clReleaseMemObject(image);

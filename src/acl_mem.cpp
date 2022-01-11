@@ -1778,6 +1778,16 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImage(
   return clCreateImageIntelFPGA(context, flags, image_format, image_desc,
                                 host_ptr, errcode_ret);
 }
+
+ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageWithProperties(
+    cl_context context, const cl_mem_properties *properties, cl_mem_flags flags,
+    const cl_image_format *image_format, const cl_image_desc *image_desc,
+    void *host_ptr, cl_int *errcode_ret) {
+  // Currently clCreateImageIntelFPGA accept no properties.
+  return clCreateImageIntelFPGA(context, flags, image_format, image_desc,
+                                host_ptr, errcode_ret);
+}
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4100)
