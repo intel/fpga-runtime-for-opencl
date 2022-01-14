@@ -28,7 +28,7 @@ endif()
 
 # We exclusively support Ninja as the generator used to build the project.
 if(NOT CMAKE_GENERATOR STREQUAL "Ninja")
-  message(FATAL_ERROR "unsupported cmake generator, please use `cmake -G Ninja`")
+  message(FATAL_ERROR "unsupported cmake generator, use `cmake -G Ninja` instead")
 endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules")

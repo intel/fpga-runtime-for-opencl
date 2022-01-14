@@ -206,7 +206,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
       err_ss << "Error: The accelerator hardware currently programmed is "
                 "incompatible with this\nversion of the runtime (" ACL_VERSION
                 " Commit " ACL_GIT_COMMIT ")."
-                " Please recompile the hardware with\nthe same version of the "
+                " Recompile the hardware with\nthe same version of the "
                 "compiler and program that onto the board.\n";
       err_str = err_ss.str();
     }

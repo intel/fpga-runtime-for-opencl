@@ -87,7 +87,7 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
     setting = setting_deprecated;
     if (0 == warn_depr1) {
       fprintf(stderr, "[Runtime Warning]: CL_CONTEXT_OFFLINE_DEVICE_ALTERA has "
-                      "been deprecated. Please use "
+                      "been deprecated. Use "
                       "CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA instead.\n");
       warn_depr1 = 1;
     }
@@ -119,7 +119,7 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
         setting = setting_deprecated;
         if (0 == warn_depr3) {
           fprintf(stderr, "[Runtime Warning]: CL_CONTEXT_MSIM_DEVICE_ALTERA "
-                          "has been deprecated. Please use "
+                          "has been deprecated. Use "
                           "CL_CONTEXT_MSIM_DEVICE_INTELFPGA instead.\n");
           warn_depr3 = 1;
         }

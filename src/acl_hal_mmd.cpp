@@ -1445,7 +1445,7 @@ int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
                         "       This combination of BSPs is not supported by "
                         "the Intel(R) FPGA SDK for OpenCL(TM) runtime.\n");
                 fprintf(stderr,
-                        "       Please uninstall the incompatible BSP(s) using "
+                        "       Uninstall the incompatible BSP(s) using "
                         "\"aocl uninstall <board_package_path>\".\n");
                 failed_device_id = physical_device_id;
                 goto failed;
