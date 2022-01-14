@@ -268,7 +268,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
   if (ptr == NULL) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
-            "Please provide a valid pointer to host data");
+            "Invalid pointer was provided to host data");
   }
 
   // Is the pipe bound to a channel yet? If not then return unsuccessfully
@@ -368,7 +368,7 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   if (ptr == NULL) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
-            "Please provide a valid pointer to host data");
+            "Invalid pointer was provided to host data");
   }
 
   // If there is no queued op and the pipe is binded
@@ -472,7 +472,7 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   if (mapped_size == NULL) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     BAIL_INFO(CL_INVALID_VALUE, pipe->context,
-              "Please provide a valid pointer for mapped_size argument");
+              "Invalid pointer was provided for mapped_size argument");
   }
   *mapped_size = 0;
 

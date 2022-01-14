@@ -585,7 +585,7 @@ static cl_int l_load_properties(cl_context context,
       override = override_deprecated;
       fprintf(stderr,
               "Warning: CL_CONTEXT_COMPILER_MODE_ALTERA has been deprecated. "
-              "Please use CL_CONTEXT_COMPILER_MODE_INTELFPGA instead.\n");
+              "Use CL_CONTEXT_COMPILER_MODE_INTELFPGA instead.\n");
     }
 
     if (override) {

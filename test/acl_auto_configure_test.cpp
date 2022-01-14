@@ -877,7 +877,7 @@ TEST(auto_configure, bad_config) {
       std::string("Error: The accelerator hardware currently programmed is "
                   "incompatible with this\nversion of the runtime (" ACL_VERSION
                   " Commit " ACL_GIT_COMMIT
-                  "). Please recompile the hardware with\nthe same version of "
+                  "). Recompile the hardware with\nthe same version of "
                   "the compiler and program that onto the board.\n"),
 
       // Bad workgroup/workitem_invariant combination

@@ -243,7 +243,7 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
       << "This binary targets the BSP variant " << pkg_board_str
       << ", while the FPGA has the BSP\n"
       << "variant " << dev_prog->device->def.autodiscovery_def.name << ".\n"
-      << "Please use the command 'aocl initialize' to load the matching BSP\n"
+      << "Use the command 'aocl initialize' to load the matching BSP\n"
       << "variant prior to invoking the host executable.";
   if (!acl_getenv("ACL_PCIE_PROGRAM_SKIP_BOARDNAME_CHECK")) {
     AND_CHECK(pkg_board_str == dev_prog->device->def.autodiscovery_def.name,
