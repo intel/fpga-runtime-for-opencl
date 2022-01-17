@@ -126,11 +126,37 @@ branch that is checked out in a separate worktree.
     git log --stat -p aaaaaa...bbbbbb
     ```
 
+## Polishing a change
+
+Prior to pushing your change, remember to run [clang-format] on the `.c`,
+`.cpp`, and `.h` files, since the [clang-format workflow] may fail otherwise.
+You can do so by running the following command.
+
+```
+./scripts/clang-format.sh --verbose
+```
+
+To match the exact formatting expected by the [clang-format version in the
+workflow], you will need to obtain [clang version 13.0.0] and add its `bin`
+directory to `PATH`. If you are using RHEL/CentOS or SLES/openSUSE, try
+installing one of the `clang+llvm-13.0.0-x86_64-linux-gnu-ubuntu-*.tar.xz`
+that is compatible with the libc and libstdc++ versions provided by your
+distribution.
+
+If you wish to format a committed or staged file, you can use clang-format git
+integration, [git-clang-format]. The main benefit of `git clang-format` is the
+ability to format a specific commit or only staged files.
+
 [Intel organization]: https://github.com/intel
 [Intel® FPGA Runtime for OpenCL™ Software Technology]: https://github.com/intel/fpga-runtime-for-opencl
+[clang version 13.0.0]: https://github.com/llvm/llvm-project/releases/tag/llvmorg-13.0.0
+[clang-format version in the workflow]: https://github.com/intel/fpga-runtime-for-opencl/blob/fc99b92704a466f7dc4d84bd45d465d64d03dbb0/container/ubuntu-20.04-clang/Dockerfile#L9
+[clang-format workflow]: https://github.com/intel/fpga-runtime-for-opencl/blob/fc99b92704a466f7dc4d84bd45d465d64d03dbb0/.github/workflows/clang-format.yml
+[clang-format]: https://clang.llvm.org/docs/ClangFormat.html
 [create a forked repository]: https://docs.github.com/en/get-started/quickstart/fork-a-repo#forking-a-repository
 [fork and pull model]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#fork-and-pull-model
 [git worktree]: https://git-scm.com/docs/git-worktree
+[git-clang-format]: https://github.com/llvm/llvm-project/blob/9e634b35ff51d0eb2b38013111491e88bdbae388/clang/tools/clang-format/git-clang-format
 [pull requests]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests
 [remote repositories]: https://git-scm.com/book/en/v2/Git-Basics-Working-with-Remotes
 [runtime repository]: https://github.com/intel/fpga-runtime-for-opencl
