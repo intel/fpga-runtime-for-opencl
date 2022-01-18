@@ -18,18 +18,18 @@ on:
   push:
     paths:
       - '.github/workflows/clang-format.yml'
+      - 'scripts/clang-format.sh'
       - '**.c'
       - '**.cpp'
       - '**.h'
-      - '**.hpp'
 
   pull_request:
     paths:
       - '.github/workflows/clang-format.yml'
+      - 'scripts/clang-format.sh'
       - '**.c'
       - '**.cpp'
       - '**.h'
-      - '**.hpp'
 
 jobs:
   build:
@@ -46,7 +46,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: run clang-format on source files
-        run: find . -regex '.*\.\(c\|cpp\|h\|hpp\)' | sort | xargs clang-format --verbose -i
+        run: ./scripts/clang-format.sh --verbose
 
       - name: ensure source files are unchanged
         run: git diff --exit-code
