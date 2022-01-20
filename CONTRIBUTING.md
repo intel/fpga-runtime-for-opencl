@@ -151,7 +151,7 @@ ability to format a specific commit or only staged files.
 [Intel® FPGA Runtime for OpenCL™ Software Technology]: https://github.com/intel/fpga-runtime-for-opencl
 [clang version 13.0.0]: https://github.com/llvm/llvm-project/releases/tag/llvmorg-13.0.0
 [clang-format version in the workflow]: https://github.com/intel/fpga-runtime-for-opencl/blob/fc99b92704a466f7dc4d84bd45d465d64d03dbb0/container/ubuntu-20.04-clang/Dockerfile#L9
-[clang-format workflow]: https://github.com/intel/fpga-runtime-for-opencl/blob/fc99b92704a466f7dc4d84bd45d465d64d03dbb0/.github/workflows/clang-format.yml
+[clang-format workflow]: https://github.com/intel/fpga-runtime-for-opencl/blob/1214c2e3d30f7b35d3f986a9b752a8c2bc086308/.github/workflows/clang-format.yml
 [clang-format]: https://clang.llvm.org/docs/ClangFormat.html
 [create a forked repository]: https://docs.github.com/en/get-started/quickstart/fork-a-repo#forking-a-repository
 [fork and pull model]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#fork-and-pull-model
