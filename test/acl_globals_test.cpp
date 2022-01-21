@@ -118,6 +118,14 @@ static acl_kernel_interface_t acltest_kernels[] = {
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 8},
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 16},
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1024},
+     }},
+    {// interface
+     "kernel15_dev_global",
+     {
+         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1},
+         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1},
+         {ACL_ARG_ADDR_NONE, ACL_ARG_BY_VALUE, sizeof(size_t), 0, 0},
+         //  {ACL_ARG_ADDR_NONE, ACL_ARG_BY_VALUE, sizeof(size_t), 0, 0},
      }}};
 
 template <typename T, std::size_t N>
@@ -185,6 +193,20 @@ static std::vector<acl_accel_def_t> acltest_complex_system_device0_accel = {
      0,
      0,
      4,
+     0,
+     32768,
+     3,
+     {},
+     {32768, 0, 0},
+     1},
+    {14,
+     ACL_RANGE_FROM_ARRAY(acltest_devicelocal[11]),
+     acltest_kernels[14],
+     acltest_laspace_info,
+     {0, 0, 0},
+     0,
+     0,
+     1,
      0,
      32768,
      3,

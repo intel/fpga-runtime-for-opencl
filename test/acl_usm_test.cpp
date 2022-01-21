@@ -30,6 +30,16 @@
 #include <cstdio>
 #include <string.h>
 
+// A default empty program binary
+#define EXAMPLE_BINARY                                                         \
+  const unsigned char *l_bin[m_num_devices];                                   \
+  size_t l_bin_lengths[m_num_devices];                                         \
+  cl_int l_bin_status[m_num_devices];                                          \
+  for (cl_uint i = 0; i < m_num_devices; i++) {                                \
+    l_bin[i] = (const unsigned char *)"0";                                     \
+    l_bin_lengths[i] = 1;                                                      \
+  }
+
 static void CL_CALLBACK notify_me_print(const char *errinfo,
                                         const void *private_info, size_t cb,
                                         void *user_data);
@@ -41,25 +51,30 @@ public:
   void setup() {
     if (threadNum() == 0) {
       acl_test_setup_generic_system();
+
+      this->load();
+      m_program = this->load_program();
+      this->build(m_program);
     }
-
     syncThreads();
-
-    this->load();
   }
 
   void teardown() {
-    unload_context();
-    if (m_context) {
-      clReleaseContext(m_context);
-      m_context = 0;
-    }
 
     syncThreads();
 
     if (threadNum() == 0) {
+      this->unload_program(m_program);
+      unload_context();
+
+      if (m_context) {
+        clReleaseContext(m_context);
+        m_context = 0;
+      }
+
       acl_test_teardown_generic_system();
     }
+    syncThreads();
     acl_test_run_standard_teardown_checks();
   }
 
@@ -106,6 +121,46 @@ public:
                         m_num_devices, &(m_device[0]), NULL, NULL, &status);
     CHECK_EQUAL(CL_SUCCESS, status);
     ACL_LOCKED(CHECK(acl_context_is_valid(m_context)));
+  }
+
+  cl_program load_program() {
+    cl_int status;
+    cl_program program;
+    EXAMPLE_BINARY;
+
+    status = CL_INVALID_VALUE;
+    size_t example_bin_len = 0;
+    const unsigned char *example_bin =
+        acl_test_get_example_binary(&example_bin_len);
+    program = clCreateProgramWithBinary(m_context, m_num_devices, &m_device[0],
+                                        l_bin_lengths, l_bin, &l_bin_status[0],
+                                        &status);
+    {
+      cl_uint i;
+      for (i = 0; i < m_num_devices; i++) {
+        CHECK_EQUAL(CL_SUCCESS, l_bin_status[i]);
+      }
+    }
+    CHECK_EQUAL(CL_SUCCESS, status);
+    CHECK(program);
+    ACL_LOCKED(CHECK(acl_program_is_valid(program)));
+    return program;
+  }
+  void unload_program(cl_program program) {
+    int program_is_valid;
+    ACL_LOCKED(program_is_valid = acl_program_is_valid(program));
+    if (program_is_valid) {
+      cl_int status;
+      while (program->num_kernels) {
+        clReleaseKernel(program->kernel_list->kernel);
+      }
+      CHECK_EQUAL(1, acl_ref_count(program));
+      status = clReleaseProgram(program);
+      CHECK_EQUAL(CL_SUCCESS, status);
+    }
+  }
+  void build(cl_program program) {
+    CHECK_EQUAL(CL_SUCCESS, clBuildProgram(program, 0, 0, "", 0, 0));
   }
 
   void load_backing_store_context(void) {
@@ -165,6 +220,7 @@ protected:
   cl_uint m_num_devices;
   cl_device_id m_device[ACL_MAX_DEVICE];
   cl_command_queue m_cq;
+  cl_program m_program;
 
 public:
   bool yeah;
@@ -1206,6 +1262,54 @@ MT_TEST(acl_usm, memfill_usm) {
   acl_free(sys_ptr);
 
   ACL_LOCKED(acl_print_debug_msg("end memfill_usm\n"));
+}
+
+MT_TEST(acl_usm, read_device_global) {
+  ACL_LOCKED(acl_print_debug_msg("begin read_device_global\n"));
+  char str[100];
+  const size_t strsize = sizeof(str) / sizeof(char); // includes NUL (!)
+  char resultbuf[strsize];
+  cl_int status;
+
+  // Don't translate device addresses in the test HAL because we already
+  // will be passing in "device" memory that are actually in the host
+  // address space of the test executable. Ugh.
+  acltest_hal_emulate_device_mem = false;
+
+  cl_event write_event = 0;
+  cl_event copy_event = 0;
+  cl_event read_event = 0;
+
+  // Prepare host memory
+  syncThreads();
+  // Host pointer example
+  void *src_ptr = malloc(strsize);
+  CHECK(src_ptr != NULL);
+  // Host USM example
+  // void* src_ptr = clHostMemAllocINTEL(m_context, NULL, strsize, 1, &status);
+  // CHECK_EQUAL(CL_SUCCESS, status);
+  // CHECK(src_ptr != NULL);
+
+  syncThreads();
+
+  // Function of interest
+  status = clEnqueueReadGlobalVariableINTEL(
+      m_cq, m_program, "kernel15_dev_global", CL_FALSE, strsize, 0, src_ptr, 0,
+      NULL, &copy_event);
+  CHECK_EQUAL(CL_SUCCESS, status);
+  int activation_id = copy_event->cmd.info.ndrange_kernel.invocation_wrapper
+                          ->image->activation_id;
+  acltest_call_kernel_update_callback(activation_id, CL_RUNNING);
+  acltest_call_kernel_update_callback(activation_id, CL_COMPLETE);
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(copy_event));
+  CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
+
+  // Host pointer example
+  free(src_ptr);
+  // Host USM example
+  // CHECK_EQUAL(CL_SUCCESS, clMemFreeINTEL(m_context, src_ptr));
+
+  ACL_LOCKED(acl_print_debug_msg("end read_write_buf\n"));
 }
 
 #endif // __arm__

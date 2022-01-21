@@ -19,6 +19,7 @@
 #include <acl_globals.h>
 #include <acl_hal.h>
 #include <acl_icd_dispatch.h>
+#include <acl_kernel.h>
 #include <acl_mem.h>
 #include <acl_platform.h>
 #include <acl_support.h>
@@ -406,6 +407,119 @@ int acl_bind_buffer_to_device(cl_device_id device, cl_mem mem) {
     }
   }
   return 1;
+}
+
+ACL_EXPORT
+// CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL() {
+CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
+    cl_command_queue command_queue, cl_program program, const char *name,
+    cl_bool blocking_write, size_t size, size_t offset, void *ptr,
+    cl_uint num_events_in_wait_list, const cl_event *event_wait_list,
+    cl_event *event) {
+
+  // TODO: get dev_global_ptr from autodiscovery instead later
+  // return 0;
+  return clEnqueueWriteGlobalVariableINTEL(
+      command_queue, program, name, blocking_write, size, offset, ptr,
+      num_events_in_wait_list, event_wait_list, event);
+}
+
+ACL_EXPORT
+CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
+    cl_command_queue command_queue, cl_program program, const char *name,
+    cl_bool blocking_write, size_t size, size_t offset, const void *ptr,
+    cl_uint num_events_in_wait_list, const cl_event *event_wait_list,
+    cl_event *event) {
+  cl_int status;
+
+  cl_kernel kernel = clCreateKernelIntelFPGA(program, name, &status);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  // do we support ptr being a buffer instead of usm pointer? it seems to be the
+  // case on spec (only usm host pointer) Given kernel arg must be a deivce usm
+  // pointer: When ptr is a host/shared usm pointer, this function is expected
+  // to copy it to device first? yes (currently discussing whether kernel arg
+  // accept host usm instead)
+  void *src_dev_ptr = clDeviceMemAllocINTEL(
+      command_queue->context, command_queue->device, NULL, size, 1, &status);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  // This copy operation have to be blocking
+  // cl_event to_dev_event = 0;
+  status = clEnqueueMemcpyINTEL(command_queue, CL_TRUE, src_dev_ptr, ptr, size,
+                                0, NULL, NULL);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  // if (to_dev_event->execution_status != CL_COMPLETE) {
+  //   return CL_INVALID_OPERATION;
+  // }
+
+  status = clSetKernelArgMemPointerINTEL(kernel, 0, src_dev_ptr);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  // should kernel header contain offset or not? no
+  // offset is always byte offset? yes
+  // Assuming below returns same thing as `clDeviceMemAllocINTEL`, where exactly
+  // is dev global ptr being read from? What format is the read dev global, is
+  // it a pointer just like the return value of `clDeviceMemAllocINTEL` or is it
+  // something else? (its an unsigned value indicating address)
+  // TODO: When passing dev global pointer directly to
+  // clSetKernelArgMemPointerINTEL, make sure REMOVE_VALID_CHECKS is defined.
+  // Otherwise this ptr is not existing in context -> cause checks to fail
+  // TODO: get dev_global_address from autodiscovery instead later
+  // dev_addr_t dev_global_address =
+  // kernel->dev_bin->get_devdef().autodiscovery_def.?
+  uintptr_t dev_global_address = 0x4000000;
+  void *dev_global_ptr2 =
+      (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
+  status =
+      set_kernel_arg_mem_pointer_without_checks(kernel, 1, dev_global_ptr2);
+  // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr2);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  status = clSetKernelArg(kernel, 2, sizeof(size_t), (const void *)(&size));
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  status = clEnqueueTask(command_queue, kernel, num_events_in_wait_list,
+                         event_wait_list, event);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  acl_lock();
+  // If nothing's blocking, then complete right away
+  acl_idle_update(command_queue->context);
+  acl_unlock();
+
+  if (blocking_write) {
+    status = clWaitForEvents(1, event);
+  }
+
+  if (blocking_write &&
+      status == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) {
+    return status;
+  }
+
+  // Free allocated device memory
+  status = clMemFreeINTEL(command_queue->context, src_dev_ptr);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  status = clReleaseKernel(kernel);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
