@@ -11,8 +11,6 @@
 #include <vector>
 
 // External library headers.
-#include <CL/cl_ext.h>
-#include <CL/cl_ext_intel.h>
 #include <CL/opencl.h>
 #include <acl_hash/acl_hash.h>
 #include <acl_threadsupport/acl_threadsupport.h>

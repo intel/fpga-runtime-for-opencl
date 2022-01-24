@@ -4,7 +4,6 @@
 #ifndef ACL_SVM_H
 #define ACL_SVM_H
 
-#include <CL/cl_ext.h>
 #include <CL/opencl.h>
 
 #include "acl_types.h"

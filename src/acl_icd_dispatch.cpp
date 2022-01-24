@@ -5,7 +5,6 @@
 #include <string.h>
 
 // External library headers.
-#include <CL/cl_ext_intel.h>
 #include <CL/cl_ext_intelfpga.h>
 #include <CL/opencl.h>
 
