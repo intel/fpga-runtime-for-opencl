@@ -11,7 +11,6 @@
 #include <unordered_set>
 
 // External library headers.
-#include <CL/cl_ext_intel.h>
 #include <CL/opencl.h>
 
 // Internal headers.

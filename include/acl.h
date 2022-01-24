@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-#include <CL/cl_ext_intel.h>
+#include <CL/cl_ext.h>
 
 #include "acl_visibility.h"
 

@@ -4,8 +4,6 @@
 #ifndef ACL_USM_H
 #define ACL_USM_H
 
-#include <CL/cl_ext.h>
-#include <CL/cl_ext_intel.h>
 #include <CL/opencl.h>
 
 #include "acl_types.h"
