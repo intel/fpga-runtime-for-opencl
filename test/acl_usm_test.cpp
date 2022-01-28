@@ -116,38 +116,16 @@ public:
   cl_program load_program() {
     cl_int status;
     cl_program program;
-    // const unsigned char *l_bin[m_num_devices];
-    // size_t l_bin_lengths[m_num_devices];
-    // cl_int l_bin_status[m_num_devices];
-    const unsigned char **l_bin = new const unsigned char *[m_num_devices];
-    size_t* l_bin_lengths = new size_t[m_num_devices];
-    cl_int* l_bin_status = new cl_int[m_num_devices];
-
-    for (cl_uint i = 0; i < m_num_devices; i++) {
-      l_bin[i] = (const unsigned char *)"0";
-      l_bin_lengths[i] = 1;
-    }
-
     status = CL_INVALID_VALUE;
-    size_t example_bin_len = 0;
-    const unsigned char *example_bin =
-        acl_test_get_example_binary(&example_bin_len);
-    program = clCreateProgramWithBinary(m_context, m_num_devices, &m_device[0],
-                                        l_bin_lengths, l_bin, &l_bin_status[0],
-                                        &status);
-    {
-      cl_uint i;
-      for (i = 0; i < m_num_devices; i++) {
-        CHECK_EQUAL(CL_SUCCESS, l_bin_status[i]);
-      }
-    }
+    const unsigned char *bin = (const unsigned char *)"0";
+    size_t bin_length = 1;
+    cl_int bin_status;
+    program = clCreateProgramWithBinary(m_context, 1, &m_device[0], &bin_length,
+                                        &bin, &bin_status, &status);
     CHECK_EQUAL(CL_SUCCESS, status);
     CHECK(program);
     ACL_LOCKED(CHECK(acl_program_is_valid(program)));
 
-    delete l_bin_status;
-    delete l_bin_lengths;
-    delete l_bin;
     return program;
   }
   void unload_program(cl_program program) {
