@@ -514,10 +514,10 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   if (status != CL_SUCCESS) {
     return status;
   }
-  status = clReleaseKernel(kernel);
-  if (status != CL_SUCCESS) {
-    return status;
-  }
+  // status = clReleaseKernel(kernel);
+  // if (status != CL_SUCCESS) {
+  //   return status;
+  // }
 
   return CL_SUCCESS;
 }
