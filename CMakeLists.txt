@@ -369,6 +369,7 @@ install(FILES
     include/CL/cl_gl_ext.h
     include/CL/cl_half.h
     include/CL/cl_icd.h
+    include/CL/cl_layer.h
     include/CL/cl_platform.h
     include/CL/cl_va_api_media_sharing_intel.h
     include/CL/cl_version.h

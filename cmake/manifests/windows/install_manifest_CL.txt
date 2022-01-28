@@ -11,6 +11,7 @@ C:/fpga-runtime-for-opencl/include/CL/cl_gl.h
 C:/fpga-runtime-for-opencl/include/CL/cl_gl_ext.h
 C:/fpga-runtime-for-opencl/include/CL/cl_half.h
 C:/fpga-runtime-for-opencl/include/CL/cl_icd.h
+C:/fpga-runtime-for-opencl/include/CL/cl_layer.h
 C:/fpga-runtime-for-opencl/include/CL/cl_platform.h
 C:/fpga-runtime-for-opencl/include/CL/cl_va_api_media_sharing_intel.h
 C:/fpga-runtime-for-opencl/include/CL/cl_version.h
