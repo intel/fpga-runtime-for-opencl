@@ -122,10 +122,9 @@ static acl_kernel_interface_t acltest_kernels[] = {
     {// interface
      "kernel15_dev_global",
      {
-         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1},
-         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1},
+         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(void *), 0, 0, 1},
+         {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(void *), 0, 0, 1},
          {ACL_ARG_ADDR_NONE, ACL_ARG_BY_VALUE, sizeof(size_t), 0, 0},
-         //  {ACL_ARG_ADDR_NONE, ACL_ARG_BY_VALUE, sizeof(size_t), 0, 0},
      }}};
 
 template <typename T, std::size_t N>
