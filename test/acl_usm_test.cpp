@@ -30,16 +30,6 @@
 #include <cstdio>
 #include <string.h>
 
-// A default empty program binary
-#define EXAMPLE_BINARY                                                         \
-  const unsigned char *l_bin[m_num_devices];                                   \
-  size_t l_bin_lengths[m_num_devices];                                         \
-  cl_int l_bin_status[m_num_devices];                                          \
-  for (cl_uint i = 0; i < m_num_devices; i++) {                                \
-    l_bin[i] = (const unsigned char *)"0";                                     \
-    l_bin_lengths[i] = 1;                                                      \
-  }
-
 static void CL_CALLBACK notify_me_print(const char *errinfo,
                                         const void *private_info, size_t cb,
                                         void *user_data);
@@ -126,7 +116,17 @@ public:
   cl_program load_program() {
     cl_int status;
     cl_program program;
-    EXAMPLE_BINARY;
+    // const unsigned char *l_bin[m_num_devices];
+    // size_t l_bin_lengths[m_num_devices];
+    // cl_int l_bin_status[m_num_devices];
+    const unsigned char **l_bin = new const unsigned char *[m_num_devices];
+    size_t* l_bin_lengths = new size_t[m_num_devices];
+    cl_int* l_bin_status = new cl_int[m_num_devices];
+
+    for (cl_uint i = 0; i < m_num_devices; i++) {
+      l_bin[i] = (const unsigned char *)"0";
+      l_bin_lengths[i] = 1;
+    }
 
     status = CL_INVALID_VALUE;
     size_t example_bin_len = 0;
@@ -144,6 +144,10 @@ public:
     CHECK_EQUAL(CL_SUCCESS, status);
     CHECK(program);
     ACL_LOCKED(CHECK(acl_program_is_valid(program)));
+
+    delete l_bin_status;
+    delete l_bin_lengths;
+    delete l_bin;
     return program;
   }
   void unload_program(cl_program program) {
