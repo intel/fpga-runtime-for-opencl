@@ -1299,8 +1299,8 @@ MT_TEST(acl_usm, read_device_global) {
                           ->image->activation_id;
   acltest_call_kernel_update_callback(activation_id, CL_RUNNING);
   acltest_call_kernel_update_callback(activation_id, CL_COMPLETE);
-  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(copy_event));
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(copy_event));
 
   // Host pointer example
   free(src_ptr);
