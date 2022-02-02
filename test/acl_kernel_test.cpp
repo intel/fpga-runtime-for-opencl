@@ -4483,7 +4483,9 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
 
+  // Testing debug_printf_dump
   // Pretend the kernel actually put something in the device buffer.
   CHECK(k->printf_device_buffer);
   cl_mem printf_buf = k->printf_device_buffer;
@@ -4495,16 +4497,13 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   const unsigned int printf_bytes = 8;
   *((int *)printf_buf->block_allocation->range.begin) = printf_conversion_index;
   *(((int *)printf_buf->block_allocation->range.begin) + 1) = printf_data;
-
   // Check operation of printf-pickup-scheduler call back function.
   // Activation id should be the device op id!
-  CHECK_EQUAL(0, op->info.num_printf_bytes_pending);
   ACL_LOCKED(acl_schedule_printf_buffer_pickup(op->id, printf_bytes,
-                                               0 /*ignored argument*/));
+                                               1 /*Debug printf dump*/));
   CHECK_EQUAL(
       printf_bytes,
       acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending);
-
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(10, m_devlog.num_ops);
@@ -4515,14 +4514,48 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(printf_bytes, op->info.num_printf_bytes_pending);
+  CHECK_EQUAL(1, op->info.debug_dump_printf);
 
   op = &(m_devlog.after[9]);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending); // should have cleared it.
-
+  CHECK_EQUAL(1, op->info.debug_dump_printf);
+  CHECK_EQUAL(printf_bytes, k->processed_printf_buffer_size);
   ACL_LOCKED(acl_idle_update(m_context));
+
+  // Testing normal printf dump
+  *(((int *)printf_buf->block_allocation->range.begin) + 2) = printf_data;
+  // Check operation of printf-pickup-scheduler call back function.
+  // Activation id should be the device op id!
+  // Now we have two printf_data in the buffer, therefore the size is doubled.
+  ACL_LOCKED(acl_schedule_printf_buffer_pickup(op->id, printf_bytes * 2,
+                                               0 /*Not debug printf dump*/));
+  CHECK_EQUAL(
+      printf_bytes * 2,
+      acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending);
+  ACL_LOCKED(acl_idle_update(m_context));
+
+  CHECK_EQUAL(11, m_devlog.num_ops);
+
+  op = &(m_devlog.before[10]);
+  CHECK_EQUAL(acl_platform.device_op_queue.op + op->id, ke->current_device_op);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
+  CHECK_EQUAL(CL_RUNNING, op->status);
+  CHECK_EQUAL(ke, op->info.event);
+  CHECK_EQUAL(printf_bytes * 2, op->info.num_printf_bytes_pending);
+
+  op = &(m_devlog.after[10]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
+  CHECK_EQUAL(CL_RUNNING, op->status);
+  CHECK_EQUAL(ke, op->info.event);
+  CHECK_EQUAL(0, op->info.num_printf_bytes_pending); // should have cleared it.
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
+  CHECK_EQUAL(0, k->processed_printf_buffer_size); // A full dump should reset
+                                                   // this variable to 0
+  ACL_LOCKED(acl_idle_update(m_context));
+  // Testing normal printf dump end
 
   // Say it's complete, but with some printf stuff to clean up.
   ACL_LOCKED(acl_receive_kernel_update(op->id, CL_COMPLETE));
@@ -4532,34 +4565,39 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   // Set printf bytes which should be picked up
   acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending =
       printf_bytes;
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
 
   ACL_LOCKED(acl_idle_update(m_context)); // bump scheduler
   CHECK_EQUAL(CL_COMPLETE, l_find_op(op->id)->execution_status);
   CHECK_EQUAL(CL_COMPLETE, l_find_op(op->id)->status); // Now it's copied up.
 
-  CHECK_EQUAL(12, m_devlog.num_ops);
+  CHECK_EQUAL(13, m_devlog.num_ops);
 
   // #10 is the printf flush.
-  op = &(m_devlog.before[10]);
+  op = &(m_devlog.before[11]);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(CL_COMPLETE, op->execution_status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(printf_bytes, op->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
 
-  op = &(m_devlog.after[10]);
+  op = &(m_devlog.after[11]);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(CL_COMPLETE, op->execution_status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending); // should have cleared it.
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
 
   // #11 is the completion.
-  op = &(m_devlog.before[11]);
+  op = &(m_devlog.before[12]);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_COMPLETE, op->status);
   CHECK_EQUAL(ke, op->info.event);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, k->processed_printf_buffer_size);
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
 
   CHECK_EQUAL(0, ke->current_device_op); // DONE!
 

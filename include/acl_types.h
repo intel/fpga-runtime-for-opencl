@@ -922,6 +922,10 @@ typedef struct _cl_kernel {
   // Eventually this should be an array of ACLDeviceBinaries similar
   // to how cl_program contains an array of dev_prog.
   const acl_device_binary_t *dev_bin;
+
+  // In ACL_HAL_DEBUG mode, printf buffer could be dumped before Kernel ends
+  // Therefore, we need to keep track of how much data has been processed.
+  size_t processed_printf_buffer_size;
 } _cl_kernel;
 
 ACL_DECLARE_CL_OBJECT_ALLOC_FUNCTIONS(cl_kernel);
@@ -1346,6 +1350,10 @@ typedef struct {
   // it sees the CL_COMPLETE status for the first time, but it won't
   // change after that.
   cl_uint num_printf_bytes_pending;
+
+  // Indicate whether this operation is dumping printf buffer before the Kernel
+  // for debug purpose
+  int debug_dump_printf = 0;
 } acl_device_op_info_t;
 
 // An operation to be performed on a device.

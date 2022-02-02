@@ -38,8 +38,8 @@
 #pragma GCC visibility push(protected)
 #endif
 
-static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
-                                 unsigned size);
+static size_t l_dump_printf_buffer(cl_event event, cl_kernel kernel,
+                                   unsigned size);
 static void decode_string(std::string &print_data);
 
 // stores to global memory are bound by smallest global memory bandwidth we
@@ -719,12 +719,13 @@ static std::string::const_iterator get_data_elem_at_offset(
   return end_of_string;
 }
 
-static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
-                                 unsigned size) {
+static size_t l_dump_printf_buffer(cl_event event, cl_kernel kernel,
+                                   unsigned size) {
   unsigned global_offset;        // the location in the printf buffer
   unsigned single_printf_offset; // the offset of a single printf
   void (*hal_dma_fn)(cl_event, const void *, void *, size_t) = 0;
   int src_on_host = 1;
+  size_t dumped_buffer_size = 0;
 #ifdef _WIN32
   __declspec(align(64)) char
       buffer[ACL_PRINTF_BUFFER_TOTAL_SIZE]; // Aligned to 64, for dma transfers
@@ -743,11 +744,11 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
   if (!verify_types()) {
     printf("Host data types are incompatible with ACL compiler, ignoring "
            "printfs...\n");
-    return;
+    return dumped_buffer_size;
   }
 
   if (printf_infos.empty())
-    return;
+    return dumped_buffer_size;
 
   // Memory is on the device if all of these are true:
   //   The memory is not SVM or the device does not support SVM.
@@ -769,8 +770,28 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
     hal_dma_fn = acl_get_hal()->copy_globalmem_to_hostmem;
   }
 
-  hal_dma_fn(NULL, kernel->printf_device_buffer->block_allocation->range.begin,
-             buffer, size);
+  // It needs the context from ACL_HAL_DEBUG instead of ACL_DEBUG
+  if (acl_get_hal()->get_debug_verbosity &&
+      acl_get_hal()->get_debug_verbosity() > 0) {
+    printf("Previously processed buffer size is %zu \n",
+           kernel->processed_printf_buffer_size);
+  }
+
+  // Check if we have already processed all the printf buffer
+  if (size > (unsigned int)kernel->processed_printf_buffer_size) {
+    void *unprocessed_begin = (void *)((char *)kernel->printf_device_buffer
+                                           ->block_allocation->range.begin +
+                                       kernel->processed_printf_buffer_size);
+    assert(size >= kernel->processed_printf_buffer_size);
+    dumped_buffer_size = size - kernel->processed_printf_buffer_size;
+    hal_dma_fn(NULL, unprocessed_begin, buffer, dumped_buffer_size);
+  } else {
+    if (acl_get_hal()->get_debug_verbosity &&
+        acl_get_hal()->get_debug_verbosity() > 0) {
+      printf("All Printf() buffer has already been dumped \n");
+    }
+    return dumped_buffer_size;
+  }
 
 #ifdef DEBUG
   if (debug_mode > 0) {
@@ -789,11 +810,11 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
     }
   }
 #endif
-
   // always 32-byte aligned address (this may change if printf chunks can be
   // of different sizes )
   // process all the printfs as long as there is data
-  for (global_offset = 0, single_printf_offset = 0; global_offset < size;
+  for (global_offset = 0, single_printf_offset = 0;
+       global_offset < dumped_buffer_size;
        global_offset += single_printf_offset) {
 
     // the first 4-bytes is the index of the format string
@@ -820,7 +841,7 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
     if (!success) {
       acl_print_debug_msg(
           "corrupt printf data, ignoring remaining printfs...\n");
-      return;
+      return dumped_buffer_size;
     }
 
 #ifdef DEBUG
@@ -883,7 +904,7 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
       if (vector_size == -1) {
         acl_print_debug_msg("wrong vector specifier in printf call, ignoring "
                             "remaining printfs...\n");
-        return;
+        return dumped_buffer_size;
       }
 
       // get the length specifier
@@ -904,7 +925,7 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
       if (size_of_data == 0) {
         acl_print_debug_msg("wrong length modifier in printf call, ignoring "
                             "remaining printfs...\n");
-        return;
+        return dumped_buffer_size;
       }
 
       for (i = 0; i < vector_size; i++) {
@@ -960,13 +981,14 @@ static void l_dump_printf_buffer(cl_event event, cl_kernel kernel,
 #ifdef DEBUG
   printf("exiting acl_dump_buffer...\n");
 #endif
+  return dumped_buffer_size;
 }
 
 //
 // Schedule enqueue read buffer to read printf buffer
 // The activation ID is the device op ID.
 void acl_schedule_printf_buffer_pickup(int activation_id, int size,
-                                       int stalled) {
+                                       int debug_dump_printf) {
   acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
 
   // This function can potentially be called by a HAL that does not use the
@@ -980,17 +1002,17 @@ void acl_schedule_printf_buffer_pickup(int activation_id, int size,
   }
 
 #ifdef DEBUG
-  printf("printf pickup %d %d %d\n", activation_id, size, stalled);
+  printf("printf pickup %d %d\n", activation_id, size);
   fflush(stdout);
 #endif
   if (activation_id >= 0 && activation_id < doq->max_ops) {
     // This address is stable, given a fixed activation_id.
     // So we don't run into race conditions.
     acl_device_op_t *op = doq->op + activation_id;
-
-    stalled = stalled; // this argument is no longer used!
-
     op->info.num_printf_bytes_pending = (cl_uint)size;
+
+    // Propagate the operation info
+    op->info.debug_dump_printf = debug_dump_printf ? 1 : 0;
   }
   // Signal all waiters.
   acl_signal_device_update();
@@ -1009,7 +1031,15 @@ void acl_process_printf_buffer(void *user_data, acl_device_op_t *op) {
 
     // Grab the printf data and emit it.
     cl_uint num_bytes = op->info.num_printf_bytes_pending;
-    l_dump_printf_buffer(event, kernel, num_bytes);
+    size_t dumped_buffer_size = l_dump_printf_buffer(event, kernel, num_bytes);
+
+    if (op->info.debug_dump_printf) {
+      // Update the already processed buffer size
+      kernel->processed_printf_buffer_size += dumped_buffer_size;
+    } else {
+      // Full dump, reset this variable
+      kernel->processed_printf_buffer_size = 0;
+    }
 
     // Mark this printf work as done.  Must do this *before* unstalling
     // the kernel, to avoid a race against the kernel filling up the
@@ -1021,8 +1051,13 @@ void acl_process_printf_buffer(void *user_data, acl_device_op_t *op) {
     acl_memory_barrier();
 
     // Allow the kernel to continue running.
-    acl_get_hal()->unstall_kernel(
-        event->cmd.info.ndrange_kernel.device->def.physical_device_id, op->id);
+    // We don't need to unstall the kernel during the early flushing during
+    // debug.
+    if (!op->info.debug_dump_printf) {
+      acl_get_hal()->unstall_kernel(
+          event->cmd.info.ndrange_kernel.device->def.physical_device_id,
+          op->id);
+    }
   }
 }
 
