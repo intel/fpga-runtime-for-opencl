@@ -2419,6 +2419,9 @@ static int l_init_kernel(cl_kernel kernel, cl_program program,
   // Check if there are printfs in the kernel
   kernel->printf_device_buffer = 0; // Default is none.
   kernel->printf_device_ptr = 0;    // Default is none.
+  // Keep track of already processed buffer size
+  // It will be reset when the buffer is full and dumped.
+  kernel->processed_printf_buffer_size = 0;
   if (!accel_def->printf_format_info.empty()) {
     auto gmem_idx = static_cast<size_t>(
         acl_get_default_memory(kernel->dev_bin->get_devdef()));

@@ -63,7 +63,7 @@ typedef void (*acl_device_update_callback)(
     unsigned physical_device_id, CL_EXCEPTION_TYPE_INTEL exception_type,
     void *user_private_info, size_t user_cb);
 typedef void (*acl_process_printf_buffer_callback)(int activation_id, int size,
-                                                   int stalled);
+                                                   int debug_dump_printf);
 ///@}
 
 typedef unsigned int mem_properties_t;

@@ -1369,8 +1369,9 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                                 ":: Calling acl_process_printf_buffer_fn with "
                                 "activation_id=%d and printf_size=%u.\n",
                                 activation_id, printf_size);
-        // update status, which will dump the printf buffer
-        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 1);
+        // update status, which will dump the printf buffer, set
+        // debug_dump_printf = 0
+        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
 
         ACL_KERNEL_IF_DEBUG_MSG(
             kern, ":: Accelerator %d new csr is %x.\n", k,
@@ -1432,7 +1433,6 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       kern->accel_job_ids[k][next_queue_back] = -1;
 
 #ifdef TEST_PROFILING_HARDWARE
-
       // Test readback of fake profile data using the acl_hal_mmd function that
       // would be called from the acl runtime.
       ACL_KERNEL_IF_DEBUG_MSG(
@@ -1495,10 +1495,39 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
   }
 }
 
+void acl_kernel_if_debug_dump_printf(acl_kernel_if *kern, unsigned k) {
+  acl_assert_locked();
+  unsigned int printf_size = 0;
+  int activation_id;
+  unsigned int next_queue_back;
+
+  if (kern->accel_queue_back[k] == (int)kern->accel_invoc_queue_depth[k] - 1)
+    next_queue_back = 0;
+  else
+    next_queue_back = kern->accel_queue_back[k] + 1;
+
+  if (kern->accel_num_printfs[k] > 0) {
+    acl_kernel_cra_read(kern, k, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
+                        &printf_size);
+    assert(printf_size <= ACL_PRINTF_BUFFER_TOTAL_SIZE);
+    ACL_KERNEL_IF_DEBUG_MSG(
+        kern, ":: Accelerator %d printf buffer size is %d.\n", k, printf_size);
+    activation_id = kern->accel_job_ids[k][next_queue_back];
+    ACL_KERNEL_IF_DEBUG_MSG(kern,
+                            ":: Calling acl_process_printf_buffer_fn with "
+                            "activation_id=%d and printf_size=%u.\n",
+                            activation_id, printf_size);
+
+    // set debug_dump_printf to 1
+    acl_process_printf_buffer_fn(activation_id, (int)printf_size, 1);
+  }
+}
+
 void acl_kernel_if_dump_status(acl_kernel_if *kern) {
   int expect_kernel = 0;
   unsigned k, i;
   acl_assert_locked();
+
   for (k = 0; k < kern->num_accel; ++k) {
     for (i = 0; i < kern->accel_invoc_queue_depth[k]; ++i) {
       if (kern->accel_job_ids[k][i] >= 0) {
@@ -1509,10 +1538,6 @@ void acl_kernel_if_dump_status(acl_kernel_if *kern) {
 
   if (!expect_kernel)
     return;
-
-  kern->io.printf("No kernel updates in approximately 10 seconds for device %u",
-                  kern->physical_device_id);
-  kern->io.printf(" ... a kernel may be hung?\n");
 
   for (k = 0; k < kern->num_accel; ++k) {
     unsigned int csr;
@@ -1538,6 +1563,9 @@ void acl_kernel_if_dump_status(acl_kernel_if *kern) {
       kern->io.printf(" write_active");
     if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_LMEM_INVALID_BANK))
       kern->io.printf(" lm_bank_exception");
+
+    // Dump the printf buffer to stdout
+    acl_kernel_if_debug_dump_printf(kern, k);
 
     unsigned buffered_kernel_invocation = 0;
     for (i = 0; i < kern->accel_invoc_queue_depth[k]; ++i) {
@@ -1576,14 +1604,23 @@ void acl_kernel_if_check_kernel_status(acl_kernel_if *kern) {
 #endif
   acl_assert_locked();
 
-  // Print kernel status if it hasn't done anything in a while
-  // If multiple thread calls this, only one will print every 10 seconds
   if (kern->last_kern_update != 0 &&
       (acl_kernel_if_get_time_us(kern) - kern->last_kern_update >
        10 * 1000000)) {
     kern->last_kern_update = acl_kernel_if_get_time_us(kern);
-    if (kern->io.debug_verbosity > 0)
+    kern->io.printf(
+        "No kernel updates in approximately 10 seconds for device %u",
+        kern->physical_device_id);
+    kern->io.printf(" ... a kernel may be hung?\n");
+    acl_kernel_if_dump_status(kern);
+  } else if (kern->io.debug_verbosity >= 3) {
+    // If ACL_HAL_DEBUG >= 3, the status will be printed even the server isn't
+    // hang every 10 seconds.
+    if (acl_kernel_if_get_time_us(kern) - kern->last_printf_dump >
+        10 * 1000000) {
+      kern->last_printf_dump = acl_kernel_if_get_time_us(kern);
       acl_kernel_if_dump_status(kern);
+    }
   }
 
 #ifdef POLLING

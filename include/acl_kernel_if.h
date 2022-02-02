@@ -50,6 +50,9 @@ typedef struct {
 
   // Track which of the kernels is the autorun profiling kernel (-1 if none)
   int autorun_profiling_kernel_id;
+
+  // Track debug printf activity
+  time_ns last_printf_dump = 0;
 } acl_kernel_if;
 
 // *********************** Public functions **************************

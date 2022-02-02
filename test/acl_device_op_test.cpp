@@ -363,6 +363,7 @@ TEST(device_op, submit_action) {
   CHECK(l_launch_kernel == the_call);
   CHECK_EQUAL(0, unblocked);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
   CHECK(prev < (latest = op->timestamp[CL_SUBMITTED]));
   prev = latest;
 
@@ -400,6 +401,7 @@ TEST(device_op, submit_action) {
   op->info.type = ACL_DEVICE_OP_KERNEL;
   op->status = op->execution_status = CL_RUNNING; // Required
   op->info.num_printf_bytes_pending = 1;
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
   acl_submit_device_op(&m_doq, op);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, submit_kind);
   CHECK_EQUAL(op->info.type, submit_kind);
@@ -409,6 +411,7 @@ TEST(device_op, submit_action) {
   CHECK_EQUAL(1, unblocked);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending); // no longer marked as
                                                      // stalled on printf.
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
   // We didn't change the submit time.
   CHECK_EQUAL(kernel_submit_time, op->timestamp[CL_SUBMITTED]);
   prev = latest;
@@ -419,6 +422,7 @@ TEST(device_op, submit_action) {
   op->info.type = ACL_DEVICE_OP_KERNEL;
   op->status = op->execution_status = CL_COMPLETE; // Required
   op->info.num_printf_bytes_pending = 1;
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
   acl_submit_device_op(&m_doq, op);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, submit_kind);
   CHECK_EQUAL(op->info.type, submit_kind);
@@ -428,6 +432,7 @@ TEST(device_op, submit_action) {
   CHECK_EQUAL(1, unblocked);
   CHECK_EQUAL(0, op->info.num_printf_bytes_pending); // no longer marked as
                                                      // stalled on printf.
+  CHECK_EQUAL(0, op->info.debug_dump_printf);
   // We didn't change the submit time.
   CHECK_EQUAL(kernel_submit_time, op->timestamp[CL_SUBMITTED]);
   prev = latest;
