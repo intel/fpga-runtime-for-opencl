@@ -86,6 +86,10 @@ static void *zlib_load_library() {
   void *const library = (void *)LoadLibraryA(WINDOWS_ZLIB_PATH);
   return library;
 #else
+  void *const dlopen_handle = dlopen("libz.so.1", RTLD_NOW);
+  if (dlopen_handle) {
+    return dlopen_handle;
+  }
   return dlopen("libz.so", RTLD_NOW);
 #endif
 }
