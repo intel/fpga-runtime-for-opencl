@@ -7,6 +7,11 @@ runtime repository and submits changes using [pull requests]. Contributions
 must pass continuous integration checks and review by the runtime maintainers
 before they are merged into the `main` branch of the [runtime repository].
 
+## Setting up your Git environment
+
+When using a machine or account for the first time, set your local [git
+identity] including your name and email address for your commits.
+
 ## Setting up your local repository
 
 Using the following steps, you will create a local repository that references
@@ -155,6 +160,7 @@ ability to format a specific commit or only staged files.
 [clang-format]: https://clang.llvm.org/docs/ClangFormat.html
 [create a forked repository]: https://docs.github.com/en/get-started/quickstart/fork-a-repo#forking-a-repository
 [fork and pull model]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/getting-started/about-collaborative-development-models#fork-and-pull-model
+[git identity]: https://git-scm.com/book/en/v2/Getting-Started-First-Time-Git-Setup#_your_identity
 [git worktree]: https://git-scm.com/docs/git-worktree
 [git-clang-format]: https://github.com/llvm/llvm-project/blob/9e634b35ff51d0eb2b38013111491e88bdbae388/clang/tools/clang-format/git-clang-format
 [pull requests]: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests
