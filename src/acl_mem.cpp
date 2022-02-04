@@ -410,15 +410,93 @@ ACL_EXPORT
 // CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL() {
 CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
     cl_command_queue command_queue, cl_program program, const char *name,
-    cl_bool blocking_write, size_t size, size_t offset, void *ptr,
+    cl_bool blocking_read, size_t size, size_t offset, void *ptr,
     cl_uint num_events_in_wait_list, const cl_event *event_wait_list,
     cl_event *event) {
+  cl_int status;
 
-  // TODO: get dev_global_ptr from autodiscovery instead later
-  // return 0;
-  return clEnqueueWriteGlobalVariableINTEL(
-      command_queue, program, name, blocking_write, size, offset, ptr,
-      num_events_in_wait_list, event_wait_list, event);
+  cl_kernel kernel = clCreateKernelIntelFPGA(program, name, &status);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  // dev_addr_t dev_global_address =
+  // kernel->dev_bin->get_devdef().autodiscovery_def.?
+  uintptr_t dev_global_address = 0x4000000;
+  void *dev_global_ptr =
+      (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
+  status = set_kernel_arg_mem_pointer_without_checks(kernel, 0, dev_global_ptr);
+  // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  // Copy device global memory to temporary device usm pointer first
+  void *tmp_dev_ptr = clDeviceMemAllocINTEL(
+      command_queue->context, command_queue->device, NULL, size, 1, &status);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  if (!tmp_dev_ptr) {
+    return CL_MEM_OBJECT_ALLOCATION_FAILURE;
+  }
+
+  status = clSetKernelArgMemPointerINTEL(kernel, 1, tmp_dev_ptr);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  // Set size kernel arg
+  status = clSetKernelArg(kernel, 2, sizeof(size_t), (const void *)(&size));
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  cl_event tmp_event = 0;
+  status = clEnqueueTask(command_queue, kernel, num_events_in_wait_list,
+                         event_wait_list, &tmp_event);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+  std::cerr << tmp_event->cmd.info.ndrange_kernel.invocation_wrapper->image
+                   ->activation_id
+            << std::endl;
+
+  // copy from the temporary device memory into user provided pointer
+  std::cerr << "read: copy from tmp dev pointer to source pointer" << std::endl;
+  status = clEnqueueMemcpyINTEL(command_queue, blocking_read, ptr, tmp_dev_ptr,
+                                size, 1, &tmp_event, event);
+  if (status != CL_SUCCESS) {
+    return status;
+  }
+
+  if (blocking_read) {
+    status = clReleaseEvent(tmp_event);
+    if (status != CL_SUCCESS) {
+      return status;
+    }
+    status = clMemFreeINTEL(command_queue->context, tmp_dev_ptr);
+    if (status != CL_SUCCESS) {
+      return status;
+    }
+    status = clReleaseKernel(kernel);
+    if (status != CL_SUCCESS) {
+      return status;
+    }
+  } else {
+    // Clean up resources after event finishes
+    void **callback_data = (void **)acl_malloc(sizeof(void *) * 3);
+    if (!callback_data) {
+      return CL_OUT_OF_HOST_MEMORY;
+    }
+    callback_data[0] = (void *)(tmp_dev_ptr);
+    callback_data[1] = (void *)(kernel);
+    callback_data[2] = (void *)(tmp_event);
+    clSetEventCallback(*event, CL_COMPLETE, acl_dev_global_cleanup,
+                       (void *)callback_data);
+  }
+
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -452,6 +530,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   if (status != CL_SUCCESS) {
     return status;
   }
+
   // if (to_dev_event->execution_status != CL_COMPLETE) {
   //   return CL_INVALID_OPERATION;
   // }
@@ -473,11 +552,10 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   // dev_addr_t dev_global_address =
   // kernel->dev_bin->get_devdef().autodiscovery_def.?
   uintptr_t dev_global_address = 0x4000000;
-  void *dev_global_ptr2 =
+  void *dev_global_ptr =
       (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
-  status =
-      set_kernel_arg_mem_pointer_without_checks(kernel, 1, dev_global_ptr2);
-  // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr2);
+  status = set_kernel_arg_mem_pointer_without_checks(kernel, 1, dev_global_ptr);
+  // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr);
   if (status != CL_SUCCESS) {
     return status;
   }
@@ -499,24 +577,54 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
 
   if (blocking_write) {
     status = clWaitForEvents(1, event);
+    if (status == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) {
+      return status;
+    }
+    status = clMemFreeINTEL(command_queue->context, src_dev_ptr);
+    if (status != CL_SUCCESS) {
+      return status;
+    }
+    status = clReleaseKernel(kernel);
+    if (status != CL_SUCCESS) {
+      return status;
+    }
+  } else {
+    // Clean up resources after event finishes
+    void **callback_data = (void **)acl_malloc(sizeof(void *) * 3);
+    if (!callback_data) {
+      return CL_OUT_OF_HOST_MEMORY;
+    }
+    callback_data[0] = (void *)(src_dev_ptr);
+    callback_data[1] = (void *)(kernel);
+    clSetEventCallback(*event, CL_COMPLETE, acl_dev_global_cleanup,
+                       (void *)callback_data);
   }
-
-  if (blocking_write &&
-      status == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) {
-    return status;
-  }
-
-  // Free allocated device memory
-  status = clMemFreeINTEL(command_queue->context, src_dev_ptr);
-  if (status != CL_SUCCESS) {
-    return status;
-  }
-  // status = clReleaseKernel(kernel);
-  // if (status != CL_SUCCESS) {
-  //   return status;
-  // }
 
   return CL_SUCCESS;
+}
+
+void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
+                                        cl_int event_command_exec_status,
+                                        void *callback_data) {
+  void **callback_ptrs =
+      (void **)callback_data; // callback_ptrs[0] is usm device pointer
+                              // callback_ptrs[1] kernel to be released
+                              // callback_ptrs[2] temporary event to be released
+  event_command_exec_status =
+      event_command_exec_status; // Avoiding Windows warning.
+  event = event;
+  acl_lock();
+  if (callback_ptrs[0]) {
+    clMemFreeINTEL(event->context, callback_ptrs[0]);
+  }
+  if (callback_ptrs[1]) {
+    clReleaseKernel(((cl_kernel)callback_ptrs[1]));
+  }
+  if (callback_ptrs[2]) {
+    clReleaseEvent(((cl_event)callback_ptrs[2]));
+  }
+  acl_free(callback_data);
+  acl_unlock();
 }
 
 ACL_EXPORT
