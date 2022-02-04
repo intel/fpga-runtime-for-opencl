@@ -3,7 +3,7 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
-FROM centos:8
+FROM rockylinux:8
 
 WORKDIR /work
 
@@ -11,8 +11,9 @@ WORKDIR /work
 # to extend the `paths` on which the workflow runs.
 COPY scripts/. ./
 
-RUN sed -i '/^enabled=/s#0#1#' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo \
-  && grep '^enabled=1$' /etc/yum.repos.d/CentOS-Linux-PowerTools.repo \
+RUN \
+  sed -i '/^enabled=/s#0#1#' /etc/yum.repos.d/Rocky-PowerTools.repo \
+  && grep '^enabled=1$' /etc/yum.repos.d/Rocky-PowerTools.repo \
   && yum -y upgrade \
   && yum -y install \
   cmake \
