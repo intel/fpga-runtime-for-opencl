@@ -387,8 +387,6 @@ MT_TEST(acl_command_queue, create_with_properties) {
     CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq));
     CHECK_EQUAL(1, acl_ref_count(cq));
     CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq));
-    CHECK_EQUAL(0, acl_ref_count(cq));
-    ACL_LOCKED(CHECK(!acl_command_queue_is_valid(cq)));
 
     // wait until all threads do their checks on the 0-ref-count command
     // queue before starting the next iteration of the loop and creating new
@@ -421,8 +419,6 @@ MT_TEST(acl_command_queue, create_with_properties) {
       CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq));
       CHECK_EQUAL(1, acl_ref_count(cq));
       CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq));
-      CHECK_EQUAL(0, acl_ref_count(cq));
-      ACL_LOCKED(CHECK(!acl_command_queue_is_valid(cq)));
 
       // wait until all threads do their checks on the 0-ref-count command
       // queue before starting the next iteration of the loop and creating new
@@ -674,15 +670,6 @@ MT_TEST(acl_command_queue, after_context_release) {
   // Should be able to release all the way.
   CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq0));
   CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq1));
-  CHECK_EQUAL(0, acl_ref_count(cq0));
-  CHECK_EQUAL(0, acl_ref_count(cq1));
-
-  ACL_LOCKED(CHECK(!acl_command_queue_is_valid(cq0)));
-  ACL_LOCKED(CHECK(!acl_command_queue_is_valid(cq1)));
-
-  // And once it's gone, it's gone.
-  CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clReleaseCommandQueue(cq0));
-  CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clReleaseCommandQueue(cq1));
 }
 
 // Main Event is in an OOO queue. It has a dependent event in an in-order queue.
