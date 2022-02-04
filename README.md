@@ -4,7 +4,7 @@
 
 ### Linux
 
--   Red Hat Enterprise Linux (RHEL)\* or CentOS\* 8
+-   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8
 -   SUSE Linux Enterprise Server (SLES)\* or openSUSE Leap\* 15
 -   Ubuntu\* 18.04 or 20.04 LTS
 -   GCC 7.4.0 and higher
@@ -134,7 +134,7 @@ ctest -V
 -   On Linux, `aoc` requires the `libtinfo.so.5` library, which you can install
     using one of the following OS-specific commands:
 
-    -   Red Hat Enterprise Linux (RHEL)\* or CentOS\* 8:
+    -   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8:
 
         ```
         sudo yum install ncurses-compat-libs-6.1
