@@ -53,7 +53,7 @@ jobs:
     strategy:
       matrix:
         container:
-          - centos-8-dev
+          - rockylinux-8-dev
           - debian-11-arm-dev
           - opensuse-leap-15-dev
           - ubuntu-18.04-dev
