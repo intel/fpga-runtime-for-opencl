@@ -1253,13 +1253,7 @@ MT_TEST(acl_usm, read_device_global) {
   char resultbuf[strsize];
   cl_int status;
 
-  // Don't translate device addresses in the test HAL because we already
-  // will be passing in "device" memory that are actually in the host
-  // address space of the test executable. Ugh.
-  acltest_hal_emulate_device_mem = false;
-
   cl_event write_event = 0;
-  cl_event copy_event = 0;
   cl_event read_event = 0;
 
   // Prepare host memory
@@ -1273,18 +1267,46 @@ MT_TEST(acl_usm, read_device_global) {
   // CHECK(src_ptr != NULL);
 
   syncThreads();
-
-  // Function of interest
-  status = clEnqueueReadGlobalVariableINTEL(
+  // Write to device global
+  status = clEnqueueWriteGlobalVariableINTEL(
       m_cq, m_program, "kernel15_dev_global", CL_FALSE, strsize, 0, src_ptr, 0,
-      NULL, &copy_event);
+      NULL, &write_event);
   CHECK_EQUAL(CL_SUCCESS, status);
-  int activation_id = copy_event->cmd.info.ndrange_kernel.invocation_wrapper
-                          ->image->activation_id;
-  acltest_call_kernel_update_callback(activation_id, CL_RUNNING);
-  acltest_call_kernel_update_callback(activation_id, CL_COMPLETE);
+
+  // Read from device global, with dependence on write event
+  status = clEnqueueReadGlobalVariableINTEL(
+      m_cq, m_program, "kernel15_dev_global", CL_FALSE, strsize, 0, src_ptr, 1,
+      &write_event, &read_event);
+  CHECK_EQUAL(CL_SUCCESS, status);
+
+  // Manually set "write device global" event done
+  int write_activation_id = write_event->cmd.info.ndrange_kernel
+                                .invocation_wrapper->image->activation_id;
+  acltest_call_kernel_update_callback(write_activation_id, CL_RUNNING);
+  acltest_call_kernel_update_callback(write_activation_id, CL_COMPLETE);
+
+  // Nudge the scheduler to take above finish into account
+  acl_lock();
+  // If nothing's blocking, then complete right away
+  acl_idle_update(m_cq->context);
+  acl_unlock();
+
+  // The event returned from read device global is not the copy kernel launch
+  // event Therefore need to first get the event that it depend on, then
+  // manually set it to complete
+  auto last_event = read_event->depend_on.end();
+  last_event--;
+  cl_event read_copy_kernel_event = *last_event;
+  int read_activation_id = read_copy_kernel_event->cmd.info.ndrange_kernel
+                               .invocation_wrapper->image->activation_id;
+  acltest_call_kernel_update_callback(read_activation_id, CL_RUNNING);
+  acltest_call_kernel_update_callback(read_activation_id, CL_COMPLETE);
+  // Now the usm copy operation will execute
+
+  // Block on all event completion
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
-  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(copy_event));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(write_event));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(read_event));
 
   // Host pointer example
   free(src_ptr);
