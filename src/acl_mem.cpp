@@ -599,6 +599,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
     }
     callback_data[0] = (void *)(src_dev_ptr);
     callback_data[1] = (void *)(kernel);
+    callback_data[2] = NULL;
     clSetEventCallback(*event, CL_COMPLETE, acl_dev_global_cleanup,
                        (void *)callback_data);
   }
