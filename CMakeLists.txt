@@ -200,6 +200,20 @@ if(ACL_WITH_ASAN)
   endforeach()
 endif()
 
+# https://clang.llvm.org/docs/ThreadSanitizer.html
+# https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html#index-fsanitize_003dthread
+option(ACL_TSAN "Build with thread sanitizer" OFF)
+message(STATUS "Build with thread sanitizer: ${ACL_TSAN}")
+if(ACL_TSAN)
+  foreach(lang C CXX)
+    if(CMAKE_${lang}_COMPILER_ID MATCHES "^(Clang|GNU)$")
+      set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -fsanitize=thread -fno-omit-frame-pointer")
+    else()
+      message(FATAL_ERROR "cannot build with thread sanitizer due to unsupported ${lang} compiler")
+    endif()
+  endforeach()
+endif()
+
 include(CPack)
 include(CTest)
 
