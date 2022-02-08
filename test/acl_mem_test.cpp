@@ -2809,7 +2809,6 @@ TEST(acl_mem, buffer_location_property) {
   size_t total_size = ACL_RANGE_SIZE(
       m_device[0]->def.autodiscovery_def.global_mem_defs[0].range);
   size_t bank_size = total_size / 2;
-  size_t small_size = bank_size / 1024;
 
   cl_mem_properties_intel props[] = {CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, 0, 0};
   a = clCreateBufferWithPropertiesINTEL(m_context, props, 0, bank_size, 0,
