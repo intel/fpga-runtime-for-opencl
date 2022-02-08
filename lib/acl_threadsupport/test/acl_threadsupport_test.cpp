@@ -442,7 +442,6 @@ TEST(condvar, wait_signal_with_timeout) {
   struct acl_condvar_s cc;
   acl_init_condvar(&cc);
 
-  int timedout = 0;
   acl_acquire_condvar(&cc);
   CHECK_EQUAL(1, acl_timed_wait_condvar(&cc, 1));
   CHECK_EQUAL(1, cc.timedout[0]);
