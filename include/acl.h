@@ -230,6 +230,8 @@ typedef struct {
       fast_launch_depth; /* How many kernels can be buffered on the device, 0
                             means no buffering just one can execute*/
   unsigned int is_sycl_compile; /* [1] SYCL compile; [0] OpenCL compile*/
+  unsigned int device_global_address; /* Address of kernel's device global*/
+  unsigned int device_global_size; /* Size of address space of device global used by this kernel*/
 } acl_accel_def_t;
 
 /* An ACL system definition.

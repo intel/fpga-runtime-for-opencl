@@ -873,6 +873,30 @@ bool acl_load_device_def_from_str(const std::string &config_str,
                                     devdef.accel[i].is_sycl_compile, counters);
       }
 
+      devdef.accel[i].device_global_address =
+          0; // Initializing for backward compatability
+      std::cerr << result << std::endl;
+      std::cerr << (counters.back() > 0) << std::endl;
+      if (result && counters.back() > 0) {
+        std::cerr << "read dev global address" << std::endl;
+        result = read_uint_counters(config_str, curr_pos,
+                                    devdef.accel[i].device_global_address, counters);
+      }else {
+        std::cerr << "read dev global address fail" << std::endl;
+      }
+        
+
+      devdef.accel[i].device_global_size =
+          0; // Initializing for backward compatability
+      if (result && counters.back() > 0) {
+        std::cerr << "read dev global size" << std::endl;
+        result = read_uint_counters(config_str, curr_pos,
+                                    devdef.accel[i].device_global_size, counters);
+      }else {
+        std::cerr << "read dev global size fail" << std::endl;
+
+      }
+
       // forward compatibility: bypassing remaining fields at the end of kernel
       // description section
       while (result && counters.size() > 0 &&
