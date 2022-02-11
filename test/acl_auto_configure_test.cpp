@@ -269,6 +269,9 @@ TEST(auto_configure, simple) {
   CHECK_EQUAL(0,
               (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
   CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel[0].is_sycl_compile);
+  CHECK_EQUAL(4096, (int)m_device_def.autodiscovery_def.accel[0].device_global_address);
+  CHECK_EQUAL(2048, (int)m_device_def.autodiscovery_def.accel[0].device_global_size);
+
 
   // Checks for device global entry.
   CHECK_EQUAL(2, m_device_def.autodiscovery_def.device_global_mem_defs.size());

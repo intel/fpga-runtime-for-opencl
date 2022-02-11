@@ -248,6 +248,8 @@ typedef struct {
 
   bool streaming_control_info_available;
   acl_streaming_kernel_control_info streaming_control_info;
+  unsigned int device_global_address; /* Address of kernel's device global*/
+  unsigned int device_global_size; /* Size of address space of device global used by this kernel*/
 } acl_accel_def_t;
 
 /* An ACL system definition.

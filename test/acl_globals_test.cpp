@@ -198,20 +198,25 @@ static std::vector<acl_accel_def_t> acltest_complex_system_device0_accel = {
      {},
      {32768, 0, 0},
      1},
-    {14,
-     ACL_RANGE_FROM_ARRAY(acltest_devicelocal[11]),
-     acltest_kernels[14],
-     acltest_laspace_info,
-     {0, 0, 0},
-     0,
-     0,
-     1,
-     0,
-     32768,
-     3,
-     {},
-     {32768, 0, 0},
-     1},
+    {14,                                                // id
+     ACL_RANGE_FROM_ARRAY(acltest_devicelocal[11]),     // mem
+     acltest_kernels[14],                               // iface
+     acltest_laspace_info, // local_aspaces
+     {0, 0, 0}, // compile_work_group_size
+     0, // is_workgroup_invariant
+     0, // is_workitem_invariant
+     1, // num_vector_lanes
+     0, // profiling_words_to_readback
+     32768, // max_work_group_size
+     3, // max_global_work_dim
+     {}, // printf_format_info
+     {32768, 0, 0}, // max_work_group_size_arr
+     1, // uses_global_work_offset
+     0, // fast_launch_depth
+     1, // is_sycl_compile
+     4096, // device_global_address
+     2048, // device_global_size
+     },
     {1,
      ACL_RANGE_FROM_ARRAY(acltest_devicelocal[1]),
      acltest_kernels[1],
