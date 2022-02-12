@@ -424,10 +424,12 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
   }
 
   // dev_addr_t dev_global_address =
-  uintptr_t dev_global_address = kernel->accel_def->device_global_address;
-  assert(kernel->accel_def->device_global_address == 4096); // TODO: remove when merging
-  // uintptr_t dev_global_address = 0x4000000;
-  // TODO: add checks for whether the copy will be out of bound for device global
+  // uintptr_t dev_global_address =
+  // kernel->dev_bin->get_devdef().autodiscovery_def.device_global_mem_defs[name];
+  // uintptr_t dev_global_address = kernel->accel_def->device_global_address;
+  uintptr_t dev_global_address = 0x4000000;
+  // TODO: add checks for whether the copy will be out of bound for device
+  // global
   void *dev_global_ptr =
       (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
   status = set_kernel_arg_mem_pointer_without_checks(kernel, 0, dev_global_ptr);

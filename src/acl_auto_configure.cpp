@@ -96,6 +96,7 @@ static bool read_uint_counters(const std::string &str,
     UNREFERENCED_PARAMETER(e);
     return false;
   }
+
   return true;
 }
 

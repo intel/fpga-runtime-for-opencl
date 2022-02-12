@@ -269,9 +269,26 @@ TEST(auto_configure, simple) {
   CHECK_EQUAL(0,
               (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
   CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel[0].is_sycl_compile);
-  CHECK_EQUAL(4096, (int)m_device_def.autodiscovery_def.accel[0].device_global_address);
-  CHECK_EQUAL(2048, (int)m_device_def.autodiscovery_def.accel[0].device_global_size);
 
+  CHECK_EQUAL(2, (int)m_device_def.autodiscovery_def.num_device_global);
+  CHECK(m_device_def.autodiscovery_def.device_global_mem_defs.find(
+            "kernel15_dev_global") !=
+        m_device_def.autodiscovery_def.device_global_mem_defs.end());
+  CHECK(m_device_def.autodiscovery_def.device_global_mem_defs.find(
+            "kernel15_dev_global2") !=
+        m_device_def.autodiscovery_def.device_global_mem_defs.end());
+  CHECK_EQUAL(4096, m_device_def.autodiscovery_def
+                        .device_global_mem_defs["kernel15_dev_global"]
+                        .address);
+  CHECK_EQUAL(2048, m_device_def.autodiscovery_def
+                        .device_global_mem_defs["kernel15_dev_global"]
+                        .size);
+  CHECK_EQUAL(2048, m_device_def.autodiscovery_def
+                        .device_global_mem_defs["kernel15_dev_global2"]
+                        .address);
+  CHECK_EQUAL(1024, m_device_def.autodiscovery_def
+                        .device_global_mem_defs["kernel15_dev_global2"]
+                        .size);
 
   // Checks for device global entry.
   CHECK_EQUAL(2, m_device_def.autodiscovery_def.device_global_mem_defs.size());

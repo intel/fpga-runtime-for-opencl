@@ -248,8 +248,6 @@ typedef struct {
 
   bool streaming_control_info_available;
   acl_streaming_kernel_control_info streaming_control_info;
-  unsigned int device_global_address; /* Address of kernel's device global*/
-  unsigned int device_global_size; /* Size of address space of device global used by this kernel*/
 } acl_accel_def_t;
 
 /* An ACL system definition.
@@ -500,6 +498,7 @@ typedef class acl_device_program_info_t *acl_device_program_info;
  */
 #define ACL_MEM_CAPABILITY_P2P (1 << 3)
 
+<<<<<<< HEAD
 // Enum values here need to match the SPIRV spec for device global in
 // https://github.com/intel/llvm/blob/44c6437684d64aba82d5a3de0e4bbe21d2b1f7ce/sycl/doc/design/spirv-extensions/SPV_INTEL_global_variable_decorations.asciidoc
 // ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT is used for validation
@@ -534,6 +533,13 @@ struct acl_device_global_mem_def_t {
   acl_device_global_init_mode_t init_mode;
   bool implement_in_csr;
 };
+=======
+typedef struct acl_device_global_mem_def_t {
+  std::string name;
+  unsigned int address;
+  unsigned int size;
+} acl_device_global_mem_def_t;
+>>>>>>> c767c31... Add device global in device autodiscovery definition
 
 // Part of acl_device_def_t where members are populated from the information
 // in the autodiscovery string. This will get updated every time the device
@@ -554,11 +560,18 @@ typedef struct acl_device_def_autodiscovery_t {
 
   std::vector<acl_hostpipe_info_t> acl_hostpipe_info;
 
+<<<<<<< HEAD
   // Device global definition.
   std::unordered_map<std::string, acl_device_global_mem_def_t>
       device_global_mem_defs;
   bool cra_ring_root_exist =
       true; // Set the default value to true for backwards compatibility flows.
+=======
+  // device global definition
+  unsigned int num_device_global;
+  std::unordered_map<std::string, acl_device_global_mem_def_t>
+      device_global_mem_defs;
+>>>>>>> c767c31... Add device global in device autodiscovery definition
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {
