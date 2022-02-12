@@ -7,6 +7,7 @@
 #include <array>
 #include <assert.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <CL/cl_ext.h>
@@ -230,8 +231,6 @@ typedef struct {
       fast_launch_depth; /* How many kernels can be buffered on the device, 0
                             means no buffering just one can execute*/
   unsigned int is_sycl_compile; /* [1] SYCL compile; [0] OpenCL compile*/
-  unsigned int device_global_address; /* Address of kernel's device global*/
-  unsigned int device_global_size; /* Size of address space of device global used by this kernel*/
 } acl_accel_def_t;
 
 /* An ACL system definition.
@@ -480,6 +479,12 @@ typedef class acl_device_program_info_t *acl_device_program_info;
  */
 #define ACL_MEM_CAPABILITY_P2P (1 << 3)
 
+typedef struct acl_device_global_mem_def_t {
+  std::string name;
+  unsigned int address;
+  unsigned int size;
+} acl_device_global_mem_def_t;
+
 // Part of acl_device_def_t where members are populated from the information
 // in the autodiscovery string. This will get updated every time the device
 // is programmed with a new device binary as the new binary would contain a
@@ -498,6 +503,11 @@ typedef struct acl_device_def_autodiscovery_t {
   std::array<acl_system_global_mem_def_t, ACL_MAX_GLOBAL_MEM> global_mem_defs;
 
   std::vector<acl_hostpipe_info_t> acl_hostpipe_info;
+
+  // device global definition
+  unsigned int num_device_global;
+  std::unordered_map<std::string, acl_device_global_mem_def_t>
+      device_global_mem_defs;
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {

@@ -96,6 +96,7 @@ static bool read_uint_counters(const std::string &str,
     UNREFERENCED_PARAMETER(e);
     return false;
   }
+
   return true;
 }
 
@@ -493,6 +494,61 @@ bool acl_load_device_def_from_str(const std::string &config_str,
                                 counters);
   }
 
+  // Read device global information
+  unsigned int num_device_global = 0;
+  if (result && counters.back() > 0) {
+    result =
+        read_uint_counters(config_str, curr_pos, num_device_global, counters);
+    devdef.num_device_global = num_device_global;
+
+    for (auto i = 0U; result && (i < num_device_global);
+         i++) { // device_global_memories
+      // read total number of fields in global_memories
+      int total_fields_device_global = 0;
+      if (counters.back() > 0) {
+        result = read_int_counters(config_str, curr_pos,
+                                   total_fields_device_global, counters);
+      }
+
+      counters.emplace_back(total_fields_device_global);
+
+      // read device global name
+      std::string device_global_name;
+      if (result && counters.back() > 0) {
+        result = read_string_counters(config_str, curr_pos, device_global_name,
+                                      counters);
+      }
+
+      // read device global address
+      unsigned int dev_global_addr = 0; // Default
+      if (result && counters.back() > 0) {
+        result =
+            read_uint_counters(config_str, curr_pos, dev_global_addr, counters);
+      }
+      // read device global address size
+      unsigned int dev_global_size = 0; // Default
+      if (result && counters.back() > 0) {
+        result =
+            read_uint_counters(config_str, curr_pos, dev_global_size, counters);
+      }
+
+      acl_device_global_mem_def_t dev_global_def = {
+          device_global_name, dev_global_addr, dev_global_size};
+      devdef.device_global_mem_defs[device_global_name] = dev_global_def;
+
+      // forward compatibility: bypassing remaining fields at the end of global
+      // memory
+      while (result && counters.size() > 0 &&
+             counters.back() > 0) { // total_fields_device_global>0
+        std::string tmp;
+        result =
+            result && read_string_counters(config_str, curr_pos, tmp, counters);
+        check_section_counters(counters);
+      }
+      counters.pop_back(); // removing total_fields_device_global
+    }                      // device_global_memories
+  }
+
   // forward compatibility: bypassing remaining fields at the end of device
   // description section
   while (result && counters.size() > 0 &&
@@ -871,30 +927,6 @@ bool acl_load_device_def_from_str(const std::string &config_str,
       if (result && counters.back() > 0) {
         result = read_uint_counters(config_str, curr_pos,
                                     devdef.accel[i].is_sycl_compile, counters);
-      }
-
-      devdef.accel[i].device_global_address =
-          0; // Initializing for backward compatability
-      std::cerr << result << std::endl;
-      std::cerr << (counters.back() > 0) << std::endl;
-      if (result && counters.back() > 0) {
-        std::cerr << "read dev global address" << std::endl;
-        result = read_uint_counters(config_str, curr_pos,
-                                    devdef.accel[i].device_global_address, counters);
-      }else {
-        std::cerr << "read dev global address fail" << std::endl;
-      }
-        
-
-      devdef.accel[i].device_global_size =
-          0; // Initializing for backward compatability
-      if (result && counters.back() > 0) {
-        std::cerr << "read dev global size" << std::endl;
-        result = read_uint_counters(config_str, curr_pos,
-                                    devdef.accel[i].device_global_size, counters);
-      }else {
-        std::cerr << "read dev global size fail" << std::endl;
-
       }
 
       // forward compatibility: bypassing remaining fields at the end of kernel
