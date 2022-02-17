@@ -188,6 +188,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 # https://clang.llvm.org/docs/AddressSanitizer.html
+# https://gcc.gnu.org/onlinedocs/gcc/Instrumentation-Options.html#index-fsanitize_003daddress
 option(ACL_WITH_ASAN "Build with address sanitizer" OFF)
 message(STATUS "Build with address sanitizer: ${ACL_WITH_ASAN}")
 if(ACL_WITH_ASAN)
