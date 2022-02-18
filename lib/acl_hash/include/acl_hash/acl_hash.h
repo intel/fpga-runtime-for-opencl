@@ -55,7 +55,7 @@ typedef struct {
   uint32_t h0, h1, h2, h3, h4;
   // The (len % 64) most recent bytes to be added.
   // tail[0] is the earliest data byte, and so on.
-  char tail[64];
+  unsigned char tail[64];
 } acl_hash_sha1_context_t;
 
 typedef struct {
