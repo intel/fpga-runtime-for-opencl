@@ -5,9 +5,14 @@
 // compiling for ARM
 #ifndef __arm__
 
-#pragma warning(push, 0)
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4100) // unreferenced formal parameter
+#endif
 #include <CppUTest/TestHarness.h>
-#pragma warning(pop);
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 #include <CL/opencl.h>
 
