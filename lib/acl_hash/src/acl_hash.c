@@ -18,11 +18,12 @@
 //////////////////////////////
 // Local functions prototypes
 
-static void l_accum(acl_hash_sha1_context_t *c, const char *buf, size_t len);
-static void l_accum_block(acl_hash_sha1_context_t *c, const char *buf);
+static void l_accum(acl_hash_sha1_context_t *c, const unsigned char *buf,
+                    size_t len);
+static void l_accum_block(acl_hash_sha1_context_t *c, const unsigned char *buf);
 static void l_close(acl_hash_sha1_context_t *c, char *digest_buf);
 static uint32_t l_leftrotate(uint32_t v, unsigned bits);
-static uint32_t l_read_bigendian_i32(const char *buf);
+static uint32_t l_read_bigendian_i32(const unsigned char *buf);
 static void l_write_bigendian_hex_i32(uint32_t v, char *buf);
 
 //////////////////////////////
@@ -53,7 +54,7 @@ int acl_hash_add(acl_hash_context_t *ctx, const void *buf, size_t len) {
     return 0;
   }
 
-  l_accum(&(ctx->alg.sha1), (char *)buf, len);
+  l_accum(&(ctx->alg.sha1), (unsigned char *)buf, len);
 
   return 1;
 }
@@ -87,7 +88,8 @@ int acl_hash_hexdigest(acl_hash_context_t *ctx, char *digest_buf,
 //////////////////////////////
 // Local functions
 
-static void l_accum(acl_hash_sha1_context_t *c, const char *buf, size_t len) {
+static void l_accum(acl_hash_sha1_context_t *c, const unsigned char *buf,
+                    size_t len) {
   size_t buf_idx = 0;
   size_t tail_idx = c->len & 63;
 
@@ -127,7 +129,8 @@ static void l_accum(acl_hash_sha1_context_t *c, const char *buf, size_t len) {
   }
 }
 
-static void l_accum_block(acl_hash_sha1_context_t *ctx, const char *buf) {
+static void l_accum_block(acl_hash_sha1_context_t *ctx,
+                          const unsigned char *buf) {
   unsigned i;
   uint32_t w[80];
   uint32_t a = ctx->h0;
@@ -180,7 +183,7 @@ static void l_accum_block(acl_hash_sha1_context_t *ctx, const char *buf) {
 }
 
 static void l_close(acl_hash_sha1_context_t *c, char *digest_buf) {
-  char extra[64];
+  unsigned char extra[64];
   unsigned i;
   unsigned raw_tail_len = (1 /* 1-byte */ + 8 /* length field */ + c->len) & 63;
   unsigned num_zero_fill_bytes = raw_tail_len > 0 ? (64 - raw_tail_len) : 0;
@@ -217,12 +220,12 @@ static uint32_t l_leftrotate(uint32_t v, unsigned bits) {
   return hi | lo;
 }
 
-static uint32_t l_read_bigendian_i32(const char *buf) {
+static uint32_t l_read_bigendian_i32(const unsigned char *buf) {
   // Need to cast to uchar so we don't sign extend when widening out to 32 bits.
-  uint32_t byte3 = (unsigned char)buf[0];
-  uint32_t byte2 = (unsigned char)buf[1];
-  uint32_t byte1 = (unsigned char)buf[2];
-  uint32_t byte0 = (unsigned char)buf[3];
+  uint32_t byte3 = buf[0];
+  uint32_t byte2 = buf[1];
+  uint32_t byte1 = buf[2];
+  uint32_t byte0 = buf[3];
   uint32_t result = (byte3 << 24) | (byte2 << 16) | (byte1 << 8) | (byte0);
   return result;
 }
