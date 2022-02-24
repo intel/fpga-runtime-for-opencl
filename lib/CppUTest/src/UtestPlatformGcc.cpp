@@ -56,7 +56,7 @@
 // kernel 2.4.11. Library support was added in glibc 2.30. (Earlier
 // glibc versions did not provide a wrapper for this system call,
 // necessitating the use of syscall(2).)
-static inline pid_t gettid(void) { return syscall( __NR_gettid ); }
+static inline pid_t gettid(void) { return (pid_t)syscall(__NR_gettid); }
 #endif
 
 #include "CppUTest/PlatformSpecificFunctions.h"
