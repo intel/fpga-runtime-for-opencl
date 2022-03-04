@@ -501,15 +501,15 @@ bool acl_load_device_def_from_str(const std::string &config_str,
         read_uint_counters(config_str, curr_pos, num_device_global, counters);
     devdef.num_device_global = num_device_global;
 
+    // read total number of fields in device global
+    int total_fields_device_global = 0;
+    if (result) {
+      result = read_int_counters(config_str, curr_pos,
+                                 total_fields_device_global, counters);
+    }
+
     for (auto i = 0U; result && (i < num_device_global);
          i++) { // device_global_memories
-      // read total number of fields in global_memories
-      int total_fields_device_global = 0;
-      if (counters.back() > 0) {
-        result = read_int_counters(config_str, curr_pos,
-                                   total_fields_device_global, counters);
-      }
-
       counters.emplace_back(total_fields_device_global);
 
       // read device global name
