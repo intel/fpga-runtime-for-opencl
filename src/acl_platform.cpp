@@ -257,6 +257,34 @@ int acl_platform_is_valid(cl_platform_id platform) {
   return platform == &acl_platform;
 }
 
+const char *acl_platform_extensions() {
+  return "cl_khr_byte_addressable_store" // yes, we have correct access to
+                                         // individual bytes!
+         " cles_khr_int64" // yes, we support 64-bit ints in the embedded
+                           // profile
+
+         " cl_khr_icd"
+#if ACL_SUPPORT_IMAGES == 1
+         " cl_khr_3d_image_writes"
+#endif
+#if ACL_SUPPORT_DOUBLE == 1
+         " cl_khr_fp64"
+#endif
+#ifdef ACL_120
+         " cl_khr_global_int32_base_atomics"
+         " cl_khr_global_int32_extended_atomics"
+         " cl_khr_local_int32_base_atomics"
+         " cl_khr_local_int32_extended_atomics"
+#endif
+#ifndef __arm__
+  // Add the following once all USM APIs are implemented, Intel publishes
+  // the spec, and published USM conformance tests pass
+  //" cl_intel_unified_shared_memory"
+#endif
+         " cl_intel_create_buffer_with_properties"
+         " cl_intel_mem_channel_property";
+}
+
 // Initialize the internal bookkeeping based on the system definition
 // provided to us.
 void acl_init_platform(void) {
@@ -298,31 +326,7 @@ void acl_init_platform(void) {
   // The extensions string specifies the extensions supported by our framework.
   // To add an extension, append a flag name and separate it from others using a
   // space.
-  acl_platform.extensions =
-      "cl_khr_byte_addressable_store" // yes, we have correct access to
-                                      // individual bytes!
-      " cles_khr_int64" // yes, we support 64-bit ints in the embedded profile
-
-      " cl_khr_icd"
-#if ACL_SUPPORT_IMAGES == 1
-      " cl_khr_3d_image_writes"
-#endif
-#if ACL_SUPPORT_DOUBLE == 1
-      " cl_khr_fp64"
-#endif
-#ifdef ACL_120
-      " cl_khr_global_int32_base_atomics"
-      " cl_khr_global_int32_extended_atomics"
-      " cl_khr_local_int32_base_atomics"
-      " cl_khr_local_int32_extended_atomics"
-#endif
-#ifndef __arm__
-  // Add the following once all USM APIs are implemented, Intel publishes
-  // the spec, and published USM conformance tests pass
-  //" cl_intel_unified_shared_memory"
-#endif
-      " cl_intel_create_buffer_with_properties"
-      " cl_intel_mem_channel_property";
+  acl_platform.extensions = acl_platform_extensions();
 
   acl_platform.profile = "EMBEDDED_PROFILE";
   acl_platform.hal = acl_get_hal();

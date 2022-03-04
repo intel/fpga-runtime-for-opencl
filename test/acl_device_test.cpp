@@ -14,6 +14,7 @@
 
 #include <acl.h>
 #include <acl_context.h>
+#include <acl_platform.h>
 #include <acl_types.h>
 #include <acl_util.h>
 
@@ -325,6 +326,10 @@ MT_TEST(DeviceInfo, basic) {
                                             &str[0], &size_ret));
 
     CHECK(size_ret > 0);
+
+    if (queries[i] == CL_DEVICE_EXTENSIONS) {
+      CHECK(strcmp(str, acl_platform_extensions()) == 0);
+    }
 
     switch (queries[i]) {
     case CL_DEVICE_VENDOR:
