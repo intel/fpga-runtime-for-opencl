@@ -95,8 +95,14 @@ volatile int threadvar = 0;
 
 void *test_thread(void *) {
   while (1) {
-    while (threadtest_state == SERVER_STATE)
+    while (true) {
+      acl_mutex_lock(&mymutex);
+      const bool is_server_state = (threadtest_state == SERVER_STATE);
+      acl_mutex_unlock(&mymutex);
+      if (!is_server_state)
+        break;
       acl_thread_yield();
+    }
     if (threadtest_state == END_STATE) {
       return 0;
     }
@@ -125,16 +131,28 @@ TEST(threadsupport, threads) {
   res = acl_mutex_unlock(&mymutex);
   CHECK_EQUAL(0, res);
 
-  while (threadtest_state != SERVER_STATE)
+  while (true) {
+    acl_mutex_lock(&mymutex);
+    const bool is_server_state = (threadtest_state == SERVER_STATE);
+    acl_mutex_unlock(&mymutex);
+    if (is_server_state)
+      break;
     acl_thread_yield();
+  }
   res = acl_mutex_lock(&mymutex);
   CHECK_EQUAL(0, res);
   CHECK_EQUAL(threadvar, 7 + 13);
   threadtest_state = CLIENT_STATE;
   res = acl_mutex_unlock(&mymutex);
   CHECK_EQUAL(0, res);
-  while (threadtest_state != SERVER_STATE)
+  while (true) {
+    acl_mutex_lock(&mymutex);
+    const bool is_server_state = (threadtest_state == SERVER_STATE);
+    acl_mutex_unlock(&mymutex);
+    if (is_server_state)
+      break;
     acl_thread_yield();
+  }
   res = acl_mutex_lock(&mymutex);
   CHECK_EQUAL(0, res);
   threadtest_state = END_STATE;
