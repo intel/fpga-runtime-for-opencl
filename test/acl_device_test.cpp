@@ -324,10 +324,7 @@ MT_TEST(DeviceInfo, basic) {
     CHECK_EQUAL(CL_SUCCESS, clGetDeviceInfo(device, queries[i], str_size,
                                             &str[0], &size_ret));
 
-    if (queries[i] != CL_DEVICE_EXTENSIONS) {
-      // Non-empty result for most supported queries.
-      CHECK(size_ret > 0);
-    }
+    CHECK(size_ret > 0);
 
     switch (queries[i]) {
     case CL_DEVICE_VENDOR:
