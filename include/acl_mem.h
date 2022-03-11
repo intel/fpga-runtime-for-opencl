@@ -97,6 +97,10 @@ void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
                                         cl_int event_command_exec_status,
                                         void *callback_data);
 
+cl_int acl_extract_device_global_address(cl_kernel kernel,
+                                         const char *dev_global_name,
+                                         unsigned int *ret_addr);
+
 #ifdef __GNUC__
 #pragma GCC visibility pop
 #endif
