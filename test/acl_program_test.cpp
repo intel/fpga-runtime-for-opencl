@@ -612,7 +612,7 @@ MT_TEST(acl_program, program_info) {
   // built stat. to success even before calling clbuildprogram
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0,
                                            NULL, &size_ret));
-  CHECK_EQUAL(341, size_ret);
+  CHECK_EQUAL(340, size_ret);
 
   CHECK_EQUAL(CL_SUCCESS, clBuildProgram(program, 0, 0, "", 0, 0));
 
@@ -633,21 +633,22 @@ MT_TEST(acl_program, program_info) {
 
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0,
                                            NULL, &size_ret));
-  CHECK_EQUAL(341, size_ret);
+  CHECK_EQUAL(340, size_ret);
   // CHECK_EQUAL(321, size_ret);
 
   names[size_ret] = 100; // making sure extra bytes of memory are not affected.
   CHECK_EQUAL(CL_SUCCESS,
               clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES,
                                2000 * sizeof(char), names, &size_ret));
-  CHECK_EQUAL(341, size_ret); // only one kernel named: "foo"
+  CHECK_EQUAL(340, size_ret); // only one kernel named: "foo"
   CHECK_EQUAL(100, names[size_ret]);
-  CHECK_EQUAL(0, strcmp("kernel0_copy_vecin_vecout;"
+  CHECK_EQUAL(0, strcmp("copy_device_global;" // TODO: eventually we would want
+                                              // to hide it from users
+                        "kernel0_copy_vecin_vecout;"
                         "kernel11_task_double;"
                         "kernel12_task_double;"
                         "kernel13_multi_vec_lane;"
                         "kernel14_svm_arg_alignment;"
-                        "kernel15_dev_global;"
                         "kernel1_vecadd_vecin_vecin_vecout;"
                         "kernel2_vecscale_vecin_scalar_vecout;"
                         "kernel3_locals;"

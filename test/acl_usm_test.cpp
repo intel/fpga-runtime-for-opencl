@@ -1266,15 +1266,15 @@ MT_TEST(acl_usm, read_device_global) {
 
   syncThreads();
   // Write to device global
-  status = clEnqueueWriteGlobalVariableINTEL(
-      m_cq, m_program, "kernel15_dev_global", CL_FALSE, strsize, 0, src_ptr, 0,
-      NULL, &write_event);
+  status = clEnqueueWriteGlobalVariableINTEL(m_cq, m_program, "dev_global_name",
+                                             CL_FALSE, strsize, 0, src_ptr, 0,
+                                             NULL, &write_event);
   CHECK_EQUAL(CL_SUCCESS, status);
 
   // Read from device global, with dependence on write event
-  status = clEnqueueReadGlobalVariableINTEL(
-      m_cq, m_program, "kernel15_dev_global", CL_FALSE, strsize, 0, src_ptr, 1,
-      &write_event, &read_event);
+  status = clEnqueueReadGlobalVariableINTEL(m_cq, m_program, "dev_global_name",
+                                            CL_FALSE, strsize, 0, src_ptr, 1,
+                                            &write_event, &read_event);
   CHECK_EQUAL(CL_SUCCESS, status);
 
   // Manually set "write device global" event done

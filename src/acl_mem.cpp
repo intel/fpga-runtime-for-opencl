@@ -406,8 +406,32 @@ int acl_bind_buffer_to_device(cl_device_id device, cl_mem mem) {
   return 1;
 }
 
+/**
+ * Read <size> bytes of data from device global
+ *
+ * This function extract the device global address with given name, create
+ * kernel from the given program, create temporary device usm pointer to hold
+ * data that will be copied from device global. Launch the copy kernel with
+ * correct pointers set as src and destination, then enqueue a memory copy
+ * operation that depend on copy kernel to copy from temporary device usm
+ * pointer into user provided host pointer. Then register a callback to release
+ * the necessary events, kernels, memories.
+ *
+ * @param command_queue the queue system this copy kernel will belong
+ * @param program contains copy kernel
+ * @param name name of device global, used to look up for device global address
+ * in autodiscovery string
+ * @param blocking_read whether the operation is blocking or not
+ * @param size number of bytes to read / write
+ * @param offset offset from the extracted address of device global
+ * @param ptr pointer that will hold the data copied from device global
+ * @param num_events_in_wait_list number of event that copy kernel depend on
+ * @param event_wait_list events that copy kernel depend on
+ * @param event the info about the execution of copy kernel will be stored in
+ * the event
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
 ACL_EXPORT
-// CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL() {
 CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
     cl_command_queue command_queue, cl_program program, const char *name,
     cl_bool blocking_read, size_t size, size_t offset, void *ptr,
@@ -415,27 +439,36 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
     cl_event *event) {
   cl_int status;
 
-  cl_kernel kernel = clCreateKernelIntelFPGA(program, name, &status);
+  // Get copy kernel from the program
+  cl_kernel kernel =
+      clCreateKernelIntelFPGA(program, "copy_device_global", &status);
   if (status != CL_SUCCESS) {
     return status;
   }
 
-  // dev_addr_t dev_global_address =
-  // uintptr_t dev_global_address =
-  // kernel->dev_bin->get_devdef().autodiscovery_def.device_global_mem_defs[name];
-  // uintptr_t dev_global_address = kernel->accel_def->device_global_address;
-  uintptr_t dev_global_address = 0x4000000;
-  // TODO: add checks for whether the copy will be out of bound for device
-  // global
+  // Look up device global address with use provided name
+  unsigned int device_global_addr_num = 0;
+  status =
+      acl_extract_device_global_address(kernel, name, &device_global_addr_num);
+  if (status != CL_SUCCESS)
+    return status;
+  uintptr_t dev_global_address = device_global_addr_num;
+
+  // Calculate the offset from the device global address, offset is in byte unit
   void *dev_global_ptr =
       (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
+  // TODO: add checks for whether the copy will be out of bound for device
+  // global
+
+  // Set the device global pointer as the kernel destination args
   status = set_kernel_arg_mem_pointer_without_checks(kernel, 0, dev_global_ptr);
   // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr);
   if (status != CL_SUCCESS) {
     return status;
   }
 
-  // Copy device global memory to temporary device usm pointer first
+  // Copy device global memory to temporary device usm pointer first to minimize
+  // area cost
   void *tmp_dev_ptr = clDeviceMemAllocINTEL(
       command_queue->context, command_queue->device, NULL, size, 1, &status);
   if (status != CL_SUCCESS) {
@@ -450,24 +483,22 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
     return status;
   }
 
-  // Set size kernel arg
+  // Propagate size information to kernel
   status = clSetKernelArg(kernel, 2, sizeof(size_t), (const void *)(&size));
   if (status != CL_SUCCESS) {
     return status;
   }
 
+  // Enqueue copy kernel execution
   cl_event tmp_event = 0;
   status = clEnqueueTask(command_queue, kernel, num_events_in_wait_list,
                          event_wait_list, &tmp_event);
   if (status != CL_SUCCESS) {
     return status;
   }
-  std::cerr << tmp_event->cmd.info.ndrange_kernel.invocation_wrapper->image
-                   ->activation_id
-            << std::endl;
 
-  // copy from the temporary device memory into user provided pointer
-  std::cerr << "read: copy from tmp dev pointer to source pointer" << std::endl;
+  // Copy from the temporary device memory into user provided host pointer
+  // give this event back to user, not the copy kernel one
   status = clEnqueueMemcpyINTEL(command_queue, blocking_read, ptr, tmp_dev_ptr,
                                 size, 1, &tmp_event, event);
   if (status != CL_SUCCESS) {
@@ -475,6 +506,7 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
   }
 
   if (blocking_read) {
+    // If blocking, first wait for event to finish, then clean up the resources.
     status = clReleaseEvent(tmp_event);
     if (status != CL_SUCCESS) {
       return status;
@@ -503,6 +535,29 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
   return CL_SUCCESS;
 }
 
+/**
+ * Write <size> bytes of data from user provided host pointer into device global
+ *
+ * This function extract the device global address with given name, create
+ * kernel from the given program, create temporary device usm pointer to hold
+ * user provided data through usm copy operation. Launch the copy kernel with
+ * correct pointers set as src and destination. Then register a callback to
+ * release the necessary events, kernels, memories.
+ *
+ * @param command_queue the queue system this copy kernel will belong
+ * @param program contains copy kernel
+ * @param name name of device global, used to look up for device global address
+ * in autodiscovery string
+ * @param blocking_write whether the operation is blocking or not
+ * @param size number of bytes to read / write
+ * @param offset offset from the extracted address of device global
+ * @param ptr pointer that will hold the data copied from device global
+ * @param num_events_in_wait_list number of event that copy kernel depend on
+ * @param event_wait_list events that copy kernel depend on
+ * @param event the info about the execution of copy kernel will be stored in
+ * the event
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
 ACL_EXPORT
 CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
     cl_command_queue command_queue, cl_program program, const char *name,
@@ -511,63 +566,64 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
     cl_event *event) {
   cl_int status;
 
-  cl_kernel kernel = clCreateKernelIntelFPGA(program, name, &status);
+  // Get copy kernel from the program
+  cl_kernel kernel =
+      clCreateKernelIntelFPGA(program, "copy_device_global", &status);
   if (status != CL_SUCCESS) {
     return status;
   }
 
-  // do we support ptr being a buffer instead of usm pointer? it seems to be the
-  // case on spec (only usm host pointer) Given kernel arg must be a deivce usm
-  // pointer: When ptr is a host/shared usm pointer, this function is expected
-  // to copy it to device first? yes (currently discussing whether kernel arg
-  // accept host usm instead)
+  // Allocate a temporary device usm pointer to hold user data
+  // This is done to minimize kernel area, as device to device memory
+  // interconnect occupies least amount of memory
   void *src_dev_ptr = clDeviceMemAllocINTEL(
       command_queue->context, command_queue->device, NULL, size, 1, &status);
   if (status != CL_SUCCESS) {
     return status;
   }
 
-  // This copy operation have to be blocking
-  // cl_event to_dev_event = 0;
+  // Copy from user provide host pointer to temporary device usm pointer
   status = clEnqueueMemcpyINTEL(command_queue, CL_TRUE, src_dev_ptr, ptr, size,
                                 0, NULL, NULL);
   if (status != CL_SUCCESS) {
     return status;
   }
 
-  // if (to_dev_event->execution_status != CL_COMPLETE) {
-  //   return CL_INVALID_OPERATION;
-  // }
-
+  // Set the source of copy (in kernel arg) as the temporary device usm pointer
   status = clSetKernelArgMemPointerINTEL(kernel, 0, src_dev_ptr);
   if (status != CL_SUCCESS) {
     return status;
   }
-  // should kernel header contain offset or not? no
-  // offset is always byte offset? yes
-  // Assuming below returns same thing as `clDeviceMemAllocINTEL`, where exactly
-  // is dev global ptr being read from? What format is the read dev global, is
-  // it a pointer just like the return value of `clDeviceMemAllocINTEL` or is it
-  // something else? (its an unsigned value indicating address)
-  // TODO: When passing dev global pointer directly to
-  // clSetKernelArgMemPointerINTEL, make sure REMOVE_VALID_CHECKS is defined.
-  // Otherwise this ptr is not existing in context -> cause checks to fail
-  // TODO: get dev_global_address from autodiscovery instead later
-  // dev_addr_t dev_global_address =
-  // kernel->dev_bin->get_devdef().autodiscovery_def.?
-  uintptr_t dev_global_address = 0x4000000;
+
+  // Look up device global address with use provided name
+  unsigned int device_global_addr_num = 0;
+  status =
+      acl_extract_device_global_address(kernel, name, &device_global_addr_num);
+  if (status != CL_SUCCESS)
+    return status;
+  uintptr_t dev_global_address = device_global_addr_num;
+
+  // TODO: remove the following checks, as it only works for unit test
+  assert(((unsigned int)dev_global_address) == 0x1024);
+  // Calculate the offset from the device global address, offset is in byte unit
   void *dev_global_ptr =
       (void *)(dev_global_address + offset * 8); // 1 unit of offset is 8 bits
+  // TODO: add checks for whether the copy will be out of bound for device
+  // global
+
+  // Set the device global pointer as the kernel destination args
   status = set_kernel_arg_mem_pointer_without_checks(kernel, 1, dev_global_ptr);
-  // status = clSetKernelArgMemPointerINTEL(kernel, 1, dev_global_ptr);
   if (status != CL_SUCCESS) {
     return status;
   }
+
+  // Propagate size information to kernel
   status = clSetKernelArg(kernel, 2, sizeof(size_t), (const void *)(&size));
   if (status != CL_SUCCESS) {
     return status;
   }
 
+  // Enqueue kernel execution
   status = clEnqueueTask(command_queue, kernel, num_events_in_wait_list,
                          event_wait_list, event);
   if (status != CL_SUCCESS) {
@@ -580,6 +636,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   acl_unlock();
 
   if (blocking_write) {
+    // If blocking, first wait for event to finish, then clean up the resources.
     status = clWaitForEvents(1, event);
     if (status == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) {
       return status;
@@ -593,7 +650,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
       return status;
     }
   } else {
-    // Clean up resources after event finishes
+    // Otherwise, clean up resources after event finishes
     void **callback_data = (void **)acl_malloc(sizeof(void *) * 3);
     if (!callback_data) {
       return CL_OUT_OF_HOST_MEMORY;
@@ -608,6 +665,53 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   return CL_SUCCESS;
 }
 
+/**
+ * Look up device global address in autodiscovery def using user provided name
+ *
+ * @param kernel the copy kernel
+ * @param dev_global_name name of device global to query
+ * @param ret_addr hold the resulting address of device global
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
+cl_int acl_extract_device_global_address(cl_kernel kernel,
+                                         const char *dev_global_name,
+                                         unsigned int *ret_addr) {
+  acl_lock();
+  // In full system flow, the autodiscovery string is available through kernel's
+  // dev_bin, however it is not in unit testing framework Thus, try to find
+  // device global definition first on kernel's device bin, if not found then
+  // try on acl_present_board_def(), which is set in unit test setup steps.
+  std::unordered_map<std::string, acl_device_global_mem_def_t> dev_global_map =
+      kernel->dev_bin->get_devdef().autodiscovery_def.device_global_mem_defs;
+  std::unordered_map<std::string, acl_device_global_mem_def_t>::const_iterator
+      dev_global = dev_global_map.find(dev_global_name);
+  if (dev_global != dev_global_map.end()) {
+    *ret_addr = dev_global->second.address;
+    UNLOCK_RETURN(CL_SUCCESS);
+  }
+  // Device global name not found in kernel dev_bin, try to find in the sysdef
+  // setup by unit tests
+  dev_global_map = acl_present_board_def()
+                       ->device[0]
+                       .autodiscovery_def.device_global_mem_defs;
+  dev_global = dev_global_map.find(dev_global_name);
+  if (dev_global != dev_global_map.end()) {
+    *ret_addr = dev_global->second.address;
+    UNLOCK_RETURN(CL_SUCCESS);
+  }
+  UNLOCK_RETURN(CL_INVALID_VALUE);
+}
+
+/**
+ * Callback function that executes after copy event finishes
+ *
+ * Main responsible for free heap memories, device memories
+ *
+ * @param event the event that this callback is registered on
+ * @param event_command_exec_status the status of of event (queue, complete etc)
+ * @param callback_data hold the resources that need to be released
+ * @return nothing
+ */
 void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
                                         cl_int event_command_exec_status,
                                         void *callback_data) {
@@ -620,12 +724,15 @@ void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
   event = event;
   acl_lock();
   if (callback_ptrs[0]) {
+    // Free intermediate device usm pointers
     clMemFreeINTEL(event->context, callback_ptrs[0]);
   }
   if (callback_ptrs[1]) {
+    // Release kernel from hep memory as its associated device memory
     clReleaseKernel(((cl_kernel)callback_ptrs[1]));
   }
   if (callback_ptrs[2]) {
+    // Release event from hep memory
     clReleaseEvent(((cl_event)callback_ptrs[2]));
   }
   acl_free(callback_data);

@@ -120,7 +120,7 @@ static acl_kernel_interface_t acltest_kernels[] = {
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(int *), 0, 0, 1024},
      }},
     {// interface
-     "kernel15_dev_global",
+     "copy_device_global",
      {
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(void *), 0, 0, 1},
          {ACL_ARG_ADDR_GLOBAL, ACL_ARG_MEM_OBJ, sizeof(void *), 0, 0, 1},
@@ -590,22 +590,31 @@ static acl_system_def_t acltest_complex_system = {
       1,
       0, /* alloc capabilities */
       0, /* min_host_mem_alignment */
-      {"fpga0",
-       "sample40byterandomhash000000000000000000",
-       0,
-       acltest_complex_system_device0_accel, /* accel */
-       {},                                   /* hal_info */
-       1,                                    // number of global memory systems
-       {
-           /* global mem info array */
-           {
-               /* global mem info for memory 0 */
-               /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
-               /* acl_system_global_mem_type_t */ ACL_GLOBAL_MEM_DEVICE_PRIVATE,
-               /* num_global_bank */ 2,
-               /* burst_interleaved */ 1,
-           },
-       }}},
+      {
+          "fpga0",
+          "sample40byterandomhash000000000000000000",
+          0,
+          acltest_complex_system_device0_accel, /* accel */
+          {},                                   /* hal_info */
+          1, // number of global memory systems
+          {
+              /* global mem info array */
+              {
+                  /* global mem info for memory 0 */
+                  /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
+                  /* acl_system_global_mem_type_t */
+                  ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                  /* num_global_bank */ 2,
+                  /* burst_interleaved */ 1,
+              },
+          },
+          {}, // acl_hostpipe_info
+          1,  // num_device_global
+          {
+              // device_global_mem_defs map
+              {"dev_global_name", {"dev_global_name", 0x1024, 2048}},
+          },
+      }},
      {nullptr,
       1,
       1,
@@ -615,22 +624,31 @@ static acl_system_def_t acltest_complex_system = {
       0,
       0, /* alloc capabilities */
       0, /* min_host_mem_alignment */
-      {"fpga1",
-       "sample40byterandomhash000000000000000001",
-       0,
-       acltest_complex_system_device1_accel, /* accel */
-       {},                                   /* hal_info */
-       1,                                    // number of global memory systems
-       {
-           /* global mem info array */
-           {
-               /* global mem info for memory 0 */
-               /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
-               /* acl_system_global_mem_type_t */ ACL_GLOBAL_MEM_DEVICE_PRIVATE,
-               /* num_global_bank */ 2,
-               /* burst_interleaved */ 1,
-           },
-       }}},
+      {
+          "fpga1",
+          "sample40byterandomhash000000000000000001",
+          0,
+          acltest_complex_system_device1_accel, /* accel */
+          {},                                   /* hal_info */
+          1, // number of global memory systems
+          {
+              /* global mem info array */
+              {
+                  /* global mem info for memory 0 */
+                  /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
+                  /* acl_system_global_mem_type_t */
+                  ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                  /* num_global_bank */ 2,
+                  /* burst_interleaved */ 1,
+              },
+          },
+          {}, // acl_hostpipe_info
+          1,  // num_device_global
+          {
+              // device_global_mem_defs map
+              {"dev_global_name", {"dev_global_name", 0x1024, 2048}},
+          },
+      }},
      {nullptr,
       2,
       1,

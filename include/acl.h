@@ -506,6 +506,7 @@ typedef struct acl_device_def_autodiscovery_t {
 
   // device global definition
   unsigned int num_device_global;
+  // std::vector<acl_device_global_mem_def_t> device_global_mem_defs;
   std::unordered_map<std::string, acl_device_global_mem_def_t>
       device_global_mem_defs;
 } acl_device_def_autodiscovery_t;

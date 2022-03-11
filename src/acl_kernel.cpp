@@ -837,6 +837,22 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointer(
   return clSetKernelArgSVMPointerIntelFPGA(kernel, arg_index, arg_value);
 }
 
+/**
+ * Set any provided void pointer as kernel arguments
+ *
+ * It is assumed that the provided pointer is a valid device address,
+ * or device global address that kernel can use to point to right address space.
+ *
+ * It is the same as `clSetKernelArgMemPointerINTEL` except the validity checks
+ * are removed. This is because the user provided pointer may not always be usm
+ * pointer, therefore will not belong to the context (as they are checked in
+ * clSetKernelArgMemPointerINTEL)
+ *
+ * @param kernel the kernel that accept the pointer arg
+ * @param arg_index which kernel argument accept the value
+ * @param arg_value the pointer to desired address space
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
 cl_int set_kernel_arg_mem_pointer_without_checks(cl_kernel kernel,
                                                  cl_uint arg_index,
                                                  void *arg_value) {
