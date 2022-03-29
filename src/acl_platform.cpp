@@ -277,9 +277,7 @@ const char *acl_platform_extensions() {
          " cl_khr_local_int32_extended_atomics"
 #endif
 #ifndef __arm__
-  // Add the following once all USM APIs are implemented, Intel publishes
-  // the spec, and published USM conformance tests pass
-  //" cl_intel_unified_shared_memory"
+         " cl_intel_unified_shared_memory"
 #endif
          " cl_intel_create_buffer_with_properties"
          " cl_intel_mem_channel_property"
