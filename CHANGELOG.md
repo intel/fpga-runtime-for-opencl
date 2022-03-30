@@ -4,13 +4,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 ### Added
+
+- Support `CL_MEM_ALLOC_BUFFER_LOCATION_INTEL` property ([#34], [#46], [#88]).
+- Support early print buffer flushing in debug mode ([#61]).
+- Document how buffers are managed in the runtime ([#81]).
+- Add `cl_intel_unified_shared_memory` to supported extensions ([#94]).
+
 ### Changed
+
+- Update Khronos OpenCL headers ([#62], [#67], [#68]).
+- Require C++17 compiler support ([#75]).
+
 ### Deprecated
 ### Removed
 ### Fixed
+
+- Load `libz.so.1` alongside `libz.so` on Linux ([#69]).
+
 ### Security
 
+- Compile with hardening flags ([#48]).
+- Add CMake flag `ACL_TSAN` to build with thread sanitizer ([#76]).
+- Fix data races detected by thread sanitizer ([#74], [#89]).
+- Fix compiler warnings ([#77], [#83], [#84], [#86]).
+
 [Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2022.2...HEAD
+[#34]: https://github.com/intel/fpga-runtime-for-opencl/pull/34
+[#46]: https://github.com/intel/fpga-runtime-for-opencl/pull/46
+[#48]: https://github.com/intel/fpga-runtime-for-opencl/pull/48
+[#61]: https://github.com/intel/fpga-runtime-for-opencl/pull/61
+[#62]: https://github.com/intel/fpga-runtime-for-opencl/pull/62
+[#67]: https://github.com/intel/fpga-runtime-for-opencl/pull/67
+[#68]: https://github.com/intel/fpga-runtime-for-opencl/pull/68
+[#69]: https://github.com/intel/fpga-runtime-for-opencl/pull/69
+[#74]: https://github.com/intel/fpga-runtime-for-opencl/pull/74
+[#75]: https://github.com/intel/fpga-runtime-for-opencl/pull/75
+[#76]: https://github.com/intel/fpga-runtime-for-opencl/pull/76
+[#77]: https://github.com/intel/fpga-runtime-for-opencl/pull/77
+[#81]: https://github.com/intel/fpga-runtime-for-opencl/pull/81
+[#83]: https://github.com/intel/fpga-runtime-for-opencl/pull/83
+[#84]: https://github.com/intel/fpga-runtime-for-opencl/pull/84
+[#86]: https://github.com/intel/fpga-runtime-for-opencl/pull/86
+[#88]: https://github.com/intel/fpga-runtime-for-opencl/pull/88
+[#89]: https://github.com/intel/fpga-runtime-for-opencl/pull/89
+[#94]: https://github.com/intel/fpga-runtime-for-opencl/pull/94
 
 ## [2022.2] - 2022-04-01
 
