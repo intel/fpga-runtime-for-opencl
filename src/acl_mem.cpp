@@ -445,6 +445,7 @@ CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
   if (status != CL_SUCCESS) {
     return status;
   }
+  assert(kernel);
 
   // Look up device global address with use provided name
   unsigned int device_global_addr_num = 0;
@@ -572,6 +573,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   if (status != CL_SUCCESS) {
     return status;
   }
+  assert(kernel);
 
   // Allocate a temporary device usm pointer to hold user data
   // This is done to minimize kernel area, as device to device memory

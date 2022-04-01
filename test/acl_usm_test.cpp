@@ -1259,10 +1259,6 @@ MT_TEST(acl_usm, read_device_global) {
   // Host pointer example
   void *src_ptr = malloc(strsize);
   CHECK(src_ptr != NULL);
-  // Host USM example
-  // void* src_ptr = clHostMemAllocINTEL(m_context, NULL, strsize, 1, &status);
-  // CHECK_EQUAL(CL_SUCCESS, status);
-  // CHECK(src_ptr != NULL);
 
   syncThreads();
   // Write to device global
@@ -1308,8 +1304,6 @@ MT_TEST(acl_usm, read_device_global) {
 
   // Host pointer example
   free(src_ptr);
-  // Host USM example
-  // CHECK_EQUAL(CL_SUCCESS, clMemFreeINTEL(m_context, src_ptr));
 
   ACL_LOCKED(acl_print_debug_msg("end read_write_buf\n"));
 }
