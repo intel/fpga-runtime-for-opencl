@@ -89,6 +89,14 @@ cl_bool acl_is_sub_or_parent_buffer(cl_mem mem);
 void CL_CALLBACK acl_free_allocation_after_event_completion(
     cl_event event, cl_int event_command_exec_status, void *callback_data);
 
+void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
+                                        cl_int event_command_exec_status,
+                                        void *callback_data);
+
+cl_int acl_extract_device_global_address(cl_kernel kernel,
+                                         const char *dev_global_name,
+                                         unsigned int *ret_addr);
+
 #ifdef __GNUC__
 #pragma GCC visibility pop
 #endif

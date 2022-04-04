@@ -54,6 +54,10 @@ void acl_receive_kernel_update(int activation_id, cl_int status);
 // safe to submit a kernel with subbuffers to the device_op_queue
 int acl_kernel_has_unmapped_subbuffers(acl_mem_migrate_t *mem_migration);
 
+cl_int set_kernel_arg_mem_pointer_without_checks(cl_kernel kernel,
+                                                 cl_uint arg_index,
+                                                 void *arg_value);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
