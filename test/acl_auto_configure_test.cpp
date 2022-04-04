@@ -36,6 +36,7 @@ TEST(auto_configure, simple) {
 #define VERSIONIDSTRINGIFY(x) #x
 #define VERSIONIDTOSTR(x) VERSIONIDSTRINGIFY(x)
 #define DEVICE_FIELDS " 23"
+#define DEVICE_FIELDS_DEV_GLOBAL " 30"
 #define DEVICE_FIELDS_OLD " 18"
 #define BOARDNAME "de4_gen2x4_swdimm"
 #define BOARDNAME2 "pcie385_a7"
@@ -96,24 +97,31 @@ TEST(auto_configure, simple) {
 #define IS_SYCL_COMPILE " 1"
 #define IS_NOT_SYCL_COMPILE " 0"
 
+// Device global autodiscovery entries
+#define NUM_DEV_GLOBAL " 2"
+#define NUM_DEV_GLOBAL_FIELD " 3" // containing dev_globa_name, address, size
+#define DEV_GLOBAL_1                                                           \
+  " kernel15_dev_global 4096 2048" // in format of dev_globa_name, address, size
+#define DEV_GLOBAL_2 " kernel15_dev_global2 2048 1024"
+
   int parsed;
   std::string err_str;
-  ACL_LOCKED(
-      parsed = acl_load_device_def_from_str(
-          std::string(
-              VERSIONIDTOSTR(ACL_AUTO_CONFIGURE_VERSIONID)
-                  DEVICE_FIELDS RANDOM_HASH
-              " " BOARDNAME IS_NOT_BIG_ENDIAN MEM HOSTPIPE KERNEL_ARG_INFO_NONE
-              " 1 82 foo" KERNEL_CRA KERNEL_FAST_LAUNCH_DEPTH KERNEL_PERF_MON
-                  KERNEL_WORKGROUP_VARIANT KERNEL_WORKITEM_VARIANT
-                      KERNEL_NUM_VECTOR_LANES1 KERNEL_PROFILE_SCANCHAIN_LENGTH
-                          ARGS_LOCAL_GLOBAL_LONG_PROF KERNEL_PRINTF_FORMATSTRINGS
-                              LD_1024 KERNEL_REQD_WORK_GROUP_SIZE_NONE
-                                  KERNEL_MAX_WORK_GROUP_SIZE_NONE
-                                      KERNEL_MAX_GLOBAL_WORK_DIM_NONE
-                                          KERNEL_USES_GLOBAL_WORK_OFFSET_ENABLED
-                                              IS_SYCL_COMPILE),
-          m_device_def.autodiscovery_def, err_str));
+  std::string autodiscovery = std::string(
+      VERSIONIDTOSTR(ACL_AUTO_CONFIGURE_VERSIONID)
+          DEVICE_FIELDS_DEV_GLOBAL RANDOM_HASH
+      " " BOARDNAME IS_NOT_BIG_ENDIAN MEM HOSTPIPE KERNEL_ARG_INFO_NONE
+          NUM_DEV_GLOBAL NUM_DEV_GLOBAL_FIELD DEV_GLOBAL_1 DEV_GLOBAL_2
+      " 1 82 foo" KERNEL_CRA KERNEL_FAST_LAUNCH_DEPTH KERNEL_PERF_MON
+          KERNEL_WORKGROUP_VARIANT KERNEL_WORKITEM_VARIANT
+              KERNEL_NUM_VECTOR_LANES1 KERNEL_PROFILE_SCANCHAIN_LENGTH
+                  ARGS_LOCAL_GLOBAL_LONG_PROF KERNEL_PRINTF_FORMATSTRINGS
+                      LD_1024 KERNEL_REQD_WORK_GROUP_SIZE_NONE
+                          KERNEL_MAX_WORK_GROUP_SIZE_NONE
+                              KERNEL_MAX_GLOBAL_WORK_DIM_NONE
+                                  KERNEL_USES_GLOBAL_WORK_OFFSET_ENABLED
+                                      IS_SYCL_COMPILE);
+  ACL_LOCKED(parsed = acl_load_device_def_from_str(
+                 autodiscovery, m_device_def.autodiscovery_def, err_str));
   CHECK_EQUAL(1, parsed);
 
   CHECK_EQUAL(1, m_device_def.autodiscovery_def.num_global_mem_systems);
@@ -260,6 +268,23 @@ TEST(auto_configure, simple) {
   CHECK_EQUAL(0,
               (int)m_device_def.autodiscovery_def.accel[0].max_work_group_size);
   CHECK_EQUAL(1, (int)m_device_def.autodiscovery_def.accel[0].is_sycl_compile);
+
+  // Checks for device global entry.
+  CHECK_EQUAL(2, m_device_def.autodiscovery_def.device_global_mem_defs.size());
+  const auto kernel15_dev_global =
+      m_device_def.autodiscovery_def.device_global_mem_defs.find(
+          "kernel15_dev_global");
+  const auto kernel15_dev_global2 =
+      m_device_def.autodiscovery_def.device_global_mem_defs.find(
+          "kernel15_dev_global2");
+  CHECK(kernel15_dev_global !=
+        m_device_def.autodiscovery_def.device_global_mem_defs.end());
+  CHECK(kernel15_dev_global2 !=
+        m_device_def.autodiscovery_def.device_global_mem_defs.end());
+  CHECK_EQUAL(4096, kernel15_dev_global->second.address);
+  CHECK_EQUAL(2048, kernel15_dev_global->second.size);
+  CHECK_EQUAL(2048, kernel15_dev_global2->second.address);
+  CHECK_EQUAL(1024, kernel15_dev_global2->second.size);
 
   // Check a second parsing.
   // It should allocate a new string for the name.
@@ -460,8 +485,8 @@ TEST(auto_configure, many_ok_forward_compatibility) {
       ACL_AUTO_CONFIGURE_VERSIONID) " 28 "
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx 0 1 15 DDR 2 1 6 0 2147483648 100 "
-                                    "100 100 100 200 200 200 200 0 0 0 0 400 "
-                                    "400 400 400 400 47 "
+                                    "100 100 100 200 200 200 200 0 0 0 0 2 "
+                                    "1 name1 1 name2 47 "
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 0 "
                                     "0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 800 "
@@ -1175,7 +1200,7 @@ TEST(auto_configure, hostpipe) {
                                     "200 "
                                     "2 9 host_to_dev 1 0 32 32768 300 300 300 "
                                     "300 dev_to_host 0 1 32 32768 300 300 300 "
-                                    "300 400 400 400 400 400 0 "
+                                    "300 400 1 3 name3 400 0 "
                                     "1 29 foo 0 128 1 0 0 1 0 1 0 0 0 0 0 0 1 "
                                     "1 1 3 1 1 1 3 1 800 800 800 800 800 900 "
                                     "900"
