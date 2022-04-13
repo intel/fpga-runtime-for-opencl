@@ -33,6 +33,17 @@ typedef struct {
   unsigned long long size;  /* size of this memory */
 } aocl_mmd_memory_info_t;
 
+// Interface to simulator to describe streaming kernel arguments that are
+// excluded from the invocation image. Streaming arguments are passed to the
+// simulator by calling aocl_mmd_simulation_streaming_kernel_args(), before
+// writing the kernel invocation image containing non-streaming arguments.
+struct aocl_mmd_streaming_kernel_arg_info_t {
+  // unique identifier for the bus-functional model (BFM)
+  std::string name;
+  // argument value
+  std::vector<char> value;
+};
+
 // MMD Version checking
 // Since MMD version changes only with major releases it is safe to assume
 // this is a float with at most one decimal
@@ -120,6 +131,11 @@ typedef struct {
                                  int *error);
 
   double mmd_version;
+
+  // Passes streaming kernel argument names and values to simulator.
+  void (*aocl_mmd_simulation_streaming_kernel_args)(
+      int handle,
+      const std::vector<aocl_mmd_streaming_kernel_arg_info_t> &streaming_args);
 } acl_mmd_dispatch_t;
 
 typedef struct {
