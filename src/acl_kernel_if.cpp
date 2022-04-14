@@ -715,6 +715,29 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
     auto parse_result = acl_load_device_def_from_str(
         std::string(acl_shipped_board_cfgs[1]),
         sysdef->device[0].autodiscovery_def, err_msg);
+    // Fill in definition for all device global memory
+    // Simulator does not have any global memory interface information until the
+    // actual aocx is loaded. (Note this is only a problem for simulator not
+    // hardware run, in hardware run, we can communicate with BSP to query
+    // memory interface information). In the flow today, the USM device
+    // allocation call happens before aocx is loaded. The aocx is loaded when
+    // clCreateProgram is called, which typically happen on first kernel launch
+    // in sycl runtime. In order to prevent the USM device allocation from
+    // failing on  mutli global memory system, initialize as much global memory
+    // system as possible for simulation flow. However there are a few downside:
+    // 1. The address range/size may not be exactly the same as the one that is
+    // in aocx, but this is not too large of a problem because runtime first fit
+    // allocation algorithm will fill the lowest address range first. Unless
+    // user requested more than what is availble.
+    // 2. it potentially occupied more space than required
+    // 3. will not error out when user requested a non-existing device global
+    // memory because we are using ACL_MAX_GLOBAL_MEM for num_global_mem_systems
+    sysdef->device[0].autodiscovery_def.num_global_mem_systems =
+        ACL_MAX_GLOBAL_MEM;
+    for (int i = 0; i < ACL_MAX_GLOBAL_MEM; i++) {
+      sysdef->device[0].autodiscovery_def.global_mem_defs[i] =
+          sysdef->device[0].autodiscovery_def.global_mem_defs[0];
+    }
     if (parse_result)
       sysdef->num_devices = 1;
     // Override the device name to the simulator.
