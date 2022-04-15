@@ -82,8 +82,10 @@ jobs:
         env:
           ref: ${{ github.ref }}
 
+      # Override uid of default user in container to align with GitHub-hosted runners
+      # https://github.com/actions/checkout/issues/47
       - name: build image
-        run: docker build -t "$image:$tag" -f container/${{ matrix.container }}/Dockerfile .
+        run: docker build --build-arg uid=1001 -t "$image:$tag" -f container/${{ matrix.container }}/Dockerfile .
         env:
           tag: ${{ steps.tag.outputs.tag }}
 
