@@ -12,6 +12,10 @@ ARG clang_archive_sig=$clang_archive.sig
 ARG clang_archive_url=https://github.com/llvm/llvm-project/releases/download/llvmorg-$clang_version/$clang_archive
 ARG clang_archive_sig_url=$clang_archive_url.sig
 
+# Optionally override uid of default user in container, e.g.,
+# docker build --build-arg uid=1001 ...
+ARG uid
+
 WORKDIR /work
 
 # https://releases.llvm.org/download.html
@@ -33,7 +37,7 @@ RUN apt-get -y update \
   && tar --strip-components=1 -C "$clang_installdir" -xf "$clang_archive" \
   && chown -R root:root "$clang_installdir" \
   && chmod -R u=rwX,g=rX,o=rX "$clang_installdir" \
-  && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
+  && useradd --system ${uid:+--uid "$uid"} --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
   && rm -rf "$PWD"
 

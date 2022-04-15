@@ -5,6 +5,10 @@
 
 FROM debian:11
 
+# Optionally override uid of default user in container, e.g.,
+# docker build --build-arg uid=1001 ...
+ARG uid
+
 WORKDIR /work
 
 # Before using a new script, update .github/workflows/container.yml
@@ -32,7 +36,7 @@ RUN dpkg --add-architecture armhf \
   libelf-dev:armhf \
   zlib1g-dev:armhf \
   && apt-get -y clean \
-  && useradd --system --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
+  && useradd --system ${uid:+--uid "$uid"} --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
   && rm -rf "$PWD"
 
