@@ -4424,19 +4424,6 @@ void acl_resize_reserved_allocations_for_device(cl_mem mem,
   unsigned int num_global_mem_systems =
       def.autodiscovery_def.num_global_mem_systems;
 
-  // When we don't know how many memory systems will exist
-  // Load as much as needed.
-  num_global_mem_systems = std::max(num_global_mem_systems, mem->mem_id + 1);
-
-  // For the simulation flow we don't know how many memory systems will exist
-  // until we load the .aocx, which may not happen until somewhat later.
-  // Reserving space is quite cheap, so reserve space for many memory systems.
-  int offline_mode = 0;
-  (void)acl_get_offline_device_user_setting(&offline_mode);
-  if (offline_mode == ACL_CONTEXT_MPSIM) {
-    num_global_mem_systems = std::max(num_global_mem_systems, 128u);
-  }
-
 #ifdef MEM_DEBUG_MSG
   printf(
       "resizing reserved_allocations, physical_device_id:%u, target_size:%u \n",
