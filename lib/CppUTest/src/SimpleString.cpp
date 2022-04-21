@@ -29,7 +29,7 @@
 #include "CppUTest/SimpleString.h"
 #include "CppUTest/PlatformSpecificFunctions.h"
 
-static char* allocString(int size)
+static char* allocString(size_t size)
 {
 	return new char[size];
 }
@@ -50,7 +50,7 @@ SimpleString::SimpleString(const char *otherBuffer)
 		buffer = getEmptryString();
 	}
 	else {
-		int len = PlatformSpecificStrLen(otherBuffer) + 1;
+		size_t len = PlatformSpecificStrLen(otherBuffer) + 1;
 		buffer = allocString(len);
 		PlatformSpecificStrCpy(buffer, otherBuffer);
 	}
@@ -58,7 +58,7 @@ SimpleString::SimpleString(const char *otherBuffer)
 
 SimpleString::SimpleString(const char *other, int repeatCount)
 {
-	int len = PlatformSpecificStrLen(other) * repeatCount + 1;
+	size_t len = PlatformSpecificStrLen(other) * repeatCount + 1;
 	buffer = allocString(len);
 	char* next = buffer;
 	for (int i = 0; i < repeatCount; i++) {
@@ -104,8 +104,8 @@ bool SimpleString::startsWith(const SimpleString& other) const
 
 bool SimpleString::endsWith(const SimpleString& other) const
 {
-	int buffer_length = PlatformSpecificStrLen(buffer);
-	int other_buffer_length = PlatformSpecificStrLen(other.buffer);
+	size_t buffer_length = PlatformSpecificStrLen(buffer);
+	size_t other_buffer_length = PlatformSpecificStrLen(other.buffer);
 	if (other_buffer_length == 0) return true;
 	if (buffer_length == 0) return false;
 	if (buffer_length < other_buffer_length) return false;
@@ -135,7 +135,7 @@ void SimpleString::split(const SimpleString& split, SimpleStringCollection& col)
 	for (int i = 0; i < num; ++i) {
 		prev = str;
 		str = PlatformSpecificStrStr(str, split.buffer) + 1;
-		int len = str - prev;
+		size_t len = str - prev;
 		char* sub = allocString(len + 1);
 		PlatformSpecificStrNCpy(sub, prev, len);
 		sub[len] = '\0';
@@ -158,15 +158,15 @@ void SimpleString::replace(char to, char with)
 void SimpleString::replace(const char* to, const char* with)
 {
 	int c = count(to);
-	int len = size();
-	int tolen = PlatformSpecificStrLen(to);
-	int withlen = PlatformSpecificStrLen(with);
+	size_t len = size();
+	size_t tolen = PlatformSpecificStrLen(to);
+	size_t withlen = PlatformSpecificStrLen(with);
 
-	int newsize = len + (withlen * c) - (tolen * c) + 1;
+	size_t newsize = len + (withlen * c) - (tolen * c) + 1;
 
 	if (newsize) {
 		char* newbuf = allocString(newsize);
-		for (int i = 0, j = 0; i < len;) {
+		for (size_t i = 0, j = 0; i < len;) {
 			if (PlatformSpecificStrNCmp(&buffer[i], to, tolen) == 0) {
 				PlatformSpecificStrNCpy(&newbuf[j], with, withlen);
 				j += withlen;
