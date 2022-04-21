@@ -303,6 +303,7 @@ target_compile_definitions(acl_objs PUBLIC
   CL_USE_DEPRECATED_OPENCL_1_1_APIS=1
   CL_USE_DEPRECATED_OPENCL_1_2_APIS=1
   CL_TARGET_OPENCL_VERSION=300
+  $<$<CONFIG:Debug>:MEM_DEBUG_MSG>
   )
 target_include_directories(acl_objs PUBLIC include)
 target_include_directories(acl_objs PRIVATE
