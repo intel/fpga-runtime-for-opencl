@@ -12,10 +12,6 @@
 #pragma GCC visibility push(protected)
 #endif
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 // Load info about a compiled program from its system description string into
 // devdef.
 // Return true if successful, false otherwise.
@@ -24,10 +20,6 @@ extern "C" {
 bool acl_load_device_def_from_str(const std::string &config_str,
                                   acl_device_def_autodiscovery_t &devdef,
                                   std::string &err_str) noexcept;
-
-#if defined(__cplusplus)
-} /* extern "C" */
-#endif
 
 #ifdef __GNUC__
 #pragma GCC visibility pop
