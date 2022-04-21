@@ -4467,13 +4467,14 @@ cl_int acl_reserve_buffer_block(cl_mem mem, acl_mem_region_t *region,
     result = copy_image_metadata(mem);
   }
 
-  if (result) {
-    mem->reserved_allocations[physical_device_id][target_mem_id] =
-        block_allocation;
-    block_allocation->mem_obj = mem;
-  } else {
+  if (!result) {
     acl_delete(block_allocation);
+    return result;
   }
+
+  mem->reserved_allocations[physical_device_id][target_mem_id] =
+      block_allocation;
+  block_allocation->mem_obj = mem;
 
 #ifdef MEM_DEBUG_MSG
   printf("acl_reserve_buffer_block finished block_allocation:%zx, range:%zx - "
