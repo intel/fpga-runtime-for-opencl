@@ -2848,7 +2848,9 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
 #ifdef MEM_DEBUG_MSG
         printf("regular buffer ");
 #endif
-        unsigned needed_mem_id = l_get_kernel_arg_mem_id(kernel, iarg);
+        const unsigned int needed_mem_id =
+            l_get_kernel_arg_mem_id(kernel, iarg);
+        const unsigned int needed_physical_id = device->def.physical_device_id;
 
 // Always enqueue a migration, even if the memory is where it should be there
 // could be something in the queue ahead of us which will move the memory.
@@ -2858,7 +2860,6 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
 #endif
 
         // first, is there a reserved region?
-        unsigned needed_physical_id = device->def.physical_device_id;
         if (mem_obj->reserved_allocations_count[needed_physical_id].size() ==
             0) {
           acl_resize_reserved_allocations_for_device(mem_obj, device->def);
