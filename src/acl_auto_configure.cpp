@@ -198,13 +198,15 @@ bool acl_load_device_def_from_str(const std::string &config_str,
                                   std::string &err_str) noexcept {
   acl_assert_locked();
 
-  auto result = !config_str.empty();
+  bool result = !config_str.empty();
+  err_str.clear();
+
   std::string::size_type curr_pos = 0;
-  std::stringstream err_ss;
   int total_fields = 0;
   std::vector<int> counters;
 
   if (!result) {
+    std::stringstream err_ss;
     err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
            << ": Expected non-zero value. Full string value is " << config_str
            << "\n";
@@ -222,6 +224,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
             static_cast<unsigned>(
                 ACL_AUTO_CONFIGURE_BACKWARDS_COMPATIBLE_WITH_VERSIONID)) {
       result = false;
+      std::stringstream err_ss;
       err_ss << "Error: The accelerator hardware currently programmed is "
                 "incompatible with this\nversion of the runtime (" ACL_VERSION
                 " Commit " ACL_GIT_COMMIT ")."
@@ -557,6 +560,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
       if (!ok) {
         // Device global name already exist in map, but it should have been
         // unique.
+        std::stringstream err_ss;
         err_ss << "Device global name should be unique. " << device_global_name
                << " is repeated.\n";
         err_str = err_ss.str();
@@ -652,6 +656,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
                              devdef.accel[i].is_workitem_invariant, counters);
       if (!devdef.accel[i].is_workgroup_invariant &&
           devdef.accel[i].is_workitem_invariant) {
+        std::stringstream err_ss;
         err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
                << ": kernel cannot be workitem-invariant while it is "
                   "workgroup-variant. "
@@ -975,7 +980,8 @@ bool acl_load_device_def_from_str(const std::string &config_str,
     devdef.accel.clear();
     devdef.hal_info.clear();
   }
-  if (!result && err_ss.str().empty()) {
+  if (!result && err_str.empty()) {
+    std::stringstream err_ss;
     err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
            << ". Full auto-discovery string value is " << config_str << "\n";
     err_str = err_ss.str();
