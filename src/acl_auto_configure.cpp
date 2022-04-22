@@ -372,6 +372,75 @@ read_global_mem_defs(const std::string &config_str,
   return result;
 }
 
+static bool read_device_global_mem_defs(
+    const std::string &config_str, std::string::size_type &curr_pos,
+    std::unordered_map<std::string, acl_device_global_mem_def_t>
+        &device_global_mem_defs,
+    std::vector<int> &counters, std::string &err_str) noexcept {
+  unsigned int num_device_global = 0;
+  bool result =
+      read_uint_counters(config_str, curr_pos, num_device_global, counters);
+
+  // read total number of fields in device global
+  unsigned int total_fields_device_global = 0;
+  if (result) {
+    result = read_uint_counters(config_str, curr_pos,
+                                total_fields_device_global, counters);
+  }
+
+  for (auto i = 0U; result && (i < num_device_global); i++) {
+    counters.emplace_back(total_fields_device_global);
+
+    // read device global name
+    std::string device_global_name;
+    if (result && counters.back() > 0) {
+      result = read_string_counters(config_str, curr_pos, device_global_name,
+                                    counters);
+    }
+
+    // read device global address
+    uint32_t dev_global_addr = 0; // Default
+    if (result && counters.back() > 0) {
+      result =
+          read_uint32_counters(config_str, curr_pos, dev_global_addr, counters);
+    }
+    // read device global address size
+    uint32_t dev_global_size = 0; // Default
+    if (result && counters.back() > 0) {
+      result =
+          read_uint32_counters(config_str, curr_pos, dev_global_size, counters);
+    }
+
+    acl_device_global_mem_def_t dev_global_def = {dev_global_addr,
+                                                  dev_global_size};
+    bool ok =
+        device_global_mem_defs.insert({device_global_name, dev_global_def})
+            .second;
+    if (!ok) {
+      // Device global name already exist in map, but it should have been
+      // unique.
+      std::stringstream err_ss;
+      err_ss << "Device global name should be unique. " << device_global_name
+             << " is repeated.\n";
+      err_str = err_ss.str();
+      result = false;
+    }
+
+    // forward compatibility: bypassing remaining fields at the end of device
+    // global memory
+    while (result && counters.size() > 0 &&
+           counters.back() > 0) { // total_fields_device_global>0
+      std::string tmp;
+      result =
+          result && read_string_counters(config_str, curr_pos, tmp, counters);
+      check_section_counters(counters);
+    }
+    counters.pop_back(); // removing total_fields_device_global
+  }
+
+  return result;
+}
+
 static bool read_kernel_args(const std::string &config_str,
                              const bool kernel_arg_info_available,
                              std::string::size_type &curr_pos,
@@ -655,68 +724,9 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   }
 
   // Read device global information.
-  unsigned int num_device_global = 0;
   if (result && counters.back() > 0) {
-    result =
-        read_uint_counters(config_str, curr_pos, num_device_global, counters);
-
-    // read total number of fields in device global
-    unsigned int total_fields_device_global = 0;
-    if (result) {
-      result = read_uint_counters(config_str, curr_pos,
-                                  total_fields_device_global, counters);
-    }
-
-    for (auto i = 0U; result && (i < num_device_global);
-         i++) { // device_global_memories
-      counters.emplace_back(total_fields_device_global);
-
-      // read device global name
-      std::string device_global_name;
-      if (result && counters.back() > 0) {
-        result = read_string_counters(config_str, curr_pos, device_global_name,
-                                      counters);
-      }
-
-      // read device global address
-      uint32_t dev_global_addr = 0; // Default
-      if (result && counters.back() > 0) {
-        result = read_uint32_counters(config_str, curr_pos, dev_global_addr,
-                                      counters);
-      }
-      // read device global address size
-      uint32_t dev_global_size = 0; // Default
-      if (result && counters.back() > 0) {
-        result = read_uint32_counters(config_str, curr_pos, dev_global_size,
-                                      counters);
-      }
-
-      acl_device_global_mem_def_t dev_global_def = {dev_global_addr,
-                                                    dev_global_size};
-      bool ok = devdef.device_global_mem_defs
-                    .insert({device_global_name, dev_global_def})
-                    .second;
-      if (!ok) {
-        // Device global name already exist in map, but it should have been
-        // unique.
-        std::stringstream err_ss;
-        err_ss << "Device global name should be unique. " << device_global_name
-               << " is repeated.\n";
-        err_str = err_ss.str();
-        result = false;
-      }
-
-      // forward compatibility: bypassing remaining fields at the end of device
-      // global memory
-      while (result && counters.size() > 0 &&
-             counters.back() > 0) { // total_fields_device_global>0
-        std::string tmp;
-        result =
-            result && read_string_counters(config_str, curr_pos, tmp, counters);
-        check_section_counters(counters);
-      }
-      counters.pop_back(); // removing total_fields_device_global
-    }                      // device_global_memories
+    result = read_device_global_mem_defs(
+        config_str, curr_pos, devdef.device_global_mem_defs, counters, err_str);
   }
 
   // forward compatibility: bypassing remaining fields at the end of device
