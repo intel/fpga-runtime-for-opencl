@@ -193,6 +193,136 @@ static int read_string_counters(const std::string &str,
   return result != "";
 }
 
+static bool read_kernel_args(const std::string &config_str,
+                             const bool kernel_arg_info_available,
+                             std::string::size_type &curr_pos,
+                             std::vector<acl_kernel_arg_info_t> &args,
+                             std::vector<int> &counters) noexcept {
+  // Get the number of parameters
+  auto num_args = 0U;
+  bool result = read_uint_counters(config_str, curr_pos, num_args, counters);
+
+  if (result) {
+    args = std::vector<acl_kernel_arg_info_t>(num_args);
+  }
+
+  for (auto j = 0U; result && (j < num_args); j++) {
+    auto addr_space_type = 0U;
+    auto category = 0U;
+    auto size = 0U;
+    int total_fields_arguments = 0;
+    if (result) {
+      result = result && read_int_counters(config_str, curr_pos,
+                                           total_fields_arguments, counters);
+    }
+    counters.emplace_back(total_fields_arguments);
+    unsigned alignment = ACL_MEM_ALIGN; // Set default to 1024 bytes
+    result =
+        result &&
+        read_uint_counters(config_str, curr_pos, addr_space_type, counters) &&
+        read_uint_counters(config_str, curr_pos, category, counters) &&
+        read_uint_counters(config_str, curr_pos, size, counters);
+    if (result) {
+      result = result &&
+               read_uint_counters(config_str, curr_pos, alignment, counters);
+    }
+
+    std::string buffer_location = "";
+    if (result) {
+      unsigned int num_buffer_locations = 0;
+      result = result && read_uint_counters(config_str, curr_pos,
+                                            num_buffer_locations, counters);
+      for (unsigned int k = 0; result && (k < num_buffer_locations); k++) {
+        result = result && read_string_counters(config_str, curr_pos,
+                                                buffer_location, counters);
+      }
+      if (result && num_buffer_locations > 1) {
+        std::cerr << "WARNING: kernel argument has multiple buffer_location "
+                     "attributes which is not supported.\nSelecting "
+                  << buffer_location << " as buffer location.\n";
+      }
+    }
+
+    // Only local mem contains the following params
+    auto aspace_id = 0U;
+    auto lmem_size_bytes = 0U;
+    if (result && (addr_space_type == ACL_ARG_ADDR_LOCAL)) {
+      result =
+          result &&
+          read_uint_counters(config_str, curr_pos, aspace_id, counters) &&
+          read_uint_counters(config_str, curr_pos, lmem_size_bytes, counters);
+    }
+
+    auto type_qualifier = 0U;
+    auto host_accessible = 0U;
+    std::string pipe_channel_id;
+    if (result) {
+      result = result && read_uint_counters(config_str, curr_pos,
+                                            type_qualifier, counters);
+      if (result && (type_qualifier == ACL_ARG_TYPE_PIPE)) {
+        result = result && read_uint_counters(config_str, curr_pos,
+                                              host_accessible, counters);
+        if (result && host_accessible) {
+          result = result && read_string_counters(config_str, curr_pos,
+                                                  pipe_channel_id, counters);
+        }
+      }
+    }
+
+    std::string name = "";
+    std::string type_name = "";
+    auto access_qualifier = 0U;
+    if (kernel_arg_info_available) {
+      if (result) {
+        result =
+            result &&
+            read_string_counters(config_str, curr_pos, name, counters) &&
+            read_string_counters(config_str, curr_pos, type_name, counters) &&
+            read_uint_counters(config_str, curr_pos, access_qualifier,
+                               counters);
+      }
+      if (type_name == "0")
+        type_name = "";
+    }
+
+    /*****************************************************************
+      Since the introduction of autodiscovery forwards-compatibility,
+      new entries for each kernel argument section start here.
+     ****************************************************************/
+
+    if (result) {
+      args[j].name = name;
+      args[j].addr_space =
+          static_cast<acl_kernel_arg_addr_space_t>(addr_space_type);
+      args[j].access_qualifier =
+          static_cast<acl_kernel_arg_access_qualifier_t>(access_qualifier);
+      args[j].category = static_cast<acl_kernel_arg_category_t>(category);
+      args[j].size = size;
+      args[j].alignment = alignment;
+      args[j].aspace_number = aspace_id;
+      args[j].lmem_size_bytes = lmem_size_bytes;
+      args[j].type_name = type_name;
+      args[j].type_qualifier =
+          static_cast<acl_kernel_arg_type_qualifier_t>(type_qualifier);
+      args[j].host_accessible = host_accessible;
+      args[j].pipe_channel_id = pipe_channel_id;
+      args[j].buffer_location = buffer_location;
+    }
+    // forward compatibility: bypassing remaining fields at the end of
+    // arguments section
+    while (result && counters.size() > 0 &&
+           counters.back() > 0) { // total_fields_arguments>0
+      std::string tmp;
+      result =
+          result && read_string_counters(config_str, curr_pos, tmp, counters);
+      check_section_counters(counters);
+    }
+    counters.pop_back();
+  }
+
+  return result;
+}
+
 bool acl_load_device_def_from_str(const std::string &config_str,
                                   acl_device_def_autodiscovery_t &devdef,
                                   std::string &err_str) noexcept {
@@ -677,135 +807,9 @@ bool acl_load_device_def_from_str(const std::string &config_str,
                                   devdef.accel[i].profiling_words_to_readback,
                                   counters);
 
-      // Get the number of parameters
-      auto num_args = 0U;
       result = result &&
-               read_uint_counters(config_str, curr_pos, num_args, counters);
-
-      if (result) {
-        devdef.accel[i].iface.args =
-            std::vector<acl_kernel_arg_info_t>(num_args);
-      }
-
-      for (auto j = 0U; result && (j < num_args); j++) { // arguments
-        auto addr_space_type = 0U;
-        auto category = 0U;
-        auto size = 0U;
-        int total_fields_arguments = 0;
-        if (result) {
-          result =
-              result && read_int_counters(config_str, curr_pos,
-                                          total_fields_arguments, counters);
-        }
-        counters.emplace_back(total_fields_arguments);
-        unsigned alignment = ACL_MEM_ALIGN; // Set default to 1024 bytes
-        result = result &&
-                 read_uint_counters(config_str, curr_pos, addr_space_type,
-                                    counters) &&
-                 read_uint_counters(config_str, curr_pos, category, counters) &&
-                 read_uint_counters(config_str, curr_pos, size, counters);
-        if (result) {
-          result = result && read_uint_counters(config_str, curr_pos, alignment,
-                                                counters);
-        }
-
-        std::string buffer_location = "";
-        if (result) {
-          unsigned int num_buffer_locations = 0;
-          result = result && read_uint_counters(config_str, curr_pos,
-                                                num_buffer_locations, counters);
-          for (unsigned int k = 0; result && (k < num_buffer_locations); k++) {
-            result = result && read_string_counters(config_str, curr_pos,
-                                                    buffer_location, counters);
-          }
-          if (result && num_buffer_locations > 1) {
-            std::cerr
-                << "WARNING: kernel argument has multiple buffer_location "
-                   "attributes which is not supported.\nSelecting "
-                << buffer_location << " as buffer location.\n";
-          }
-        }
-
-        // Only local mem contains the following params
-        auto aspace_id = 0U;
-        auto lmem_size_bytes = 0U;
-        if (result && (addr_space_type == ACL_ARG_ADDR_LOCAL)) {
-          result =
-              result &&
-              read_uint_counters(config_str, curr_pos, aspace_id, counters) &&
-              read_uint_counters(config_str, curr_pos, lmem_size_bytes,
-                                 counters);
-        }
-
-        auto type_qualifier = 0U;
-        auto host_accessible = 0U;
-        std::string pipe_channel_id;
-        if (result) {
-          result = result && read_uint_counters(config_str, curr_pos,
-                                                type_qualifier, counters);
-          if (result && (type_qualifier == ACL_ARG_TYPE_PIPE)) {
-            result = result && read_uint_counters(config_str, curr_pos,
-                                                  host_accessible, counters);
-            if (result && host_accessible) {
-              result =
-                  result && read_string_counters(config_str, curr_pos,
-                                                 pipe_channel_id, counters);
-            }
-          }
-        }
-
-        std::string name = "";
-        std::string type_name = "";
-        auto access_qualifier = 0U;
-        if (kernel_arg_info_available) {
-          if (result) {
-            result =
-                result &&
-                read_string_counters(config_str, curr_pos, name, counters) &&
-                read_string_counters(config_str, curr_pos, type_name,
-                                     counters) &&
-                read_uint_counters(config_str, curr_pos, access_qualifier,
-                                   counters);
-          }
-          if (type_name == "0")
-            type_name = "";
-        }
-
-        /*****************************************************************
-          Since the introduction of autodiscovery forwards-compatibility,
-          new entries for each kernel argument section start here.
-         ****************************************************************/
-
-        if (result) {
-          devdef.accel[i].iface.args[j].name = name;
-          devdef.accel[i].iface.args[j].addr_space =
-              static_cast<acl_kernel_arg_addr_space_t>(addr_space_type);
-          devdef.accel[i].iface.args[j].access_qualifier =
-              static_cast<acl_kernel_arg_access_qualifier_t>(access_qualifier);
-          devdef.accel[i].iface.args[j].category =
-              static_cast<acl_kernel_arg_category_t>(category);
-          devdef.accel[i].iface.args[j].size = size;
-          devdef.accel[i].iface.args[j].alignment = alignment;
-          devdef.accel[i].iface.args[j].aspace_number = aspace_id;
-          devdef.accel[i].iface.args[j].lmem_size_bytes = lmem_size_bytes;
-          devdef.accel[i].iface.args[j].type_name = type_name;
-          devdef.accel[i].iface.args[j].type_qualifier =
-              static_cast<acl_kernel_arg_type_qualifier_t>(type_qualifier);
-          devdef.accel[i].iface.args[j].host_accessible = host_accessible;
-          devdef.accel[i].iface.args[j].pipe_channel_id = pipe_channel_id;
-          devdef.accel[i].iface.args[j].buffer_location = buffer_location;
-        }
-        // forward compatibility: bypassing remaining fields at the end of
-        // arguments section
-        while (result && counters.size() > 0 &&
-               counters.back() > 0) { // total_fields_arguments>0
-          std::string tmp;
-          result = result &&
-                   read_string_counters(config_str, curr_pos, tmp, counters);
-          check_section_counters(counters);
-        }
-        counters.pop_back();
-      } // arguments
+               read_kernel_args(config_str, kernel_arg_info_available, curr_pos,
+                                devdef.accel[i].iface.args, counters);
 
       // Get the number of printf format strings
       auto num_printf_format_strings = 0U;
