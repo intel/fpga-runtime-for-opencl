@@ -372,6 +372,69 @@ read_global_mem_defs(const std::string &config_str,
   return result;
 }
 
+static bool
+read_hostpipe_infos(const std::string &config_str,
+                    std::string::size_type &curr_pos,
+                    std::vector<acl_hostpipe_info_t> &hostpipe_infos,
+                    std::vector<int> &counters) noexcept {
+  auto num_hostpipes = 0U;
+  bool result =
+      read_uint_counters(config_str, curr_pos, num_hostpipes, counters);
+
+  // read total number of fields in hostpipes
+  int total_fields_hostpipes = 0;
+  if (result) {
+    result = read_int_counters(config_str, curr_pos, total_fields_hostpipes,
+                               counters);
+  }
+
+  for (unsigned i = 0; result && (i < num_hostpipes); i++) {
+    counters.emplace_back(total_fields_hostpipes);
+    std::string name;
+
+    auto hostpipe_is_host_to_dev = 0U;
+    auto hostpipe_is_dev_to_host = 0U;
+    auto hostpipe_width = 0U;
+    auto hostpipe_max_buffer_depth = 0U;
+    result =
+        result && read_string_counters(config_str, curr_pos, name, counters) &&
+        read_uint_counters(config_str, curr_pos, hostpipe_is_host_to_dev,
+                           counters) &&
+        read_uint_counters(config_str, curr_pos, hostpipe_is_dev_to_host,
+                           counters) &&
+        read_uint_counters(config_str, curr_pos, hostpipe_width, counters) &&
+        read_uint_counters(config_str, curr_pos, hostpipe_max_buffer_depth,
+                           counters);
+    // is_host_to_dev and is_dev_to_host are exclusive because of the enum
+    // Type
+    acl_hostpipe_info_t acl_hostpipe_info;
+    acl_hostpipe_info.name = name;
+    acl_hostpipe_info.is_host_to_dev = hostpipe_is_host_to_dev;
+    acl_hostpipe_info.is_dev_to_host = hostpipe_is_dev_to_host;
+    acl_hostpipe_info.data_width = hostpipe_width;
+    acl_hostpipe_info.max_buffer_depth = hostpipe_max_buffer_depth;
+    hostpipe_infos.push_back(acl_hostpipe_info);
+
+    /*****************************************************************
+      Since the introduction of autodiscovery forwards-compatibility,
+      new entries for the 'hostpipe' section start here.
+     ****************************************************************/
+
+    // forward compatibility: bypassing remaining fields at the end of
+    // hostpipes
+    while (result && counters.size() > 0 &&
+           counters.back() > 0) { // total_fields_hostpipes>0
+      std::string tmp;
+      result =
+          result && read_string_counters(config_str, curr_pos, tmp, counters);
+      check_section_counters(counters);
+    }
+    counters.pop_back(); // removing total_fields_hostpipes
+  }
+
+  return result;
+}
+
 static bool read_device_global_mem_defs(
     const std::string &config_str, std::string::size_type &curr_pos,
     std::unordered_map<std::string, acl_device_global_mem_def_t>
@@ -913,60 +976,8 @@ bool acl_load_device_def_from_str(const std::string &config_str,
 
   // Set up hostpipe information
   if (result) {
-    auto num_hostpipes = 0U;
-    result = read_uint_counters(config_str, curr_pos, num_hostpipes, counters);
-
-    // read total number of fields in hostpipes
-    int total_fields_hostpipes = 0;
-    if (result) {
-      result = read_int_counters(config_str, curr_pos, total_fields_hostpipes,
+    result = read_hostpipe_infos(config_str, curr_pos, devdef.acl_hostpipe_info,
                                  counters);
-    }
-
-    for (unsigned i = 0; result && (i < num_hostpipes); i++) {
-      counters.emplace_back(total_fields_hostpipes);
-      std::string name;
-
-      auto hostpipe_is_host_to_dev = 0U;
-      auto hostpipe_is_dev_to_host = 0U;
-      auto hostpipe_width = 0U;
-      auto hostpipe_max_buffer_depth = 0U;
-      result =
-          result &&
-          read_string_counters(config_str, curr_pos, name, counters) &&
-          read_uint_counters(config_str, curr_pos, hostpipe_is_host_to_dev,
-                             counters) &&
-          read_uint_counters(config_str, curr_pos, hostpipe_is_dev_to_host,
-                             counters) &&
-          read_uint_counters(config_str, curr_pos, hostpipe_width, counters) &&
-          read_uint_counters(config_str, curr_pos, hostpipe_max_buffer_depth,
-                             counters);
-      // is_host_to_dev and is_dev_to_host are exclusive because of the enum
-      // Type
-      acl_hostpipe_info_t acl_hostpipe_info;
-      acl_hostpipe_info.name = name;
-      acl_hostpipe_info.is_host_to_dev = hostpipe_is_host_to_dev;
-      acl_hostpipe_info.is_dev_to_host = hostpipe_is_dev_to_host;
-      acl_hostpipe_info.data_width = hostpipe_width;
-      acl_hostpipe_info.max_buffer_depth = hostpipe_max_buffer_depth;
-      devdef.acl_hostpipe_info.push_back(acl_hostpipe_info);
-
-      /*****************************************************************
-        Since the introduction of autodiscovery forwards-compatibility,
-        new entries for the 'hostpipe' section start here.
-       ****************************************************************/
-
-      // forward compatibility: bypassing remaining fields at the end of
-      // hostpipes
-      while (result && counters.size() > 0 &&
-             counters.back() > 0) { // total_fields_hostpipes>0
-        std::string tmp;
-        result =
-            result && read_string_counters(config_str, curr_pos, tmp, counters);
-        check_section_counters(counters);
-      }
-      counters.pop_back(); // removing total_fields_hostpipes
-    }
   }
 
   /*****************************************************************
