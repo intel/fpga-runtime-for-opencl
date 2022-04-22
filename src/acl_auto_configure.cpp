@@ -559,6 +559,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
         // unique.
         err_ss << "Device global name should be unique. " << device_global_name
                << " is repeated.\n";
+        err_str = err_ss.str();
         result = false;
       }
 
