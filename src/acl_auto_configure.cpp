@@ -685,7 +685,6 @@ bool acl_load_device_def_from_str(const std::string &config_str,
         auto addr_space_type = 0U;
         auto category = 0U;
         auto size = 0U;
-        auto num_buffer_locations = 0U;
         int total_fields_arguments = 0;
         if (result) {
           result =
@@ -706,15 +705,18 @@ bool acl_load_device_def_from_str(const std::string &config_str,
 
         std::string buffer_location = "";
         if (result) {
+          unsigned int num_buffer_locations = 0;
           result = result && read_uint_counters(config_str, curr_pos,
                                                 num_buffer_locations, counters);
-          for (auto k = 0U; result && (k < num_buffer_locations); k++) {
-            if (j > 0) {
-              buffer_location = buffer_location + " ";
-            }
-
+          for (unsigned int k = 0; result && (k < num_buffer_locations); k++) {
             result = result && read_string_counters(config_str, curr_pos,
                                                     buffer_location, counters);
+          }
+          if (result && num_buffer_locations > 1) {
+            std::cerr
+                << "WARNING: kernel argument has multiple buffer_location "
+                   "attributes which is not supported.\nSelecting "
+                << buffer_location << " as buffer location.\n";
           }
         }
 
