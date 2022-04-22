@@ -193,6 +193,185 @@ static int read_string_counters(const std::string &str,
   return result != "";
 }
 
+static bool
+read_global_mem_defs(const std::string &config_str,
+                     std::string::size_type &curr_pos,
+                     unsigned int &num_global_mem_systems,
+                     std::array<acl_system_global_mem_def_t, ACL_MAX_GLOBAL_MEM>
+                         &global_mem_defs,
+                     std::vector<int> &counters) noexcept {
+  bool result = read_uint_counters(config_str, curr_pos, num_global_mem_systems,
+                                   counters);
+
+  for (auto i = 0U; result && (i < num_global_mem_systems); i++) {
+    std::string gmem_name;
+    // read total number of fields in global_memories
+    int total_fields_global_memories = 0;
+    result = read_int_counters(config_str, curr_pos,
+                               total_fields_global_memories, counters);
+    counters.emplace_back(total_fields_global_memories);
+
+    // read global memory name
+    if (result) {
+      result = read_string_counters(config_str, curr_pos, gmem_name, counters);
+    }
+
+    // read global memory type
+    auto gmem_type =
+        static_cast<unsigned>(ACL_GLOBAL_MEM_DEVICE_PRIVATE); // Default
+    if (result) {
+      result = read_uint_counters(config_str, curr_pos, gmem_type, counters);
+      if (gmem_type >= static_cast<unsigned>(ACL_GLOBAL_MEM_TYPE_COUNT))
+        result = false;
+    }
+
+    auto num_dimms = 0U;
+    auto configuration_address = 0ULL;
+    auto burst_interleaved = 1U;
+    std::uintptr_t gmem_start = 0, gmem_end = 0;
+    acl_system_global_mem_allocation_type_t allocation_type =
+        ACL_GLOBAL_MEM_UNDEFINED_ALLOCATION;
+    std::string primary_interface;
+    std::vector<std::string> can_access;
+    if (result) {
+      gmem_start = ~gmem_start;
+
+      // read number of memory interfaces (DIMMS or banks) usable as device
+      // global memory
+      result = read_uint_counters(config_str, curr_pos, num_dimms, counters);
+
+      if (result && num_dimms > 1) {
+        // read memory configuration address
+        result = read_ulonglong_counters(config_str, curr_pos,
+                                         configuration_address, counters);
+        // read whether the memory access is burst-interleaved across memory
+        // interfaces
+        if (result) {
+          result = read_uint_counters(config_str, curr_pos, burst_interleaved,
+                                      counters);
+        }
+      }
+
+      int total_fields_memory_interface = 0;
+      if (result) {
+        result = read_int_counters(config_str, curr_pos,
+                                   total_fields_memory_interface, counters);
+      }
+
+      // Find start and end address of global memory.
+      // Assume memory range is contiguous, but start/end address pairs for
+      // each DIMM can be in any order.
+      for (auto j = 0U; result && (j < num_dimms); j++) {
+        counters.emplace_back(total_fields_memory_interface);
+        auto cur_gmem_start = 0ULL;
+        auto cur_gmem_end = 0ULL;
+        result = read_ulonglong_counters(config_str, curr_pos, cur_gmem_start,
+                                         counters) &&
+                 read_ulonglong_counters(config_str, curr_pos, cur_gmem_end,
+                                         counters);
+        if (gmem_start > cur_gmem_start)
+          gmem_start = static_cast<std::uintptr_t>(cur_gmem_start);
+        if (gmem_end < cur_gmem_end)
+          gmem_end = static_cast<std::uintptr_t>(cur_gmem_end);
+
+        /*****************************************************************
+          Since the introduction of autodiscovery forwards-compatibility,
+          new entries for the 'global memory interface' section start here
+         ****************************************************************/
+
+        // forward compatibility: bypassing remaining fields at the end of
+        // memory interface
+        while (result && counters.size() > 0 &&
+               counters.back() > 0) { // total_fields_memory_interface>0
+          std::string tmp;
+          result = result &&
+                   read_string_counters(config_str, curr_pos, tmp, counters);
+          check_section_counters(counters);
+        }
+        counters.pop_back(); // removing total_fields_memory_interface from
+                             // the list
+      }
+
+      /*****************************************************************
+        Since the introduction of autodiscovery forwards-compatibility,
+        new entries for the 'global memory' section start here.
+       ****************************************************************/
+
+      // read memory allocation_type
+      // These are new since the addition of forward compatibility; it is
+      // important that they come after all global memory fields included
+      // in version 23, when forward compatibility was added.
+      // Only try to read these if there are values left to read in the
+      // global memory subsection.
+      if (result && counters.back() > 0) {
+        auto alloc_type = 0U;
+        result = read_uint_counters(config_str, curr_pos, alloc_type, counters);
+        allocation_type =
+            static_cast<acl_system_global_mem_allocation_type_t>(alloc_type);
+      }
+
+      // read memory primary interface
+      if (result && counters.back() > 0) {
+        result = read_string_counters(config_str, curr_pos, primary_interface,
+                                      counters);
+        if (result && primary_interface == "-")
+          primary_interface = "";
+      }
+
+      // read size of memory can access list
+      if (result && counters.back() > 0) {
+        unsigned can_access_count = 0U;
+        result = read_uint_counters(config_str, curr_pos, can_access_count,
+                                    counters);
+        while (result && can_access_count-- && counters.size() > 0 &&
+               counters.back() > 0) {
+          std::string temp;
+          result = read_string_counters(config_str, curr_pos, temp, counters);
+          can_access.push_back(temp);
+        }
+      }
+    }
+
+    if (result) {
+      // Global memory definition can't change across reprograms.
+      // If global memory definition changed, allocations will get messed up.
+      // The check won't be done here though. It will need to be done by the
+      // callers.
+      //
+      // IMPORTANT: If a new field is added here, make sure that field is
+      // also copied in acl_program.cpp:l_device_memory_definition_copy().
+      // For built-in kernels (and CL_CONTEXT_COMPILER_MODE=3), memory
+      // definition is copied from the one loaded from autodiscovery ROM
+      // to new program object's device definition.
+      global_mem_defs[i].num_global_banks = num_dimms;
+      global_mem_defs[i].config_addr =
+          static_cast<size_t>(configuration_address);
+      global_mem_defs[i].name = gmem_name;
+      global_mem_defs[i].range.begin = reinterpret_cast<void *>(gmem_start);
+      global_mem_defs[i].range.next = reinterpret_cast<void *>(gmem_end);
+      global_mem_defs[i].type =
+          static_cast<acl_system_global_mem_type_t>(gmem_type);
+      global_mem_defs[i].burst_interleaved = burst_interleaved;
+      global_mem_defs[i].allocation_type = allocation_type;
+      global_mem_defs[i].primary_interface = primary_interface;
+      global_mem_defs[i].can_access_list = can_access;
+    }
+
+    // forward compatibility: bypassing remaining fields at the end of global
+    // memory
+    while (result && counters.size() > 0 &&
+           counters.back() > 0) { // total_fields_global_memories>0
+      std::string tmp;
+      result =
+          result && read_string_counters(config_str, curr_pos, tmp, counters);
+      check_section_counters(counters);
+    }
+    counters.pop_back(); // removing total_fields_global_memories
+  }
+
+  return result;
+}
+
 static bool read_kernel_args(const std::string &config_str,
                              const bool kernel_arg_info_available,
                              std::string::size_type &curr_pos,
@@ -401,179 +580,9 @@ bool acl_load_device_def_from_str(const std::string &config_str,
 
   // Set up device global memories
   if (result) {
-    result = read_uint_counters(config_str, curr_pos,
-                                devdef.num_global_mem_systems, counters);
-
-    for (auto i = 0U; result && (i < devdef.num_global_mem_systems);
-         i++) { // global_memories
-      std::string gmem_name;
-      // read total number of fields in global_memories
-      int total_fields_global_memories = 0;
-      result = read_int_counters(config_str, curr_pos,
-                                 total_fields_global_memories, counters);
-      counters.emplace_back(total_fields_global_memories);
-
-      // read global memory name
-      if (result) {
-        result =
-            read_string_counters(config_str, curr_pos, gmem_name, counters);
-      }
-
-      // read global memory type
-      auto gmem_type =
-          static_cast<unsigned>(ACL_GLOBAL_MEM_DEVICE_PRIVATE); // Default
-      if (result) {
-        result = read_uint_counters(config_str, curr_pos, gmem_type, counters);
-        if (gmem_type >= static_cast<unsigned>(ACL_GLOBAL_MEM_TYPE_COUNT))
-          result = false;
-      }
-
-      auto num_dimms = 0U;
-      auto configuration_address = 0ULL;
-      auto burst_interleaved = 1U;
-      std::uintptr_t gmem_start = 0, gmem_end = 0;
-      acl_system_global_mem_allocation_type_t allocation_type =
-          ACL_GLOBAL_MEM_UNDEFINED_ALLOCATION;
-      std::string primary_interface;
-      std::vector<std::string> can_access;
-      if (result) {
-        gmem_start = ~gmem_start;
-
-        // read number of memory interfaces (DIMMS or banks) usable as device
-        // global memory
-        result = read_uint_counters(config_str, curr_pos, num_dimms, counters);
-
-        if (result && num_dimms > 1) {
-          // read memory configuration address
-          result = read_ulonglong_counters(config_str, curr_pos,
-                                           configuration_address, counters);
-          // read whether the memory access is burst-interleaved across memory
-          // interfaces
-          if (result) {
-            result = read_uint_counters(config_str, curr_pos, burst_interleaved,
-                                        counters);
-          }
-        }
-
-        int total_fields_memory_interface = 0;
-        if (result) {
-          result = read_int_counters(config_str, curr_pos,
-                                     total_fields_memory_interface, counters);
-        }
-
-        // Find start and end address of global memory.
-        // Assume memory range is contiguous, but start/end address pairs for
-        // each DIMM can be in any order.
-        for (auto j = 0U; result && (j < num_dimms); j++) {
-          counters.emplace_back(total_fields_memory_interface);
-          auto cur_gmem_start = 0ULL;
-          auto cur_gmem_end = 0ULL;
-          result = read_ulonglong_counters(config_str, curr_pos, cur_gmem_start,
-                                           counters) &&
-                   read_ulonglong_counters(config_str, curr_pos, cur_gmem_end,
-                                           counters);
-          if (gmem_start > cur_gmem_start)
-            gmem_start = static_cast<std::uintptr_t>(cur_gmem_start);
-          if (gmem_end < cur_gmem_end)
-            gmem_end = static_cast<std::uintptr_t>(cur_gmem_end);
-
-          /*****************************************************************
-            Since the introduction of autodiscovery forwards-compatibility,
-            new entries for the 'global memory interface' section start here
-           ****************************************************************/
-
-          // forward compatibility: bypassing remaining fields at the end of
-          // memory interface
-          while (result && counters.size() > 0 &&
-                 counters.back() > 0) { // total_fields_memory_interface>0
-            std::string tmp;
-            result = result &&
-                     read_string_counters(config_str, curr_pos, tmp, counters);
-            check_section_counters(counters);
-          }
-          counters.pop_back(); // removing total_fields_memory_interface from
-                               // the list
-        }
-
-        /*****************************************************************
-          Since the introduction of autodiscovery forwards-compatibility,
-          new entries for the 'global memory' section start here.
-         ****************************************************************/
-
-        // read memory allocation_type
-        // These are new since the addition of forward compatibility; it is
-        // important that they come after all global memory fields included
-        // in version 23, when forward compatibility was added.
-        // Only try to read these if there are values left to read in the
-        // global memory subsection.
-        if (result && counters.back() > 0) {
-          auto alloc_type = 0U;
-          result =
-              read_uint_counters(config_str, curr_pos, alloc_type, counters);
-          allocation_type =
-              static_cast<acl_system_global_mem_allocation_type_t>(alloc_type);
-        }
-
-        // read memory primary interface
-        if (result && counters.back() > 0) {
-          result = read_string_counters(config_str, curr_pos, primary_interface,
-                                        counters);
-          if (result && primary_interface == "-")
-            primary_interface = "";
-        }
-
-        // read size of memory can access list
-        if (result && counters.back() > 0) {
-          unsigned can_access_count = 0U;
-          result = read_uint_counters(config_str, curr_pos, can_access_count,
-                                      counters);
-          while (result && can_access_count-- && counters.size() > 0 &&
-                 counters.back() > 0) {
-            std::string temp;
-            result = read_string_counters(config_str, curr_pos, temp, counters);
-            can_access.push_back(temp);
-          }
-        }
-      }
-
-      if (result) {
-        // Global memory definition can't change across reprograms.
-        // If global memory definition changed, allocations will get messed up.
-        // The check won't be done here though. It will need to be done by the
-        // callers.
-        //
-        // IMPORTANT: If a new field is added here, make sure that field is
-        // also copied in acl_program.cpp:l_device_memory_definition_copy().
-        // For built-in kernels (and CL_CONTEXT_COMPILER_MODE=3), memory
-        // definition is copied from the one loaded from autodiscovery ROM
-        // to new program object's device definition.
-        devdef.global_mem_defs[i].num_global_banks = num_dimms;
-        devdef.global_mem_defs[i].config_addr =
-            static_cast<size_t>(configuration_address);
-        devdef.global_mem_defs[i].name = gmem_name;
-        devdef.global_mem_defs[i].range.begin =
-            reinterpret_cast<void *>(gmem_start);
-        devdef.global_mem_defs[i].range.next =
-            reinterpret_cast<void *>(gmem_end);
-        devdef.global_mem_defs[i].type =
-            static_cast<acl_system_global_mem_type_t>(gmem_type);
-        devdef.global_mem_defs[i].burst_interleaved = burst_interleaved;
-        devdef.global_mem_defs[i].allocation_type = allocation_type;
-        devdef.global_mem_defs[i].primary_interface = primary_interface;
-        devdef.global_mem_defs[i].can_access_list = can_access;
-      }
-
-      // forward compatibility: bypassing remaining fields at the end of global
-      // memory
-      while (result && counters.size() > 0 &&
-             counters.back() > 0) { // total_fields_global_memories>0
-        std::string tmp;
-        result =
-            result && read_string_counters(config_str, curr_pos, tmp, counters);
-        check_section_counters(counters);
-      }
-      counters.pop_back(); // removing total_fields_global_memories
-    }                      // global_memories
+    result = read_global_mem_defs(config_str, curr_pos,
+                                  devdef.num_global_mem_systems,
+                                  devdef.global_mem_defs, counters);
   }
 
   // Set up hostpipe information
