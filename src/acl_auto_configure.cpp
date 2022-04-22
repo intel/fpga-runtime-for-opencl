@@ -571,6 +571,263 @@ static bool read_kernel_args(const std::string &config_str,
   return result;
 }
 
+static bool read_accel_defs(const std::string &config_str,
+                            std::string::size_type &curr_pos,
+                            const bool kernel_arg_info_available,
+                            std::vector<acl_accel_def_t> &accel,
+                            std::vector<acl_hal_accel_def_t> &hal_info,
+                            std::vector<int> &counters,
+                            std::string &err_str) noexcept {
+  auto num_accel = 0U;
+  bool result = read_uint_counters(config_str, curr_pos, num_accel, counters);
+  if (result) {
+    accel = std::vector<acl_accel_def_t>(num_accel);
+    hal_info = std::vector<acl_hal_accel_def_t>(num_accel);
+  }
+
+  // Setup the accelerators
+  for (auto i = 0U; result && (i < num_accel); i++) {
+    accel[i].id = i;
+
+    accel[i].mem.begin = reinterpret_cast<void *>(0);
+    accel[i].mem.next = reinterpret_cast<void *>(0x00020000);
+
+    int total_fields_kernel = 0;
+    if (result) {
+      result = read_int_counters(config_str, curr_pos, total_fields_kernel,
+                                 counters);
+    }
+    counters.emplace_back(total_fields_kernel);
+
+    result =
+        read_string_counters(config_str, curr_pos, hal_info[i].name, counters);
+
+    if (!result)
+      break;
+    accel[i].iface.name = hal_info[i].name;
+
+    // Get kernel CRA address and range.
+    // The address is the offset from the CRA address of the first kernel CRA.
+    // That first kernel CRA comes after, for example, the PCIE CRA.
+    result = result &&
+             read_uint_counters(config_str, curr_pos, hal_info[i].csr.address,
+                                counters) &&
+             read_uint_counters(config_str, curr_pos, hal_info[i].csr.num_bytes,
+                                counters);
+
+    result = result && read_uint_counters(config_str, curr_pos,
+                                          accel[i].fast_launch_depth, counters);
+
+    // Get the kernel performance monitor address and range - used for
+    // profiling.  If the performance monitor is not instantiated, the
+    // range field here will be 0.
+    result = result &&
+             read_uint_counters(config_str, curr_pos,
+                                hal_info[i].perf_mon.address, counters) &&
+             read_uint_counters(config_str, curr_pos,
+                                hal_info[i].perf_mon.num_bytes, counters);
+
+    // Determine whether the kernel is workgroup-invariant.
+    result =
+        result && read_uint_counters(config_str, curr_pos,
+                                     accel[i].is_workgroup_invariant, counters);
+
+    // Determine whether the kernel is workitem-invariant.
+    result =
+        result && read_uint_counters(config_str, curr_pos,
+                                     accel[i].is_workitem_invariant, counters);
+    if (!accel[i].is_workgroup_invariant && accel[i].is_workitem_invariant) {
+      std::stringstream err_ss;
+      err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
+             << ": kernel cannot be workitem-invariant while it is "
+                "workgroup-variant. "
+                "Full auto-discovery string value is "
+             << config_str << "\n";
+      err_str = err_ss.str();
+      result = false;
+    }
+
+    // Determine whether the kernel is vectorized.
+    result = result && read_uint_counters(config_str, curr_pos,
+                                          accel[i].num_vector_lanes, counters);
+
+    // Determine how much profiling data is available in the kernel
+    result = result &&
+             read_uint_counters(config_str, curr_pos,
+                                accel[i].profiling_words_to_readback, counters);
+
+    result =
+        result && read_kernel_args(config_str, kernel_arg_info_available,
+                                   curr_pos, accel[i].iface.args, counters);
+
+    // Get the number of printf format strings
+    auto num_printf_format_strings = 0U;
+    result = result && read_uint_counters(config_str, curr_pos,
+                                          num_printf_format_strings, counters);
+    accel[i].printf_format_info =
+        std::vector<acl_printf_info_t>(num_printf_format_strings);
+
+    // Disable fast relaunch when kernel has printf
+    if (accel[i].printf_format_info.size() > 0) {
+      accel[i].fast_launch_depth = 0;
+    }
+
+    // Get the arguments themselves
+    int total_fields_printf = 0;
+    if (result) {
+      result = read_int_counters(config_str, curr_pos, total_fields_printf,
+                                 counters);
+    }
+    for (auto j = 0U; result && (j < accel[i].printf_format_info.size()); j++) {
+      counters.emplace_back(total_fields_printf);
+      result =
+          read_uint_counters(config_str, curr_pos,
+                             accel[i].printf_format_info[j].index, counters) &&
+          read_string_counters(config_str, curr_pos,
+                               accel[i].printf_format_info[j].format_string,
+                               counters);
+
+      /*******************************************************************
+        Since the introduction of autodiscovery forwards-compatibility,
+        new entries for each kernel's 'printf' section start here.
+       ******************************************************************/
+
+      // forward compatibility: bypassing remaining fields at the end of
+      // printf calls section
+      while (result && counters.size() > 0 &&
+             counters.back() > 0) { // fields_printf>0
+        std::string tmp;
+        result =
+            result && read_string_counters(config_str, curr_pos, tmp, counters);
+        check_section_counters(counters);
+      }
+      counters.pop_back();
+    }
+
+    // Read the number of local mem systems, then aspaceID and static
+    // demand for each.
+    if (result) {
+      auto num_local_aspaces = 0U;
+      result =
+          read_uint_counters(config_str, curr_pos, num_local_aspaces, counters);
+
+      int total_fields_local_aspaces = 0;
+      // Read the number of fields in local mem systems
+      if (result) {
+        result = read_int_counters(config_str, curr_pos,
+                                   total_fields_local_aspaces, counters);
+      }
+      accel[i].local_aspaces =
+          std::vector<acl_local_aspace_info>(num_local_aspaces);
+
+      for (auto it = 0U; it < num_local_aspaces && result; ++it) {
+        counters.emplace_back(total_fields_local_aspaces);
+        result = read_uint_counters(config_str, curr_pos,
+                                    accel[i].local_aspaces[it].aspace_id,
+                                    counters) &&
+                 read_uint_counters(config_str, curr_pos,
+                                    accel[i].local_aspaces[it].static_demand,
+                                    counters);
+
+        /****************************************************************
+          Since the introduction of autodiscovery forwards-compatibility,
+          new entries for each kernel's 'local memory systems' section
+          start here.
+         ***************************************************************/
+
+        // forward compatibility: bypassing remaining fields at the end of
+        // local mem system section
+        while (result && counters.size() > 0 &&
+               counters.back() > 0) { // fields_local_aspaces>0
+          std::string tmp;
+          result = result &&
+                   read_string_counters(config_str, curr_pos, tmp, counters);
+          check_section_counters(counters);
+        }
+        counters.pop_back();
+      }
+    }
+
+    // Parse kernel attribute reqd_work_group_size.
+    if (result) {
+      std::vector<unsigned> wgs = {0U, 0U, 0U};
+      result = read_uint_counters(config_str, curr_pos, wgs[0], counters) &&
+               read_uint_counters(config_str, curr_pos, wgs[1], counters) &&
+               read_uint_counters(config_str, curr_pos, wgs[2], counters);
+
+      accel[i].compile_work_group_size[0] = wgs[0];
+      accel[i].compile_work_group_size[1] = wgs[1];
+      accel[i].compile_work_group_size[2] = wgs[2];
+    }
+
+    accel[i].max_work_group_size_arr[0] = 0;
+    accel[i].max_work_group_size_arr[1] = 0;
+    accel[i].max_work_group_size_arr[2] = 0;
+
+    // Parse kernel attribute max_work_group_size.
+    if (result) {
+      auto num_vals = 0U;
+      result = read_uint_counters(config_str, curr_pos, num_vals, counters);
+      if (result) {
+        // OpenCL supports only 3 dimensions in specifying work-group size
+        assert(
+            num_vals <= 3 &&
+            "Unsupported number of Maximum work-group size values specified");
+        accel[i].max_work_group_size = 1;
+        auto n = 0U;
+        while (result && n < num_vals) {
+          auto max_work_group_size_val = 0U;
+          result =
+              result && read_uint_counters(config_str, curr_pos,
+                                           max_work_group_size_val, counters);
+
+          accel[i].max_work_group_size_arr[n] = max_work_group_size_val;
+          accel[i].max_work_group_size *= max_work_group_size_val;
+          n++;
+        }
+      }
+    }
+
+    if (result) {
+      result = read_uint_counters(config_str, curr_pos,
+                                  accel[i].max_global_work_dim, counters);
+    }
+
+    if (result) {
+      result = read_uint_counters(config_str, curr_pos,
+                                  accel[i].uses_global_work_offset, counters);
+    }
+
+    /*******************************************************************
+      Since the introduction of autodiscovery forwards-compatibility,
+      new entries for each 'kernel description' section start here.
+     ******************************************************************/
+    accel[i].is_sycl_compile = 0; // Initializing for backward compatability
+    if (result && counters.back() > 0) {
+      result = read_uint_counters(config_str, curr_pos,
+                                  accel[i].is_sycl_compile, counters);
+    }
+
+    // forward compatibility: bypassing remaining fields at the end of kernel
+    // description section
+    while (result && counters.size() > 0 &&
+           counters.back() > 0) { // total_fields_kernel>0
+      std::string tmp;
+      result =
+          result && read_string_counters(config_str, curr_pos, tmp, counters);
+      check_section_counters(counters);
+    }
+    counters.pop_back();
+  }
+
+  if (!result) {
+    accel.clear();
+    hal_info.clear();
+  }
+
+  return result;
+}
+
 bool acl_load_device_def_from_str(const std::string &config_str,
                                   acl_device_def_autodiscovery_t &devdef,
                                   std::string &err_str) noexcept {
@@ -741,268 +998,11 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   counters.pop_back(); // removing total_fields
 
   // Set up kernel description
-  auto num_accel = 0U;
   if (result) {
-    result = read_uint_counters(config_str, curr_pos, num_accel, counters);
-  }
-  if (result) {
-    devdef.accel = std::vector<acl_accel_def_t>(num_accel);
-    devdef.hal_info = std::vector<acl_hal_accel_def_t>(num_accel);
-
-    // Setup the accelerators
-    for (auto i = 0U; result && (i < num_accel); i++) { // Setup the
-                                                        // accelerators
-      devdef.accel[i].id = i;
-
-      devdef.accel[i].mem.begin = reinterpret_cast<void *>(0);
-      devdef.accel[i].mem.next = reinterpret_cast<void *>(0x00020000);
-
-      int total_fields_kernel = 0;
-      if (result) {
-        result = read_int_counters(config_str, curr_pos, total_fields_kernel,
-                                   counters);
-      }
-      counters.emplace_back(total_fields_kernel);
-
-      result = read_string_counters(config_str, curr_pos,
-                                    devdef.hal_info[i].name, counters);
-
-      if (!result)
-        break;
-      devdef.accel[i].iface.name = devdef.hal_info[i].name;
-
-      // Get kernel CRA address and range.
-      // The address is the offset from the CRA address of the first kernel CRA.
-      // That first kernel CRA comes after, for example, the PCIE CRA.
-      result = result &&
-               read_uint_counters(config_str, curr_pos,
-                                  devdef.hal_info[i].csr.address, counters) &&
-               read_uint_counters(config_str, curr_pos,
-                                  devdef.hal_info[i].csr.num_bytes, counters);
-
-      result = result &&
-               read_uint_counters(config_str, curr_pos,
-                                  devdef.accel[i].fast_launch_depth, counters);
-
-      // Get the kernel performance monitor address and range - used for
-      // profiling.  If the performance monitor is not instantiated, the
-      // range field here will be 0.
-      result =
-          result &&
-          read_uint_counters(config_str, curr_pos,
-                             devdef.hal_info[i].perf_mon.address, counters) &&
-          read_uint_counters(config_str, curr_pos,
-                             devdef.hal_info[i].perf_mon.num_bytes, counters);
-
-      // Determine whether the kernel is workgroup-invariant.
-      result = result && read_uint_counters(
-                             config_str, curr_pos,
-                             devdef.accel[i].is_workgroup_invariant, counters);
-
-      // Determine whether the kernel is workitem-invariant.
-      result = result && read_uint_counters(
-                             config_str, curr_pos,
-                             devdef.accel[i].is_workitem_invariant, counters);
-      if (!devdef.accel[i].is_workgroup_invariant &&
-          devdef.accel[i].is_workitem_invariant) {
-        std::stringstream err_ss;
-        err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
-               << ": kernel cannot be workitem-invariant while it is "
-                  "workgroup-variant. "
-                  "Full auto-discovery string value is "
-               << config_str << "\n";
-        err_str = err_ss.str();
-        result = false;
-      }
-
-      // Determine whether the kernel is vectorized.
-      result = result &&
-               read_uint_counters(config_str, curr_pos,
-                                  devdef.accel[i].num_vector_lanes, counters);
-
-      // Determine how much profiling data is available in the kernel
-      result = result &&
-               read_uint_counters(config_str, curr_pos,
-                                  devdef.accel[i].profiling_words_to_readback,
-                                  counters);
-
-      result = result &&
-               read_kernel_args(config_str, kernel_arg_info_available, curr_pos,
-                                devdef.accel[i].iface.args, counters);
-
-      // Get the number of printf format strings
-      auto num_printf_format_strings = 0U;
-      result =
-          result && read_uint_counters(config_str, curr_pos,
-                                       num_printf_format_strings, counters);
-      devdef.accel[i].printf_format_info =
-          std::vector<acl_printf_info_t>(num_printf_format_strings);
-
-      // Disable fast relaunch when kernel has printf
-      if (devdef.accel[i].printf_format_info.size() > 0) {
-        devdef.accel[i].fast_launch_depth = 0;
-      }
-
-      // Get the arguments themselves
-      int total_fields_printf = 0;
-      if (result) {
-        result = read_int_counters(config_str, curr_pos, total_fields_printf,
-                                   counters);
-      }
-      for (auto j = 0U;
-           result && (j < devdef.accel[i].printf_format_info.size()); j++) {
-        counters.emplace_back(total_fields_printf);
-        result =
-            read_uint_counters(config_str, curr_pos,
-                               devdef.accel[i].printf_format_info[j].index,
-                               counters) &&
-            read_string_counters(
-                config_str, curr_pos,
-                devdef.accel[i].printf_format_info[j].format_string, counters);
-
-        /*******************************************************************
-          Since the introduction of autodiscovery forwards-compatibility,
-          new entries for each kernel's 'printf' section start here.
-         ******************************************************************/
-
-        // forward compatibility: bypassing remaining fields at the end of
-        // printf calls section
-        while (result && counters.size() > 0 &&
-               counters.back() > 0) { // fields_printf>0
-          std::string tmp;
-          result = result &&
-                   read_string_counters(config_str, curr_pos, tmp, counters);
-          check_section_counters(counters);
-        }
-        counters.pop_back();
-      }
-
-      // Read the number of local mem systems, then aspaceID and static
-      // demand for each.
-      if (result) {
-        auto num_local_aspaces = 0U;
-        result = read_uint_counters(config_str, curr_pos, num_local_aspaces,
-                                    counters);
-
-        int total_fields_local_aspaces = 0;
-        // Read the number of fields in local mem systems
-        if (result) {
-          result = read_int_counters(config_str, curr_pos,
-                                     total_fields_local_aspaces, counters);
-        }
-        devdef.accel[i].local_aspaces =
-            std::vector<acl_local_aspace_info>(num_local_aspaces);
-
-        for (auto it = 0U; it < num_local_aspaces && result; ++it) {
-          counters.emplace_back(total_fields_local_aspaces);
-          result =
-              read_uint_counters(config_str, curr_pos,
-                                 devdef.accel[i].local_aspaces[it].aspace_id,
-                                 counters) &&
-              read_uint_counters(
-                  config_str, curr_pos,
-                  devdef.accel[i].local_aspaces[it].static_demand, counters);
-
-          /****************************************************************
-            Since the introduction of autodiscovery forwards-compatibility,
-            new entries for each kernel's 'local memory systems' section
-            start here.
-           ***************************************************************/
-
-          // forward compatibility: bypassing remaining fields at the end of
-          // local mem system section
-          while (result && counters.size() > 0 &&
-                 counters.back() > 0) { // fields_local_aspaces>0
-            std::string tmp;
-            result = result &&
-                     read_string_counters(config_str, curr_pos, tmp, counters);
-            check_section_counters(counters);
-          }
-          counters.pop_back();
-        }
-      }
-
-      // Parse kernel attribute reqd_work_group_size.
-      if (result) {
-        std::vector<unsigned> wgs = {0U, 0U, 0U};
-        result = read_uint_counters(config_str, curr_pos, wgs[0], counters) &&
-                 read_uint_counters(config_str, curr_pos, wgs[1], counters) &&
-                 read_uint_counters(config_str, curr_pos, wgs[2], counters);
-
-        devdef.accel[i].compile_work_group_size[0] = wgs[0];
-        devdef.accel[i].compile_work_group_size[1] = wgs[1];
-        devdef.accel[i].compile_work_group_size[2] = wgs[2];
-      }
-
-      devdef.accel[i].max_work_group_size_arr[0] = 0;
-      devdef.accel[i].max_work_group_size_arr[1] = 0;
-      devdef.accel[i].max_work_group_size_arr[2] = 0;
-
-      // Parse kernel attribute max_work_group_size.
-      if (result) {
-        auto num_vals = 0U;
-        result = read_uint_counters(config_str, curr_pos, num_vals, counters);
-        if (result) {
-          // OpenCL supports only 3 dimensions in specifying work-group size
-          assert(
-              num_vals <= 3 &&
-              "Unsupported number of Maximum work-group size values specified");
-          devdef.accel[i].max_work_group_size = 1;
-          auto n = 0U;
-          while (result && n < num_vals) {
-            auto max_work_group_size_val = 0U;
-            result =
-                result && read_uint_counters(config_str, curr_pos,
-                                             max_work_group_size_val, counters);
-
-            devdef.accel[i].max_work_group_size_arr[n] =
-                max_work_group_size_val;
-            devdef.accel[i].max_work_group_size *= max_work_group_size_val;
-            n++;
-          }
-        }
-      }
-
-      if (result) {
-        result =
-            read_uint_counters(config_str, curr_pos,
-                               devdef.accel[i].max_global_work_dim, counters);
-      }
-
-      if (result) {
-        result = read_uint_counters(config_str, curr_pos,
-                                    devdef.accel[i].uses_global_work_offset,
-                                    counters);
-      }
-
-      /*******************************************************************
-        Since the introduction of autodiscovery forwards-compatibility,
-        new entries for each 'kernel description' section start here.
-       ******************************************************************/
-      devdef.accel[i].is_sycl_compile =
-          0; // Initializing for backward compatability
-      if (result && counters.back() > 0) {
-        result = read_uint_counters(config_str, curr_pos,
-                                    devdef.accel[i].is_sycl_compile, counters);
-      }
-
-      // forward compatibility: bypassing remaining fields at the end of kernel
-      // description section
-      while (result && counters.size() > 0 &&
-             counters.back() > 0) { // total_fields_kernel>0
-        std::string tmp;
-        result =
-            result && read_string_counters(config_str, curr_pos, tmp, counters);
-        check_section_counters(counters);
-      }
-      counters.pop_back();
-    } // Setup the accelerators
+    result = read_accel_defs(config_str, curr_pos, kernel_arg_info_available,
+                             devdef.accel, devdef.hal_info, counters, err_str);
   }
 
-  if (!result) {
-    devdef.accel.clear();
-    devdef.hal_info.clear();
-  }
   if (!result && err_str.empty()) {
     std::stringstream err_ss;
     err_ss << "FAILED to read auto-discovery string at byte " << curr_pos
