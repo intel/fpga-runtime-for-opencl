@@ -136,6 +136,11 @@ typedef enum {
 } acl_kernel_arg_access_qualifier_t; // this is defaulted to none, for non-pipe
                                      // and non-image args.
 
+struct acl_streaming_kernel_arg_info {
+  // name of the streaming interface at device image boundary
+  std::string interface_name;
+};
+
 // This defines everything "interface" of a kernel argument.
 // Be sure to keep this consistent with l_kernel_interface_match() in
 // acl_kernel.cpp. This struct must remain trivially copyable.
@@ -170,6 +175,9 @@ typedef struct {
   // allowed, e.g., "struct mystruct"
   std::string type_name;
   std::string name;
+
+  bool streaming_arg_info_available;
+  acl_streaming_kernel_arg_info streaming_arg_info;
 } acl_kernel_arg_info_t;
 
 // This struct must remain trivially copyable.
@@ -231,6 +239,8 @@ typedef struct {
       fast_launch_depth; /* How many kernels can be buffered on the device, 0
                             means no buffering just one can execute*/
   unsigned int is_sycl_compile; /* [1] SYCL compile; [0] OpenCL compile*/
+
+  bool streaming_control_info_available;
 } acl_accel_def_t;
 
 /* An ACL system definition.
