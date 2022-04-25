@@ -548,8 +548,9 @@ static bool read_kernel_args(const std::string &config_str,
                                                 buffer_location, counters);
       }
       if (result && num_buffer_locations > 1) {
-        std::cerr << "WARNING: kernel argument has multiple buffer_location "
-                     "attributes which is not supported.\nSelecting "
+        std::cerr << "WARNING: kernel argument " << j
+                  << " has multiple buffer_location attributes which is not "
+                     "supported.\nSelecting "
                   << buffer_location << " as buffer location.\n";
       }
     }
