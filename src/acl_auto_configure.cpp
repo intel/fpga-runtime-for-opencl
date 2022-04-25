@@ -504,6 +504,24 @@ static bool read_device_global_mem_defs(
   return result;
 }
 
+static bool read_streaming_kernel_arg_info(
+    const std::string &config_str, std::string::size_type &curr_pos,
+    bool &streaming_arg_info_available,
+    acl_streaming_kernel_arg_info &streaming_arg_info,
+    std::vector<int> &counters) noexcept {
+  unsigned int value = 0;
+  bool result = read_uint_counters(config_str, curr_pos, value, counters);
+  streaming_arg_info_available = value;
+
+  if (result && streaming_arg_info_available) {
+    streaming_arg_info = acl_streaming_kernel_arg_info{};
+    result = read_string_counters(config_str, curr_pos,
+                                  streaming_arg_info.interface_name, counters);
+  }
+
+  return result;
+}
+
 static bool read_kernel_args(const std::string &config_str,
                              const bool kernel_arg_info_available,
                              std::string::size_type &curr_pos,
@@ -597,6 +615,14 @@ static bool read_kernel_args(const std::string &config_str,
         type_name = "";
     }
 
+    bool streaming_arg_info_available = false;
+    acl_streaming_kernel_arg_info streaming_arg_info;
+    if (result && counters.back() > 0) {
+      result = read_streaming_kernel_arg_info(config_str, curr_pos,
+                                              streaming_arg_info_available,
+                                              streaming_arg_info, counters);
+    }
+
     /*****************************************************************
       Since the introduction of autodiscovery forwards-compatibility,
       new entries for each kernel argument section start here.
@@ -619,6 +645,8 @@ static bool read_kernel_args(const std::string &config_str,
       args[j].host_accessible = host_accessible;
       args[j].pipe_channel_id = pipe_channel_id;
       args[j].buffer_location = buffer_location;
+      args[j].streaming_arg_info_available = streaming_arg_info_available;
+      args[j].streaming_arg_info = streaming_arg_info;
     }
     // forward compatibility: bypassing remaining fields at the end of
     // arguments section
@@ -631,6 +659,18 @@ static bool read_kernel_args(const std::string &config_str,
     }
     counters.pop_back();
   }
+
+  return result;
+}
+
+static bool
+read_streaming_kernel_control_info(const std::string &config_str,
+                                   std::string::size_type &curr_pos,
+                                   bool &streaming_control_info_available,
+                                   std::vector<int> &counters) noexcept {
+  unsigned int value = 0;
+  bool result = read_uint_counters(config_str, curr_pos, value, counters);
+  streaming_control_info_available = value;
 
   return result;
 }
@@ -870,6 +910,12 @@ static bool read_accel_defs(const std::string &config_str,
     if (result && counters.back() > 0) {
       result = read_uint_counters(config_str, curr_pos,
                                   accel[i].is_sycl_compile, counters);
+    }
+
+    if (result && counters.back() > 0) {
+      result = read_streaming_kernel_control_info(
+          config_str, curr_pos, accel[i].streaming_control_info_available,
+          counters);
     }
 
     // forward compatibility: bypassing remaining fields at the end of kernel
