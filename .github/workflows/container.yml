@@ -59,6 +59,7 @@ jobs:
           - ubuntu-18.04-dev
           - ubuntu-20.04-dev
           - ubuntu-20.04-clang
+          - ubuntu-22.04-dev
 
     env:
       image: ghcr.io/${{ github.repository }}/${{ matrix.container }}
