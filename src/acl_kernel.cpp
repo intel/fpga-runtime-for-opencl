@@ -2755,8 +2755,8 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
   // with a base address of 0
 
   // Need to determine sizeof device's pointers.
-  cl_uint dev_local_ptr_size = 4; // Always.
-  cl_uint dev_global_ptr_size = device->address_bits >> 3;
+  const cl_uint dev_local_ptr_size = 4; // Always.
+  const cl_uint dev_global_ptr_size = device->address_bits >> 3;
 
   // Bump allocator pointer for each local aspace
   // Maps the aspace ID to the next available local memory address.
@@ -2790,7 +2790,8 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
       printf("local");
 #endif
 
-      unsigned this_aspace = kernel->accel_def->iface.args[iarg].aspace_number;
+      const unsigned int this_aspace =
+          kernel->accel_def->iface.args[iarg].aspace_number;
 
       // This arg is a pointer to __local.
       cl_ulong local_size = 0;
@@ -2812,7 +2813,8 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
 
       // On the emulator, the argument size of a pipe (which is a mem object) is
       // 0. Since we copy in 0 bytes, we should read out 0 bytes.
-      size_t copy_sz = (arg_info->size == 0) ? arg_info->size : sizeof(cl_mem);
+      const size_t copy_sz =
+          (arg_info->size == 0) ? arg_info->size : sizeof(cl_mem);
       safe_memcpy(&mem_obj, &(kernel->arg_value[host_idx]), copy_sz,
                   sizeof(cl_mem), copy_sz);
 
@@ -2832,7 +2834,7 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
         value for the argument declared as a pointer to global or constant
         memory in the kernel."
         */
-        cl_ulong null_ptr = 0;
+        const cl_ulong null_ptr = 0;
         safe_memcpy(buf + device_idx, &null_ptr, dev_global_ptr_size,
                     dev_global_ptr_size, dev_global_ptr_size);
         // Shared physical memory:
@@ -2902,7 +2904,7 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
 
         // copy the address of the reserved allocation into the invocation
         // image:
-        void *mem_addr =
+        const void *mem_addr =
             mem_obj->reserved_allocations[needed_physical_id][needed_mem_id]
                 ->range.begin;
         safe_memcpy(buf + device_idx, &mem_addr, dev_global_ptr_size,
@@ -2911,7 +2913,7 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
         if (memory_migration->num_mem_objects == 0) {
           // First time allocation, 128 was chosen because previously, number of
           // kernel arguments were set to an hardcoded limit of 128
-          const unsigned initial_alloc = 128;
+          const unsigned int initial_alloc = 128;
 
           memory_migration->src_mem_list =
               (acl_mem_migrate_wrapper_t *)acl_malloc(
@@ -2923,7 +2925,7 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
           memory_migration->num_alloc = initial_alloc;
         } else if (memory_migration->num_mem_objects >=
                    memory_migration->num_alloc) {
-          const unsigned next_alloc = memory_migration->num_alloc * 2;
+          const unsigned int next_alloc = memory_migration->num_alloc * 2;
           // check for overflow, num_alloc is a 32-bit unsigned integer and
           // unsigned integer overflow is defined behaviour
           if (next_alloc < memory_migration->num_alloc)
