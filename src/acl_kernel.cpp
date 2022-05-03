@@ -2758,8 +2758,6 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
   cl_uint dev_local_ptr_size = 4; // Always.
   cl_uint dev_global_ptr_size = device->address_bits >> 3;
 
-  cl_uint buf_incr = 0;
-
   // Bump allocator pointer for each local aspace
   // Maps the aspace ID to the next available local memory address.
   std::unordered_map<unsigned, size_t> next_local;
@@ -2783,6 +2781,9 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
 
     const acl_kernel_arg_info_t *arg_info =
         &(kernel->accel_def->iface.args[iarg]);
+
+    // Exclude kernel argument value from device-side buffer by default.
+    cl_uint buf_incr = 0;
 
     if (arg_info->addr_space == ACL_ARG_ADDR_LOCAL) {
 #ifdef MEM_DEBUG_MSG
