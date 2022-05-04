@@ -103,10 +103,10 @@ static cl_int l_enqueue_kernel_with_type(
     const cl_event *event_wait_list, cl_event *event, cl_command_type type);
 static void l_get_arg_offset_and_size(cl_kernel kernel, cl_uint arg_index,
                                       size_t *start_idx_ret, size_t *size_ret);
-static cl_int
-l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
-                                       char *buf, cl_uint *num_bytes,
-                                       acl_mem_migrate_t *memory_migration);
+static cl_int l_copy_and_adjust_arguments_for_device(
+    cl_kernel kernel, cl_device_id device, char *buf, cl_uint *num_bytes,
+    acl_mem_migrate_t *memory_migration,
+    std::vector<aocl_mmd_streaming_kernel_arg_info_t> &streaming_args);
 
 static void l_abort_use_of_wrapper(acl_kernel_invocation_wrapper_t *wrapper);
 
@@ -2178,7 +2178,7 @@ static cl_int l_enqueue_kernel_with_type(
 
     kernel_arg_bytes = (cl_uint)l_copy_and_adjust_arguments_for_device(
         kernel, device, &(invocation->arg_value[0]), &kernel_arg_bytes,
-        &memory_migration);
+        &memory_migration, serialization_wrapper->streaming_args);
 
     assert(kernel_arg_bytes <= kernel->arg_value_size);
 
@@ -2242,7 +2242,7 @@ static cl_int l_enqueue_kernel_with_type(
 
   status = l_copy_and_adjust_arguments_for_device(
       kernel, device, &(invocation->arg_value[0]), &kernel_arg_bytes,
-      &memory_migration);
+      &memory_migration, wrapper->streaming_args);
 
   if (status != CL_SUCCESS) {
     ERR_RET(status, context, "Argument error");
@@ -2738,10 +2738,10 @@ int acl_num_non_null_mem_args(cl_kernel kernel) {
 //
 // Returns number of bytes written to the device-side buffer in num_bytes.
 // Returns failure if memory could not be reserved on the device.
-static cl_int
-l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
-                                       char *buf, cl_uint *num_bytes,
-                                       acl_mem_migrate_t *memory_migration) {
+static cl_int l_copy_and_adjust_arguments_for_device(
+    cl_kernel kernel, cl_device_id device, char *buf, cl_uint *num_bytes,
+    acl_mem_migrate_t *memory_migration,
+    std::vector<aocl_mmd_streaming_kernel_arg_info_t> &streaming_args) {
   // indices into the host and device arg value buffer arrays.
   size_t host_idx = 0;
   size_t device_idx = 0;
@@ -2770,6 +2770,9 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
     next_local[aspace.aspace_id] +=
         l_round_up_for_alignment(aspace.static_demand);
   }
+
+  streaming_args.clear();
+
 #ifdef MEM_DEBUG_MSG
   printf("kernel args\n");
 #endif
@@ -2785,7 +2788,17 @@ l_copy_and_adjust_arguments_for_device(cl_kernel kernel, cl_device_id device,
     // Exclude kernel argument value from device-side buffer by default.
     cl_uint buf_incr = 0;
 
-    if (arg_info->addr_space == ACL_ARG_ADDR_LOCAL) {
+    if (arg_info->streaming_arg_info_available) {
+#ifdef MEM_DEBUG_MSG
+      printf("streaming");
+#endif
+      // Copy argument value to a separate buffer since it may be modified with
+      // clSetKernelArg() after kernel is enqueued but before it is launched.
+      const char *const arg_value = &kernel->arg_value[host_idx];
+      streaming_args.emplace_back(aocl_mmd_streaming_kernel_arg_info_t{
+          arg_info->streaming_arg_info.interface_name,
+          std::vector<char>(arg_value, arg_value + arg_info->size)});
+    } else if (arg_info->addr_space == ACL_ARG_ADDR_LOCAL) {
 #ifdef MEM_DEBUG_MSG
       printf("local");
 #endif
