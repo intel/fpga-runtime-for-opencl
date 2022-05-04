@@ -23,6 +23,7 @@
 #include "acl.h"
 #include "acl_device_binary.h"
 #include "acl_hal.h"
+#include "acl_hal_mmd.h"
 #include "acl_icd_dispatch.h"
 
 #if defined(__cplusplus)
@@ -446,6 +447,7 @@ typedef struct acl_kernel_invocation_wrapper_t {
   acl_dev_kernel_invocation_image_t *image;
   acl_dev_kernel_invocation_image_t image_storage; // What image points to.
 
+  std::vector<aocl_mmd_streaming_kernel_arg_info_t> streaming_args;
 } acl_kernel_invocation_wrapper_t;
 
 typedef struct {
