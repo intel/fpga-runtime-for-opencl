@@ -1876,6 +1876,14 @@ void acl_hal_mmd_copy_globalmem_to_globalmem(cl_event event, const void *src,
 void acl_hal_mmd_launch_kernel(unsigned int physical_device_id,
                                acl_kernel_invocation_wrapper_t *wrapper) {
   acl_assert_locked();
+
+  const auto &streaming_args = wrapper->streaming_args;
+  if (!streaming_args.empty()) {
+    device_info[physical_device_id]
+        .mmd_dispatch->aocl_mmd_simulation_streaming_kernel_args(
+            device_info[physical_device_id].handle, streaming_args);
+  }
+
   acl_kernel_if_launch_kernel(&kern[physical_device_id], wrapper);
 }
 
