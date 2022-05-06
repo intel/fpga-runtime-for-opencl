@@ -91,8 +91,9 @@ jobs:
 
       - name: create build files
         run: |
+          test ${{ matrix.config }} = Debug && ASAN=1
           cd build
-          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=/fpga-runtime-for-opencl -DCMAKE_INSTALL_LIBDIR=lib
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=/fpga-runtime-for-opencl -DCMAKE_INSTALL_LIBDIR=lib ${ASAN:+-DACL_WITH_ASAN=ON}
         env:
           CC: ${{ matrix.cross }}gcc
           CXX: ${{ matrix.cross }}g++
