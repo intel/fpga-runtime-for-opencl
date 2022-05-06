@@ -1014,11 +1014,15 @@ static void l_forcibly_release_allocations(cl_context context) {
     }
 
     if (context->invocation_wrapper) {
-      unsigned i;
-      for (i = 0; i < context->num_invocation_wrappers_allocated; i++) {
-        if (context->invocation_wrapper[i]->image->arg_value)
-          acl_delete_arr(context->invocation_wrapper[i]->image->arg_value);
-        acl_free(context->invocation_wrapper[i]);
+      for (unsigned int i = 0; i < context->num_invocation_wrappers_allocated;
+           i++) {
+        auto *const wrapper = context->invocation_wrapper[i];
+        if (wrapper->image->arg_value) {
+          acl_delete_arr(wrapper->image->arg_value);
+        }
+        // invoke non-default destructors of non-POD types, e.g., std::vector
+        wrapper->~acl_kernel_invocation_wrapper_t();
+        acl_free(wrapper);
       }
       acl_free(context->invocation_wrapper);
       context->invocation_wrapper = 0;
@@ -1208,6 +1212,8 @@ l_init_kernel_invocation_wrapper(acl_kernel_invocation_wrapper_t *wrapper,
   acl_assert_locked();
 
   if (wrapper) {
+    // invoke non-default constructors of non-POD types, e.g., std::vector
+    new (wrapper) acl_kernel_invocation_wrapper_t{};
     wrapper->id = i;
     wrapper->image = &(wrapper->image_storage);
     wrapper->image->arg_value = nullptr;
