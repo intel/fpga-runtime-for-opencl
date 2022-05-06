@@ -86,6 +86,8 @@ jobs:
         run: |
           cd build
           ctest -V
+        env:
+          ASAN_OPTIONS: halt_on_error=0
 
       - name: asan result
         uses: actions/upload-artifact@v2
