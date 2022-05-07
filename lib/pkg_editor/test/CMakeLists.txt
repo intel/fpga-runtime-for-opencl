@@ -3,7 +3,7 @@
 
 add_executable(pkg_editor_test pkg_editor_test.cpp)
 target_link_libraries(pkg_editor_test PRIVATE CppUTest pkg_editor)
-add_test(pkg_editor_test pkg_editor_test)
+add_test(pkg_editor_test pkg_editor_test -v)
 
 if(ZLIB_FOUND)
   target_compile_definitions(pkg_editor_test PRIVATE USE_ZLIB)

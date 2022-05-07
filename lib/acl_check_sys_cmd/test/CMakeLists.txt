@@ -3,4 +3,4 @@
 
 add_executable(acl_check_sys_cmd_test acl_check_sys_cmd_test.cpp)
 target_link_libraries(acl_check_sys_cmd_test PRIVATE acl_check_sys_cmd)
-add_test(acl_check_sys_cmd_test acl_check_sys_cmd_test)
+add_test(acl_check_sys_cmd_test acl_check_sys_cmd_test -v)
