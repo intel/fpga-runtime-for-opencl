@@ -6,4 +6,4 @@ target_link_libraries(acl_hash_test PRIVATE acl_hash CppUTest)
 target_compile_definitions(acl_hash_test PRIVATE
   "ACL_TARGET_BIT=${ACL_TARGET_BIT}"
 )
-add_test(acl_hash_test acl_hash_test)
+add_test(acl_hash_test acl_hash_test -v)
