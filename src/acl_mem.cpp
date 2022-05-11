@@ -5604,8 +5604,8 @@ void acl_mem_migrate_buffer(void *user_data, acl_device_op_t *op) {
 
 #ifdef MEM_DEBUG_MSG
               printf("release block %zx (%u:%u) ",
-                     (size_t)(src_mem->reserved_allocations[src_device]
-                                                           [src_mem_id]),
+                     (size_t)(
+                         src_mem->reserved_allocations[src_device][src_mem_id]),
                      src_device, src_mem_id);
 #endif
               remove_mem_block_linked_list(
@@ -5991,9 +5991,8 @@ static void l_mem_transfer_buffer_explicitly(cl_context context,
           dst_unmap_cmd.info.mem_xfer.map_flags = CL_MAP_WRITE;
         }
         dst_unmap_cmd.info.mem_xfer.src_mem = context->unwrapped_host_mem;
-        dst_unmap_cmd.info.mem_xfer.src_offset[0] =
-            (size_t)((char *)dst_mem->host_mem.aligned_ptr -
-                     (char *)ACL_MEM_ALIGN);
+        dst_unmap_cmd.info.mem_xfer.src_offset[0] = (size_t)(
+            (char *)dst_mem->host_mem.aligned_ptr - (char *)ACL_MEM_ALIGN);
         dst_unmap_cmd.info.mem_xfer.src_offset[1] = 0;
         dst_unmap_cmd.info.mem_xfer.src_offset[2] = 0;
         dst_unmap_cmd.info.mem_xfer.dst_mem = dst_mem;
@@ -6340,9 +6339,8 @@ void acl_copy_device_buffers_to_host_before_programming(
       cmd.info.mem_xfer.src_offset[2] = 0;
       cmd.info.mem_xfer.dst_mem = context2->unwrapped_host_mem;
       if (mem->flags & CL_MEM_USE_HOST_PTR) {
-        cmd.info.mem_xfer.dst_offset[0] =
-            (size_t)((char *)mem->fields.buffer_objs.host_ptr -
-                     (char *)ACL_MEM_ALIGN);
+        cmd.info.mem_xfer.dst_offset[0] = (size_t)(
+            (char *)mem->fields.buffer_objs.host_ptr - (char *)ACL_MEM_ALIGN);
       } else {
         cmd.info.mem_xfer.dst_offset[0] =
             (size_t)((char *)mem->host_mem.aligned_ptr - (char *)ACL_MEM_ALIGN);
@@ -6486,9 +6484,8 @@ void acl_copy_device_buffers_from_host_after_programming(
       cmd.type = CL_COMMAND_WRITE_BUFFER;
       cmd.info.mem_xfer.src_mem = context2->unwrapped_host_mem;
       if (mem->flags & CL_MEM_USE_HOST_PTR) {
-        cmd.info.mem_xfer.src_offset[0] =
-            (size_t)((char *)mem->fields.buffer_objs.host_ptr -
-                     (char *)ACL_MEM_ALIGN);
+        cmd.info.mem_xfer.src_offset[0] = (size_t)(
+            (char *)mem->fields.buffer_objs.host_ptr - (char *)ACL_MEM_ALIGN);
       } else {
         cmd.info.mem_xfer.src_offset[0] =
             (size_t)((char *)mem->host_mem.aligned_ptr - (char *)ACL_MEM_ALIGN);

@@ -1211,9 +1211,8 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   } else {
     offset = (unsigned int)KERNEL_OFFSET_INVOCATION_IMAGE;
     image_p = (uintptr_t) & (image->work_dim);
-    image_size_static =
-        (size_t)((uintptr_t) & (image->arg_value) - (uintptr_t) &
-                 (image->work_dim));
+    image_size_static = (size_t)(
+        (uintptr_t) & (image->arg_value) - (uintptr_t) & (image->work_dim));
   }
 
   if ((kern->io.debug_verbosity) >= 2) {
