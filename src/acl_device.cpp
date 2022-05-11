@@ -708,6 +708,8 @@ clReleaseDevice(cl_device_id device) {
 
 ACL_EXPORT CL_API_ENTRY cl_int
 clReconfigurePLLIntelFPGA(cl_device_id device, const char *pll_settings_str) {
+  // To get the format of the second string argument please refer to the code
+  // comments specified for struct pll_setting_t in include/acl_pll.
   const acl_hal_t *hal;
   cl_int configure_status;
   acl_lock();
