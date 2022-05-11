@@ -8,16 +8,19 @@
 
 #include "acl_bsp_io.h"
 
+// Settings for the Phase-Locked-Loop
+// note that we use double frequency of the kernel clock for some double-pumped
+// memories
 typedef struct {
-  unsigned int freq_khz;
-  unsigned int m;
-  unsigned int n;
-  unsigned int k;
-  unsigned int c0;
-  unsigned int c1;
-  unsigned int r;
-  unsigned int cp;
-  unsigned int div;
+  unsigned int freq_khz; /* output frequency in kHz */
+  unsigned int m;        /* multiplier factor */
+  unsigned int n;        /* 1st divider factor */
+  unsigned int k;        /* 2nd divider factor */
+  unsigned int c0;       /* output divider for kernel clock */
+  unsigned int c1;       /* output divider for double kernel clock */
+  unsigned int r;        /* lowpass filter setting */
+  unsigned int cp;       /* charge pump gain setting */
+  unsigned int div;      /* PLL mode */
 } pll_setting_t;
 
 typedef struct {
