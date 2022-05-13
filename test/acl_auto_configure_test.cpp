@@ -1487,3 +1487,63 @@ TEST(auto_configure, cra_ring_root_exist) {
 
   CHECK_EQUAL(1, devdef.cra_ring_root_exist);
 }
+
+// Will finalize later, Zibai todo.
+
+// TEST(auto_configure, hostpipe_mappings) {
+//   const std::string config_str{
+//       "23 45 " RANDOM_HASH
+//       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
+//       "0 0 0 0 0 5 4 pipe_logical_name1 pipe_physical_name1 1 12345 "
+//       "pipe_logical_name2 pipe_physical_name2 0 12323 pipe_logical_name3 "
+//       "pipe_physical_name1 1 12313 pipe_logical_name1 pipe_physical_name1 0 "
+//       "12316 pipe_logical_name1 pipe_physical_name3 0 12342 3 90 "
+//       "_ZTS3CRCILi0EE 512 256 1 0 0 1 0 1 0 9 6 0 0 8 1 0 0 6 2 1 8 1024 0 3 6 "
+//       "0 0 8 1 0 0 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 "
+//       "6 0 0 8 1 0 0 6 0 0 8 1 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 64 "
+//       "_ZTS11LZReductionILi0EE 0 256 1 0 0 0 0 1 0 5 6 0 0 8 1 0 0 6 2 1 8 "
+//       "1024 0 3 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 0 0 8 1 0 0 0 0 2 2 64 131072 65 "
+//       "32768 1 1 1 3 1 1 1 3 1 0 125 _ZTS13StaticHuffmanILi0EE 256 256 1 0 0 1 "
+//       "0 1 0 10 6 0 0 8 1 0 0 6 0 0 4 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 6 0 "
+//       "0 8 1 0 0 6 0 0 8 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 "
+//       "0 0 8 1 0 0 0 0 15 2 64 116 65 116 66 1152 67 512 68 256 69 120 70 120 "
+//       "71 1152 72 116 73 1152 74 512 75 256 76 120 77 120 78 1152 1 1 1 3 1 1 "
+//       "1 3 1 0"};
+
+//   acl_device_def_autodiscovery_t devdef;
+//   {
+//     bool result;
+//     std::string err_str;
+//     ACL_LOCKED(result =
+//                    acl_load_device_def_from_str(config_str, devdef, err_str));
+//     std::cerr << err_str;
+//     CHECK(result);
+//   }
+
+//   CHECK_EQUAL(5, devdef.hostpipe_mappings.size());
+
+//   CHECK(devdef.hostpipe_mappings[0].logical_name == "pipe_logical_name1");
+//   CHECK(devdef.hostpipe_mappings[0].physical_name == "pipe_physical_name1");
+//   CHECK(devdef.hostpipe_mappings[0].implement_in_csr);
+//   CHECK(devdef.hostpipe_mappings[0].csr_address == 12345);
+
+//   CHECK(devdef.hostpipe_mappings[1].logical_name == "pipe_logical_name2");
+//   CHECK(devdef.hostpipe_mappings[1].physical_name == "pipe_physical_name2");
+//   CHECK(!devdef.hostpipe_mappings[1].implement_in_csr);
+//   CHECK(devdef.hostpipe_mappings[1].csr_address == 12323);
+
+//   CHECK(devdef.hostpipe_mappings[2].logical_name == "pipe_logical_name3");
+//   CHECK(devdef.hostpipe_mappings[2].physical_name == "pipe_physical_name1");
+//   CHECK(devdef.hostpipe_mappings[2].implement_in_csr);
+//   CHECK(devdef.hostpipe_mappings[2].csr_address == 12313);
+
+//   CHECK(devdef.hostpipe_mappings[3].logical_name == "pipe_logical_name1");
+//   CHECK(devdef.hostpipe_mappings[3].physical_name == "pipe_physical_name1");
+//   CHECK(!devdef.hostpipe_mappings[3].implement_in_csr);
+//   CHECK(devdef.hostpipe_mappings[3].csr_address == 12316);
+
+//   CHECK(devdef.hostpipe_mappings[4].logical_name == "pipe_logical_name1");
+//   CHECK(devdef.hostpipe_mappings[4].physical_name == "pipe_physical_name3");
+//   CHECK(!devdef.hostpipe_mappings[4].implement_in_csr);
+//   CHECK(devdef.hostpipe_mappings[4].csr_address == 12342);
+// }
