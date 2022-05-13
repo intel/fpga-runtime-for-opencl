@@ -198,6 +198,36 @@ static bool read_ulonglong_counters(const std::string &str,
   return true;
 }
 
+// Reads the next word in str and converts it into a uintptr_t.
+// Returns true if a valid integer was read or false if an error occurred.
+// pos is updated to the position immediately following the parsed word
+// even if an error occurs.
+static bool read_uintptr_counters(const std::string &str,
+                                  std::string::size_type &pos, uintptr_t &val,
+                                  std::vector<int> &counters) noexcept {
+  std::string result;
+  pos = read_word(str, pos, result);
+  decrement_section_counters(counters);
+
+  size_t end = 0;
+  unsigned long long parsed;
+  try {
+    parsed = std::stoull(result, &end);
+  } catch (const std::exception &) {
+    return false;
+  }
+  if (end != result.size()) {
+    return false;
+  }
+
+  val = static_cast<uintptr_t>(parsed);
+  if (val != parsed) {
+    return false;
+  }
+
+  return true;
+}
+
 // Reads the next word in str and converts it into an unsigned or using its
 // default value. Returns true if a valid integer was read or false if an error
 // occurred. pos is updated to the position immediately following the parsed
@@ -592,6 +622,44 @@ static bool read_streaming_kernel_arg_info(
     streaming_arg_info = acl_streaming_kernel_arg_info{};
     result = read_string_counters(config_str, curr_pos,
                                   streaming_arg_info.interface_name, counters);
+  }
+  return result;
+}
+
+static bool read_hostpipe_mappings(
+    const std::string &config_str, std::string::size_type &curr_pos,
+    std::vector<acl_hostpipe_mapping> &hostpipe_mappings,
+    std::vector<int> &counters, std::string &err_str) noexcept {
+  unsigned int num_mappings = 0;
+  bool result =
+      read_uint_counters(config_str, curr_pos, num_mappings, counters);
+
+  unsigned int num_fields_per_mapping = 0;
+  if (result) {
+    result = read_uint_counters(config_str, curr_pos, num_fields_per_mapping,
+                                counters);
+  }
+
+  for (unsigned int i = 0; result && (i < num_mappings); i++) {
+    counters.emplace_back(num_fields_per_mapping);
+
+    acl_hostpipe_mapping mapping{};
+    result = read_string_counters(config_str, curr_pos, mapping.logical_name,
+                                  counters) &&
+             read_string_counters(config_str, curr_pos, mapping.physical_name,
+                                  counters) &&
+             read_bool_counters(config_str, curr_pos, mapping.implement_in_csr,
+                                counters) &&
+             read_uintptr_counters(config_str, curr_pos, mapping.csr_address,
+                                   counters);
+    hostpipe_mappings.emplace_back(mapping);
+
+    while (result && counters.back() > 0) {
+      std::string tmp;
+      result = read_string_counters(config_str, curr_pos, tmp, counters);
+    }
+    check_section_counters(counters);
+    counters.pop_back();
   }
 
   return result;
@@ -1129,6 +1197,11 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   if (result && counters.back() > 0) {
     result = read_bool_counters(config_str, curr_pos,
                                 devdef.cra_ring_root_exist, counters);
+
+  // Read program scoped hostpipes mappings
+  if (result && counters.back() > 0) {
+    result = read_hostpipe_mappings(
+        config_str, curr_pos, devdef.hostpipe_mappings, counters, err_str);
   }
 
   // forward compatibility: bypassing remaining fields at the end of device
