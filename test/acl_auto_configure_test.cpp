@@ -482,11 +482,11 @@ TEST(auto_configure, many_ok_forward_compatibility) {
   // sections and subsections to check forward compatibility
 
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 28 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 29 "
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx 0 1 15 DDR 2 1 6 0 2147483648 100 "
                                     "100 100 100 200 200 200 200 0 0 0 0 2 "
-                                    "1 name1 1 name2 47 "
+                                    "1 name1 name2 0 0 47 "
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 500 500 500 500 0 0 "
                                     "0 0 1 1 1 3 1 1 1 3 1 800 800 800 800 800 "
