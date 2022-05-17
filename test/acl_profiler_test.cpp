@@ -23,6 +23,7 @@
 #include <acl_event.h>
 #include <acl_globals.h>
 #include <acl_kernel.h>
+#include <acl_platform.h>
 #include <acl_printf.h>
 #include <acl_profiler.h>
 #include <acl_program.h>
@@ -60,11 +61,12 @@ MT_TEST_GROUP(acl_profile) {
       putenv(profiler_timer_env_var);
 #endif
       acl_test_setup_generic_system();
-      acl_dot_push(&m_devlog, &acl_platform.device_op_queue);
 
       this->load();
       m_program = this->load_program();
       this->build(m_program);
+
+      acl_dot_push(&m_devlog, get_device_op_queue_from_context(m_context));
     }
     syncThreads();
   }

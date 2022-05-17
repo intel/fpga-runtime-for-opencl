@@ -2632,7 +2632,8 @@ void acl_hal_mmd_reset_kernels(cl_device_id device) {
       int activation_id = kern[physical_device_id].accel_job_ids[k][i];
       if (kern[physical_device_id].accel_job_ids[k][i] >= 0) {
         kern[physical_device_id].accel_job_ids[k][i] = -1;
-        acl_kernel_update_fn(activation_id,
+        acl_kernel_update_fn(physical_device_id,
+                             activation_id,
                              -1); // Signal that it finished with error, since
                                   // we forced it to finish
       }

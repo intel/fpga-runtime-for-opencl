@@ -625,7 +625,7 @@ int acl_update_queue(cl_command_queue command_queue) {
   }
 
   // First nudge the device operation scheduler.
-  acl_update_device_op_queue(&(acl_platform.device_op_queue));
+  acl_update_device_op_queue(get_device_op_queue_from_context(command_queue->context));
 
   if (command_queue->properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) {
     return acl_update_ooo_queue(command_queue);

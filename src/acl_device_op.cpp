@@ -240,6 +240,12 @@ void acl_init_device_op_queue_limited(acl_device_op_queue_t *doq,
     acl_device_op_reset_device_op(doq->op + i);
   }
 
+  // Init locking data for this context
+  acl_init_condvar(&(doq->locking_data.condvar));
+  doq->locking_data.lock_count = 0;
+  doq->locking_data.inside_sig_flag = 0;
+  doq->locking_data.inside_sig_old_lock_count = 0;
+
   // The live lists are all empty.
   doq->first_live = ACL_OPEN;
   doq->last_committed = ACL_OPEN;
@@ -264,6 +270,7 @@ void acl_init_device_op_queue_limited(acl_device_op_queue_t *doq,
   doq->usm_memcpy = acl_usm_memcpy;
   doq->log_update = 0;
 
+  doq->num_managed_devices = 0;
   for (i = 0; i < ACL_MAX_DEVICE; i++) {
     doq->devices[i] = NULL;
   }
@@ -1444,23 +1451,27 @@ static void l_record_milestone(acl_device_op_t *op,
 ACL_EXPORT
 void acl_device_op_dump_stats(void) {
 #ifdef ACL_DEVICE_OP_STATS
-  acl_device_op_stats_t *stats = &(acl_platform.device_op_queue.stats);
-  acl_assert_locked();
-  printf("Device op stats:\n");
+  #define PF(X)                                                                  \
+    printf("  %-25s %12u %12.6f\n", #X, stats->num_##X,                          \
+          ((float)stats->num_##X / (float)stats->num_queue_updates));
 
-#define PF(X)                                                                  \
-  printf("  %-25s %12u %12.6f\n", #X, stats->num_##X,                          \
-         ((float)stats->num_##X / (float)stats->num_queue_updates));
-  PF(queue_updates)
-  PF(exclusion_checks)
-  PF(conflict_checks)
-  PF(submits)
-  PF(live_op_pending_calcs)
-  PF(queued)
-  PF(running)
-  PF(complete)
-  fflush(stdout);
-#undef PF
+  for (int iq = 0; iq < acl_platform.num_device_op_queues; iq++) {
+    if (acl_platform.device_op_queues[iq] == nullptr) continue;
+    acl_device_op_stats_t *stats = &(acl_platform.device_op_queues[iq]->stats);
+    acl_assert_locked();
+    printf("Device op stats:\n");
+
+    PF(queue_updates)
+    PF(exclusion_checks)
+    PF(conflict_checks)
+    PF(submits)
+    PF(live_op_pending_calcs)
+    PF(queued)
+    PF(running)
+    PF(complete)
+    fflush(stdout);
+  }
+  #undef PF
 #else
   printf("Device op stats are not available\n");
 #endif

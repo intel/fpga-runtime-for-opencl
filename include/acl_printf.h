@@ -18,7 +18,7 @@ extern "C" {
 
 // Enqueue printf buffer dump
 ACL_EXPORT
-void acl_schedule_printf_buffer_pickup(int activation_id, int size,
+void acl_schedule_printf_buffer_pickup(unsigned int physical_device_id, int activation_id, int size,
                                        int overflow);
 
 // Print the printf data associated with the given deviced operation

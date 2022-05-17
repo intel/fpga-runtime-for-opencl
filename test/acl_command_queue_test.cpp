@@ -730,9 +730,9 @@ MT_TEST(acl_command_queue, mixed_queue_dependencies_1) {
 
   // Finish e1, see if e2 gets submitted
   CHECK_EQUAL(e1->last_device_op, e1->current_device_op);
-  ACL_LOCKED(acl_receive_kernel_update(e1->current_device_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, e1->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(context));
-  ACL_LOCKED(acl_receive_kernel_update(e1->current_device_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, e1->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(context));
 
   CHECK_EQUAL(CL_COMPLETE, e2->execution_status); // The important check
@@ -806,9 +806,9 @@ MT_TEST(acl_command_queue, mixed_queue_dependencies_2) {
 
   // Finish e1, see if e2 gets submitted
   CHECK_EQUAL(e1->last_device_op, e1->current_device_op);
-  ACL_LOCKED(acl_receive_kernel_update(e1->current_device_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, e1->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(context));
-  ACL_LOCKED(acl_receive_kernel_update(e1->current_device_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, e1->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(context));
 
   CHECK_EQUAL(CL_COMPLETE, e2->execution_status); // The important check

@@ -21,6 +21,7 @@
 #include <acl_globals.h>
 #include <acl_kernel.h>
 #include <acl_mem.h>
+#include <acl_platform.h>
 #include <acl_printf.h>
 #include <acl_program.h>
 #include <acl_support.h>
@@ -44,7 +45,7 @@ static void CL_CALLBACK test_debug_print(const char *errinfo,
                                          void *user_data);
 
 static const acl_device_op_t *l_find_op(int id) {
-  const acl_device_op_queue_t *doq = &acl_platform.device_op_queue;
+  const acl_device_op_queue_t *doq = get_device_op_queue(0);
   if (id >= 0 && id < doq->max_ops) {
     return doq->op + id;
   }
@@ -68,13 +69,16 @@ MT_TEST_GROUP(acl_kernel) {
   void setup() {
     if (threadNum() == 0) {
       acl_test_setup_generic_system();
-      acl_dot_push(&m_devlog, &acl_platform.device_op_queue);
     }
     syncThreads();
 
     this->load();
     m_program = this->load_program();
     this->build(m_program);
+
+    if (threadNum() == 0) {
+      acl_dot_push(&m_devlog, get_device_op_queue(0));
+    }
 
     // See acl_globals_test.cpp
     m_sample_kernel_name = "kernel0_copy_vecin_vecout";
@@ -1369,7 +1373,9 @@ TEST(acl_kernel, enqueue_ndrange) {
   // The commit to the devcie op queue should have set the activation_id.
   CHECK_EQUAL(active_op->id, invocation->activation_id);
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_RUNNING));
+  // Not sure how to get actual physical device id that ran this kernel,
+  // so using device[0]
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   this->load_times(event, times);
   CHECK(times[1] < times[2]);
@@ -1385,7 +1391,7 @@ TEST(acl_kernel, enqueue_ndrange) {
   // progress.
   CHECK_EQUAL(2, acl_ref_count(kernel));
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   this->load_times(event, times);
   CHECK(times[2] < times[3]);
@@ -1859,9 +1865,9 @@ TEST(acl_kernel, enqueue_ndrange_workgroup_invariant_kernel) {
 
   // Fake completion of the task.
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   CHECK_EQUAL(CL_SUCCESS, clWaitForEvents(1, &event));
 
@@ -1946,7 +1952,7 @@ TEST(acl_kernel, enqueue_ndrange_workitem_invariant_kernel) {
 
   // Fake completion of the task.
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
 
   // Since the ndrange is serialized to "global_size" tasks, the first
   // "global_size-1" completions should put the state back to running, and not
@@ -1956,13 +1962,13 @@ TEST(acl_kernel, enqueue_ndrange_workitem_invariant_kernel) {
     int num_updates;
     ACL_LOCKED(acl_print_debug_msg("serilialized event:%d\n", (int)i));
     ACL_LOCKED(
-        acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+        acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
     ACL_LOCKED(num_updates = acl_update_queue(m_cq));
     CHECK_EQUAL(0, num_updates);
   }
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
   CHECK_EQUAL(CL_SUCCESS, clWaitForEvents(1, &event));
 
   ACL_LOCKED(acl_print_debug_msg("here 7\n"));
@@ -2035,7 +2041,7 @@ TEST(acl_kernel, enqueue_task) {
   CHECK_EQUAL(0, times[3]);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   this->load_times(event, times);
   CHECK(times[1] < times[2]);
@@ -2046,7 +2052,7 @@ TEST(acl_kernel, enqueue_task) {
 
   // not complete yet.
   CHECK_EQUAL(0, times[3]);
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   this->load_times(event, times);
   CHECK(times[2] < times[3]);
@@ -2171,10 +2177,10 @@ TEST(acl_kernel, local_arg_alloc) {
     // Fake completion of the task.
     acl_print_debug_msg(" set running\n");
     ACL_LOCKED(
-        acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+        acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
     acl_print_debug_msg(" set complete\n");
     ACL_LOCKED(
-        acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+        acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
     acl_print_debug_msg("wait for events\n");
     CHECK_EQUAL(CL_SUCCESS, clWaitForEvents(1, &event));
@@ -2239,7 +2245,7 @@ TEST(acl_kernel, fast_launch_with_dependencies_ooo) {
                                            // previous is finished
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[0]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[0]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_RUNNING, event[0]->execution_status);
@@ -2247,14 +2253,14 @@ TEST(acl_kernel, fast_launch_with_dependencies_ooo) {
   CHECK_EQUAL(CL_SUBMITTED, event[2]->execution_status); // buffered on device
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[0]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[0]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_SUBMITTED, event[1]->execution_status);
   CHECK_EQUAL(CL_SUBMITTED, event[2]->execution_status);
   ACL_LOCKED(
-      acl_receive_kernel_update(event[1]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[1]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event[2]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[2]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_COMPLETE, event[0]->execution_status);
@@ -2262,9 +2268,9 @@ TEST(acl_kernel, fast_launch_with_dependencies_ooo) {
   CHECK_EQUAL(CL_RUNNING, event[2]->execution_status);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[1]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[1]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(
-      acl_receive_kernel_update(event[2]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[2]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   clReleaseEvent(event[0]);
@@ -2316,7 +2322,7 @@ TEST(acl_kernel, fast_launch_with_dependencies) {
               event[2]->execution_status); // stalled in the device_op_queue
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[0]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[0]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_RUNNING, event[0]->execution_status);
@@ -2325,10 +2331,10 @@ TEST(acl_kernel, fast_launch_with_dependencies) {
               event[2]->execution_status); // stalled in the device_op_queue
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[0]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[0]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(event[1]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[1]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_COMPLETE, event[0]->execution_status);
@@ -2336,13 +2342,13 @@ TEST(acl_kernel, fast_launch_with_dependencies) {
   CHECK_EQUAL(CL_SUBMITTED, event[2]->execution_status); // buffered on device
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event[1]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[1]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(event[2]->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[2]->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(event[2]->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event[2]->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_COMPLETE, event[0]->execution_status);
@@ -2414,14 +2420,14 @@ TEST(acl_kernel, multi_queue) {
   CHECK_EQUAL(CL_SUBMITTED, active_op->status);
   CHECK_EQUAL(CL_QUEUED, stalled_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // Still stalled
   CHECK_EQUAL(CL_RUNNING, active_op->status);
   CHECK_EQUAL(CL_QUEUED, stalled_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // Finally submitted
@@ -2429,11 +2435,11 @@ TEST(acl_kernel, multi_queue) {
   CHECK_EQUAL(CL_COMPLETE, active_op->info.event->execution_status);
   CHECK_EQUAL(CL_SUBMITTED, stalled_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(stalled_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, stalled_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_RUNNING, stalled_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(stalled_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, stalled_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_COMPLETE, stalled_op->status);
   CHECK_EQUAL(CL_COMPLETE, stalled_op->info.event->execution_status);
@@ -2498,14 +2504,14 @@ TEST(acl_kernel, multi_queue_with_fast_launch) {
   CHECK_EQUAL(CL_SUBMITTED, active_op->status);
   CHECK_EQUAL(CL_SUBMITTED, buffered_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // Still buffered
   CHECK_EQUAL(CL_RUNNING, active_op->status);
   CHECK_EQUAL(CL_SUBMITTED, buffered_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, active_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // Runtime still considers the event buffered until the kernel reports it is
@@ -2514,11 +2520,11 @@ TEST(acl_kernel, multi_queue_with_fast_launch) {
   CHECK_EQUAL(CL_COMPLETE, active_op->info.event->execution_status);
   CHECK_EQUAL(CL_SUBMITTED, buffered_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(buffered_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, buffered_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_RUNNING, buffered_op->status);
 
-  ACL_LOCKED(acl_receive_kernel_update(buffered_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0]->def.physical_device_id, buffered_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_COMPLETE, buffered_op->status);
   CHECK_EQUAL(CL_COMPLETE, buffered_op->info.event->execution_status);
@@ -2605,7 +2611,7 @@ TEST(acl_kernel, two_task) {
       times[1]); // has been submitted, becase we were not waiting on anything.
   // Waiting for response from device to say kernel has started running.
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // set KERNEL1 to RUNNING = 1
@@ -2617,7 +2623,7 @@ TEST(acl_kernel, two_task) {
       times[2]); // The kernel is running, since the mem migration has happened.
   CHECK_EQUAL(0, times[3]); // not yet complete
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to COMPLETE +
   // submit KERNEL2 to device = 2
@@ -2646,14 +2652,14 @@ TEST(acl_kernel, two_task) {
   // Waiting for response from device to say kernel has started running.
   CHECK_EQUAL(0, times[3]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to RUNNING = 1
   CHECK_EQUAL(offset + 12, m_devlog.num_ops);
   this->load_times(event, times);
   CHECK(times[1] < times[2]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to COMPLETE = 1
   CHECK_EQUAL(offset + 13, m_devlog.num_ops);
@@ -2730,7 +2736,7 @@ TEST(acl_kernel, two_task_with_fast_relaunch) {
       times[1]); // has been submitted, because we were not waiting on anything.
   // Waiting for response from device to say kernel has started running.
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // set KERNEL1 to RUNNING = 1
@@ -2743,7 +2749,7 @@ TEST(acl_kernel, two_task_with_fast_relaunch) {
       times[2]); // The kernel is running, since the mem migration has happened.
   CHECK_EQUAL(0, times[3]); // not yet complete
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to COMPLETE = 1
   CHECK_EQUAL(offset + 11, m_devlog.num_ops);
@@ -2771,14 +2777,14 @@ TEST(acl_kernel, two_task_with_fast_relaunch) {
   // Waiting for response from device to say kernel has started running.
   CHECK_EQUAL(0, times[3]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to RUNNING = 1
   CHECK_EQUAL(offset + 12, m_devlog.num_ops);
   this->load_times(event, times);
   CHECK(times[1] < times[2]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to COMPLETE = 1
   CHECK_EQUAL(offset + 13, m_devlog.num_ops);
@@ -2867,7 +2873,7 @@ TEST(acl_kernel, fast_relaunch_with_subbuffer) {
       times[1]); // has been submitted, because we were not waiting on anything.
   // Waiting for response from device to say kernel has started running.
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   // set KERNEL1 to RUNNING  = 1
@@ -2880,7 +2886,7 @@ TEST(acl_kernel, fast_relaunch_with_subbuffer) {
       times[2]); // The kernel is running, since the mem migration has happened.
   CHECK_EQUAL(0, times[3]); // not yet complete
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to COMPLETE +
   // set MEM_MIGRATE2 to RUNNING +
@@ -2913,14 +2919,14 @@ TEST(acl_kernel, fast_relaunch_with_subbuffer) {
   // Waiting for response from device to say kernel has started running.
   CHECK_EQUAL(0, times[3]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to RUNNING = 1
   CHECK_EQUAL(offset + 12, m_devlog.num_ops);
   this->load_times(event, times);
   CHECK(times[1] < times[2]);
   ACL_LOCKED(
-      acl_receive_kernel_update(event2->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event2->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to COMPLETE = 1
   CHECK_EQUAL(offset + 13, m_devlog.num_ops);
@@ -2977,7 +2983,7 @@ TEST(acl_kernel, two_task_with_fast_relaunch_id_conflict) {
   CHECK_EQUAL(0, event1->is_on_device_op_queue);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event0->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event0->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(2, m_cq->num_commands);
@@ -2988,7 +2994,7 @@ TEST(acl_kernel, two_task_with_fast_relaunch_id_conflict) {
       0, event1->is_on_device_op_queue); // good shouldn't of been submitted
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event0->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event0->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(1, m_cq->num_commands);
@@ -2998,11 +3004,11 @@ TEST(acl_kernel, two_task_with_fast_relaunch_id_conflict) {
   CHECK_EQUAL(1, event1->is_on_device_op_queue); // now it is safe
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event1->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event1->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event1->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event1->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
@@ -3116,9 +3122,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_zero_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 2;
   CHECK_EQUAL(CL_INVALID_GLOBAL_WORK_SIZE,
@@ -3134,9 +3140,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_zero_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 3;
   CHECK_EQUAL(CL_INVALID_GLOBAL_WORK_SIZE,
@@ -3152,9 +3158,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_zero_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
 
@@ -3189,9 +3195,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_one_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 2;
   CHECK_EQUAL(CL_INVALID_GLOBAL_WORK_SIZE,
@@ -3207,9 +3213,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_one_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 3;
   CHECK_EQUAL(CL_INVALID_GLOBAL_WORK_SIZE,
@@ -3225,9 +3231,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_one_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
 
@@ -3264,9 +3270,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_two_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 2;
   CHECK_EQUAL(CL_SUCCESS,
@@ -3274,9 +3280,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_two_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   work_dim = 3;
   CHECK_EQUAL(CL_INVALID_GLOBAL_WORK_SIZE,
@@ -3292,9 +3298,9 @@ TEST(acl_kernel, enqueue_ndrange_max_global_work_dim_two_kernel) {
                                      local_size, 0, 0, &event));
 
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(event->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0]->def.physical_device_id, event->current_device_op->id, CL_COMPLETE));
 
   CHECK_EQUAL(CL_SUCCESS, clFinish(m_cq));
 
@@ -3383,7 +3389,7 @@ TEST_GROUP(acl_kernel_reprogram_scheduler) {
     CHECK_EQUAL(0, m_device->last_bin);
     CHECK_EQUAL(0, m_device->loaded_bin);
 
-    acl_dot_push(&m_devlog, &acl_platform.device_op_queue);
+    acl_dot_push(&m_devlog, get_device_op_queue(m_device->def.physical_device_id));
   }
 
   void unload(void) {
@@ -3670,10 +3676,10 @@ TEST(acl_kernel_reprogram_scheduler, release_and_reprogram) {
   CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k0, 0, NULL, &k_e));
   CHECK(k_e != NULL);
 
-  ACL_LOCKED(acl_receive_kernel_update(k_e->current_device_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(k_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(k_e));
   CHECK_EQUAL(CL_SUCCESS, clReleaseKernel(k0));
@@ -3686,10 +3692,10 @@ TEST(acl_kernel_reprogram_scheduler, release_and_reprogram) {
   CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k1, 0, NULL, &k_e));
   CHECK(k_e != NULL);
 
-  ACL_LOCKED(acl_receive_kernel_update(k_e->current_device_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(k_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(mem));
   CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(k_e));
@@ -3795,7 +3801,7 @@ TEST(acl_kernel_reprogram_scheduler, require_reprogram) {
 
   // Pretend to start the kernel
   acl_print_debug_msg("Say kernel is running\n");
-  ACL_LOCKED(acl_receive_kernel_update(k_e->current_device_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_RUNNING));
   CHECK_EQUAL(CL_RUNNING, k_e->current_device_op->execution_status);
 
   ACL_LOCKED(acl_idle_update(m_context));
@@ -3815,7 +3821,7 @@ TEST(acl_kernel_reprogram_scheduler, require_reprogram) {
 
   acl_print_debug_msg("Say kernel is complete\n");
   ACL_LOCKED(
-      acl_receive_kernel_update(k_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k_e->current_device_op->id, CL_COMPLETE));
   CHECK_EQUAL(CL_COMPLETE, k_e->current_device_op->execution_status);
 
   ACL_LOCKED(acl_idle_update(m_context));
@@ -3830,7 +3836,8 @@ TEST(acl_kernel_reprogram_scheduler, require_reprogram) {
   CHECK_EQUAL(1, op3a->last_in_group);
 
   // Completion timestamp has propagated up to the user level event.
-  CHECK_EQUAL(acl_platform.device_op_queue.op[op3a->id].timestamp[CL_COMPLETE],
+  acl_device_op_queue_t *doq = get_device_op_queue(m_device[0].def.physical_device_id);
+  CHECK_EQUAL(doq->op[op3a->id].timestamp[CL_COMPLETE],
               k_e->timestamp[CL_COMPLETE]);
 
   // Completion wipes out the downlink.
@@ -3943,9 +3950,9 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   CHECK_EQUAL(1, op5->last_in_group);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_COMPLETE));
 
   // Count mem copies.
   num_read_mems = 0;
@@ -3975,9 +3982,9 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   acl_test_setenv("ACL_PCIE_USE_JTAG_PROGRAMMING", "1");
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k1_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(k1_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_COMPLETE));
   // Force the schedule update!
   ACL_LOCKED(acl_idle_update(m_context));
 
@@ -4054,9 +4061,9 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   CHECK_EQUAL(1, op5->last_in_group);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_COMPLETE));
 
   // Force the schedule update!
   ACL_LOCKED(acl_idle_update(m_context));
@@ -4119,7 +4126,7 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
     }
 
     ACL_LOCKED(
-        acl_receive_kernel_update(k1_e->current_device_op->id, CL_RUNNING));
+        acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_RUNNING));
     ACL_LOCKED(acl_idle_update(m_context));
 
     // set KERNEL1 to RUNNING = 1
@@ -4132,7 +4139,7 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
     CHECK_EQUAL(1, op->last_in_group);
 
     ACL_LOCKED(
-        acl_receive_kernel_update(k1_e->current_device_op->id, CL_COMPLETE));
+        acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_COMPLETE));
     ACL_LOCKED(acl_idle_update(m_context));
 
     // set KERNEL1 to COMPLETE = 1
@@ -4204,7 +4211,7 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
     // Pretend to complete the third kernel
     acl_print_debug_msg("Forcing kernel2 running\n");
     ACL_LOCKED(
-        acl_receive_kernel_update(k2_e->current_device_op->id, CL_RUNNING));
+        acl_receive_kernel_update(m_device[0].def.physical_device_id, k2_e->current_device_op->id, CL_RUNNING));
     ACL_LOCKED(acl_idle_update(m_context));
 
     expectedNumOps++;
@@ -4218,7 +4225,7 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
     CHECK_EQUAL(1, op->last_in_group);
 
     ACL_LOCKED(
-        acl_receive_kernel_update(k2_e->current_device_op->id, CL_COMPLETE));
+        acl_receive_kernel_update(m_device[0].def.physical_device_id, k2_e->current_device_op->id, CL_COMPLETE));
     ACL_LOCKED(acl_idle_update(m_context));
 
     expectedNumOps++;
@@ -4264,14 +4271,14 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   // At this point all three events should be in the device_op_queue
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to RUNNING = 1
   // still can't execute reprogram
   CHECK_EQUAL(offset + 6, m_devlog.num_ops);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k0_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k0_e->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to COMPLETE +
   // submit REPROGRAM2 to device +
@@ -4285,13 +4292,13 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   CHECK_EQUAL(offset + 15, m_devlog.num_ops);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k1_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to RUNNING = 1
   CHECK_EQUAL(offset + 16, m_devlog.num_ops);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k1_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k1_e->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL2 to COMPLETE +
   // submit REPROGRAM1 to device +  <---This is the important one, must not be
@@ -4302,10 +4309,10 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   CHECK_EQUAL(offset + 25, m_devlog.num_ops);
 
   ACL_LOCKED(
-      acl_receive_kernel_update(k2_e->current_device_op->id, CL_RUNNING));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k2_e->current_device_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
   ACL_LOCKED(
-      acl_receive_kernel_update(k2_e->current_device_op->id, CL_COMPLETE));
+      acl_receive_kernel_update(m_device[0].def.physical_device_id, k2_e->current_device_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
   // set KERNEL1 to RUNNING +
   // set KERNEL1 to COMPLETE = 2
@@ -4392,9 +4399,9 @@ TEST(acl_kernel_reprogram_scheduler, use_host_buf_use_twice_same_invocation) {
   CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k, 0, 0, &ke));
 
   acl_device_op_t *active_op = ke->current_device_op;
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, active_op->id, CL_RUNNING));
   ACL_LOCKED(acl_idle_update(m_context));
-  ACL_LOCKED(acl_receive_kernel_update(active_op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, active_op->id, CL_COMPLETE));
   ACL_LOCKED(acl_idle_update(m_context));
 
   clReleaseEvent(ke);
@@ -4458,7 +4465,7 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
     }
   }
   // Say it's running.
-  ACL_LOCKED(acl_receive_kernel_update(op->id, CL_RUNNING));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, op->id, CL_RUNNING));
 
   // Check that acl_receive_kernel_update does the right thing with the index.
   CHECK_EQUAL(CL_RUNNING, l_find_op(op->id)->execution_status);
@@ -4478,7 +4485,8 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
 
   CHECK_EQUAL(9, m_devlog.num_ops);
   op = &(m_devlog.before[8]);
-  CHECK_EQUAL(acl_platform.device_op_queue.op + op->id, ke->current_device_op);
+  acl_device_op_queue_t *doq = get_device_op_queue_from_context(m_context);
+  CHECK_EQUAL(doq->op + op->id, ke->current_device_op);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
@@ -4499,17 +4507,17 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   *(((int *)printf_buf->block_allocation->range.begin) + 1) = printf_data;
   // Check operation of printf-pickup-scheduler call back function.
   // Activation id should be the device op id!
-  ACL_LOCKED(acl_schedule_printf_buffer_pickup(op->id, printf_bytes,
+  ACL_LOCKED(acl_schedule_printf_buffer_pickup(m_device[0].def.physical_device_id, op->id, printf_bytes,
                                                1 /*Debug printf dump*/));
   CHECK_EQUAL(
       printf_bytes,
-      acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending);
+      doq->op[op->id].info.num_printf_bytes_pending);
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(10, m_devlog.num_ops);
 
   op = &(m_devlog.before[9]);
-  CHECK_EQUAL(acl_platform.device_op_queue.op + op->id, ke->current_device_op);
+  CHECK_EQUAL(doq->op + op->id, ke->current_device_op);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
@@ -4530,17 +4538,17 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   // Check operation of printf-pickup-scheduler call back function.
   // Activation id should be the device op id!
   // Now we have two printf_data in the buffer, therefore the size is doubled.
-  ACL_LOCKED(acl_schedule_printf_buffer_pickup(op->id, printf_bytes * 2,
+  ACL_LOCKED(acl_schedule_printf_buffer_pickup(m_device[0].def.physical_device_id, op->id, printf_bytes * 2,
                                                0 /*Not debug printf dump*/));
   CHECK_EQUAL(
       printf_bytes * 2,
-      acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending);
+      doq->op[op->id].info.num_printf_bytes_pending);
   ACL_LOCKED(acl_idle_update(m_context));
 
   CHECK_EQUAL(11, m_devlog.num_ops);
 
   op = &(m_devlog.before[10]);
-  CHECK_EQUAL(acl_platform.device_op_queue.op + op->id, ke->current_device_op);
+  CHECK_EQUAL(doq->op + op->id, ke->current_device_op);
   CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op->info.type);
   CHECK_EQUAL(CL_RUNNING, op->status);
   CHECK_EQUAL(ke, op->info.event);
@@ -4558,13 +4566,12 @@ TEST(acl_kernel_reprogram_scheduler, printf_handler) {
   // Testing normal printf dump end
 
   // Say it's complete, but with some printf stuff to clean up.
-  ACL_LOCKED(acl_receive_kernel_update(op->id, CL_COMPLETE));
+  ACL_LOCKED(acl_receive_kernel_update(m_device[0].def.physical_device_id, op->id, CL_COMPLETE));
   // Check that acl_receive_kernel_update does the right thing with the index.
   CHECK_EQUAL(CL_COMPLETE, l_find_op(op->id)->execution_status);
   CHECK_EQUAL(CL_RUNNING, l_find_op(op->id)->status); // not copied up!
   // Set printf bytes which should be picked up
-  acl_platform.device_op_queue.op[op->id].info.num_printf_bytes_pending =
-      printf_bytes;
+  doq->op[op->id].info.num_printf_bytes_pending = printf_bytes;
   CHECK_EQUAL(0, op->info.debug_dump_printf);
 
   ACL_LOCKED(acl_idle_update(m_context)); // bump scheduler

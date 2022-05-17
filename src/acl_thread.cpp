@@ -11,8 +11,13 @@
 #include <acl.h>
 #include <acl_context.h>
 #include <acl_hal.h>
+#include <acl_platform.h>
 #include <acl_thread.h>
 
+// Global locking data.
+// Just like members of acl_locking_data_t but with
+// "static" on the l_acl_global_condvar and ACL_TLS on
+// lock_counts and sig_flag.
 ACL_TLS int acl_global_lock_count = 0;
 ACL_TLS int acl_inside_sig_flag = 0;
 ACL_TLS int acl_inside_sig_old_lock_count = 0;
@@ -22,53 +27,107 @@ static struct acl_condvar_s l_acl_global_condvar;
 // l_init_once() is defined in an OS-specific section below
 static void l_init_once();
 
-void acl_lock() {
-  l_init_once();
-  if (acl_global_lock_count == 0) {
-    acl_acquire_condvar(&l_acl_global_condvar);
+void acl_lock(acl_locking_data_t *locking_data) {
+
+  if (locking_data == nullptr) {
+    // Condvar is not specified, so use the global one
+    l_init_once();
+    if (acl_global_lock_count == 0) {
+      acl_acquire_condvar(&l_acl_global_condvar);
+    }
+    acl_global_lock_count++;
+
+  } else {
+
+    // Locking data (condvar and associated counters) is given.
+    // This condvar must have already been initialized during its owner's
+    // creation time.
+    if (locking_data->lock_count == 0) {
+      acl_acquire_condvar(&locking_data->condvar);
+    }
+    locking_data->lock_count++;
   }
-  acl_global_lock_count++;
 }
 
-void acl_unlock() {
-  acl_assert_locked();
-  acl_global_lock_count--;
-  if (acl_global_lock_count == 0) {
-    acl_release_condvar(&l_acl_global_condvar);
+void acl_unlock(acl_locking_data_t *locking_data) {
+
+  if (locking_data == nullptr) {
+    acl_assert_locked();
+    acl_global_lock_count--;
+    if (acl_global_lock_count == 0) {
+      acl_release_condvar(&l_acl_global_condvar);
+    }
+  } else {
+    acl_assert_locked(locking_data);
+    locking_data->lock_count--;
+    if (locking_data->lock_count == 0) {
+      acl_release_condvar(&locking_data->condvar);
+    }
   }
 }
 
-int acl_is_locked_callback(void) { return (acl_global_lock_count > 0); }
-
-int acl_suspend_lock() {
-  int old_lock_count = acl_global_lock_count;
-  acl_global_lock_count = 0;
-  if (old_lock_count > 0)
-    acl_release_condvar(&l_acl_global_condvar);
-  return old_lock_count;
+int acl_is_locked_callback(acl_locking_data_t *locking_data) { 
+  if (locking_data == nullptr) {
+    return (acl_global_lock_count > 0); 
+  } else {
+    return (locking_data->lock_count > 0); 
+  }
 }
 
-void acl_resume_lock(int lock_count) {
-  acl_assert_unlocked();
-  if (lock_count > 0)
-    acl_acquire_condvar(&l_acl_global_condvar);
-  acl_global_lock_count = lock_count;
+int acl_suspend_lock(acl_locking_data_t *locking_data) {
+
+  if (locking_data == nullptr) {
+    int old_lock_count = acl_global_lock_count;
+    acl_global_lock_count = 0;
+    if (old_lock_count > 0)
+      acl_release_condvar(&l_acl_global_condvar);
+    return old_lock_count;
+  } else {
+    int old_lock_count = locking_data->lock_count;
+    locking_data->lock_count = 0;
+    if (old_lock_count > 0)
+      acl_release_condvar(&locking_data->condvar);
+    return old_lock_count;
+  }
+}
+
+void acl_resume_lock(int lock_count, acl_locking_data_t *locking_data) {
+  acl_assert_unlocked(locking_data);
+  if (locking_data == nullptr) {
+    if (lock_count > 0) {
+      acl_acquire_condvar(&l_acl_global_condvar);
+    }
+    acl_global_lock_count = lock_count;
+  } else {
+    if (lock_count > 0) {
+      acl_acquire_condvar(&locking_data->condvar);
+    }
+    locking_data->lock_count = lock_count;
+  }
 }
 
 void acl_wait_for_device_update(cl_context context) {
+  acl_locking_data_t *locking_data = get_device_op_queue_locking_data_from_context(context);
+  //acl_assert_locked(locking_data);
   acl_assert_locked();
   if (acl_get_hal()->get_debug_verbosity &&
       acl_get_hal()->get_debug_verbosity() > 0) {
     unsigned timeout = 5; // Seconds
     // Keep waiting until signal is received
-    while (acl_timed_wait_condvar(&l_acl_global_condvar, timeout))
+    while (acl_timed_wait_condvar(&locking_data->condvar, timeout))
       acl_context_print_hung_device_status(context);
   } else {
-    acl_wait_condvar(&l_acl_global_condvar);
+    acl_wait_condvar(&locking_data->condvar);
   }
 }
 
-void acl_signal_device_update() { acl_signal_condvar(&l_acl_global_condvar); }
+void acl_signal_device_update(acl_locking_data_t *locking_data) { 
+  if (locking_data == nullptr) {
+    acl_signal_condvar(&l_acl_global_condvar); 
+  } else {
+    acl_signal_condvar(&locking_data->condvar); 
+  }
+}
 
 #ifdef __linux__
 
@@ -139,9 +198,9 @@ static void l_init_once() {
 // a chance to execute. This function is useful for multithreaded hosts with
 // e.g. polling BSPs (using yield) to prevent one thread from hogging the mutex
 // while waiting for something like clFinish.
-void acl_yield_lock_and_thread() {
+void acl_yield_lock_and_thread(acl_locking_data_t *locking_data) {
   int lock_count;
-  lock_count = acl_suspend_lock();
+  lock_count = acl_suspend_lock(locking_data);
 #ifdef __arm__
   // arm-linux-gnueabihf-g++ version used is 4.7.1.
   // std::this_thread::yield can be enabled for it by defining
@@ -152,5 +211,5 @@ void acl_yield_lock_and_thread() {
 #else
   std::this_thread::yield();
 #endif
-  acl_resume_lock(lock_count);
+  acl_resume_lock(lock_count, locking_data);
 }

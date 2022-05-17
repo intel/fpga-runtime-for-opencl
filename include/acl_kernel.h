@@ -41,12 +41,12 @@ void acl_launch_kernel(void *user_data, acl_device_op_t *op);
 
 // Called when we get a kernel interrupt indicating that profiling data is ready
 ACL_EXPORT
-void acl_profile_update(int activation_id);
+void acl_profile_update(unsigned int physical_device_id, int activation_id);
 
 // This should be called by the HAL, to receive notification of RUNNING and
 // COMPLETE state transitions, and used printf buffer size
 ACL_EXPORT
-void acl_receive_kernel_update(int activation_id, cl_int status);
+void acl_receive_kernel_update(unsigned int physical_device_id, int activation_id, cl_int status);
 
 // Used to check if one of the kernel arguments needs to be mapped to the device
 // When unmapping subbuffers we may transfer memory that is currently used

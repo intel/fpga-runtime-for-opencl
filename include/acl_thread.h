@@ -4,13 +4,17 @@
 #ifndef ACL_THREAD_H
 #define ACL_THREAD_H
 
-#include "acl.h"
-#include "acl_context.h"
-#include "acl_types.h"
-
+// System headers.
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+
+// External library headers.
+#include <acl_threadsupport/acl_threadsupport.h>
+
+// Internal headers.
+#include "acl.h"
+
 
 #if defined(__cplusplus)
 extern "C" {
@@ -22,6 +26,22 @@ extern "C" {
 #else // WINDOWS
 #define ACL_TLS __declspec(thread)
 #endif
+
+
+/* An opaque type for critical section + condition variable.
+ * Use indirection here so we don't force every module in the world to pull
+ * in windows.h.
+ */
+// typedef struct acl_condvar_s *acl_condvar_t;
+
+typedef struct acl_locking_data_s acl_locking_data_t;
+struct acl_locking_data_s {
+  struct acl_condvar_s condvar;
+  int lock_count;
+  int inside_sig_flag;
+  int inside_sig_old_lock_count;
+};
+
 
 extern ACL_TLS int acl_global_lock_count;
 extern ACL_TLS int acl_inside_sig_flag;
@@ -38,23 +58,46 @@ extern ACL_TLS int acl_inside_sig_old_lock_count;
 // If a function needs an assert that passes if either the lock is held or
 // inside a signal handler, it can use "acl_assert_locked_or_sig()".
 
-static inline int acl_is_inside_sig() { return acl_inside_sig_flag; }
-
-static inline void acl_assert_inside_sig() { assert(acl_is_inside_sig()); }
-
-static inline void acl_assert_outside_sig() { assert(!acl_is_inside_sig()); }
-
-static inline void acl_sig_started() {
-  assert(!acl_inside_sig_flag);
-  acl_inside_sig_flag = 1;
-  acl_inside_sig_old_lock_count = acl_global_lock_count;
-  acl_global_lock_count = 0;
+static inline int acl_is_inside_sig(acl_locking_data_t *locking_data = nullptr) { 
+  if (locking_data == nullptr) {
+    return acl_inside_sig_flag; 
+  } else {
+    return locking_data->inside_sig_flag;
+  }
 }
 
-static inline void acl_sig_finished() {
-  assert(acl_inside_sig_flag);
-  acl_inside_sig_flag = 0;
-  acl_global_lock_count = acl_inside_sig_old_lock_count;
+static inline void acl_assert_inside_sig(acl_locking_data_t *locking_data = nullptr) { 
+  assert(acl_is_inside_sig(locking_data)); 
+}
+
+static inline void acl_assert_outside_sig(acl_locking_data_t *locking_data = nullptr) { 
+  assert(!acl_is_inside_sig(locking_data)); 
+}
+
+static inline void acl_sig_started(acl_locking_data_t *locking_data = nullptr) {
+  if (locking_data == nullptr) {
+    assert(!acl_inside_sig_flag);
+    acl_inside_sig_flag = 1;
+    acl_inside_sig_old_lock_count = acl_global_lock_count;
+    acl_global_lock_count = 0;
+  } else {
+    assert(!locking_data->inside_sig_flag);
+    locking_data->inside_sig_flag = 1;
+    locking_data->inside_sig_old_lock_count = locking_data->lock_count;
+    locking_data->lock_count = 0;
+  }
+}
+
+static inline void acl_sig_finished(acl_locking_data_t *locking_data = nullptr) {
+  if (locking_data == nullptr) {
+    assert(acl_inside_sig_flag);
+    acl_inside_sig_flag = 0;
+    acl_global_lock_count = acl_inside_sig_old_lock_count;
+  } else {
+    assert(locking_data->inside_sig_flag);
+    locking_data->inside_sig_flag = 0;
+    locking_data->lock_count = locking_data->inside_sig_old_lock_count;
+  }
 }
 
 // Blocking/Unblocking signals (Only implemented for Linux)
@@ -75,31 +118,41 @@ static inline void acl_sig_unblock_signals() {
 
 // -- global lock functions --
 
-void acl_lock();
-void acl_unlock();
-int acl_suspend_lock();
-void acl_resume_lock(int lock_count);
+void acl_lock(acl_locking_data_t *locking_data = nullptr);
+void acl_unlock(acl_locking_data_t *locking_data = nullptr);
+int  acl_suspend_lock(acl_locking_data_t *locking_data = nullptr);
+void acl_resume_lock(int lock_count, acl_locking_data_t *locking_data = nullptr);
 void acl_wait_for_device_update(cl_context context);
-void acl_signal_device_update();
+void acl_signal_device_update(acl_locking_data_t *locking_data = nullptr);
 
-static inline int acl_is_locked() { return (acl_global_lock_count > 0); }
-
-// Used by dynamically loaded libs to check lock status.
-int acl_is_locked_callback(void);
-
-static inline void acl_assert_locked() { assert(acl_is_locked()); }
-
-static inline void acl_assert_locked_or_sig() {
-  assert(acl_is_locked() || acl_is_inside_sig());
+static inline int acl_is_locked(acl_locking_data_t *locking_data = nullptr) {
+  if (locking_data == nullptr) {
+    return acl_global_lock_count > 0;
+  } else {
+    return (locking_data->lock_count > 0); 
+  }
 }
 
-static inline void acl_assert_unlocked() { assert(!acl_is_locked()); }
+// Used by dynamically loaded libs to check lock status.
+int acl_is_locked_callback(acl_locking_data_t *locking_data = nullptr);
+
+static inline void acl_assert_locked(acl_locking_data_t *locking_data = nullptr) { 
+  assert(acl_is_locked(locking_data)); 
+}
+
+static inline void acl_assert_locked_or_sig(acl_locking_data_t *locking_data = nullptr) {
+  assert(acl_is_locked(locking_data) || acl_is_inside_sig(locking_data));
+}
+
+static inline void acl_assert_unlocked(acl_locking_data_t *locking_data = nullptr) { 
+  assert(!acl_is_locked(locking_data)); 
+}
 
 // -- misc functions --
 
 int acl_get_thread_id();
 int acl_get_pid();
-void acl_yield_lock_and_thread();
+void acl_yield_lock_and_thread(acl_locking_data_t *locking_data = nullptr);
 
 #if defined(__cplusplus)
 } /* extern "C" */

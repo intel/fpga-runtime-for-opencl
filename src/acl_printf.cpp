@@ -28,6 +28,7 @@
 #include <acl_event.h>
 #include <acl_globals.h>
 #include <acl_kernel.h>
+#include <acl_platform.h>
 #include <acl_printf.h>
 #include <acl_program.h>
 #include <acl_svm.h>
@@ -987,9 +988,9 @@ static size_t l_dump_printf_buffer(cl_event event, cl_kernel kernel,
 //
 // Schedule enqueue read buffer to read printf buffer
 // The activation ID is the device op ID.
-void acl_schedule_printf_buffer_pickup(int activation_id, int size,
+void acl_schedule_printf_buffer_pickup(unsigned int physical_device_id, int activation_id, int size,
                                        int debug_dump_printf) {
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_queue_t *doq = get_device_op_queue(physical_device_id);
 
   // This function can potentially be called by a HAL that does not use the
   // ACL global lock, so we need to use acl_lock() instead of

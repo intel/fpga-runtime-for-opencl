@@ -316,6 +316,19 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
         context->device[i]->last_bin->unload_content();
     }
 
+#if 0
+    // TODO: Remove devices from device op queue that manages them.
+    // If a device op queue does not manage any devices, de-allocate it.
+    for (unsigned i = 0; i < context->num_devices; i++) {
+      unsigned int physical_device_id = context->device[i]->def.physical_device_id;
+      int cur_doq_idx = acl_platform.physical_dev_id_to_doq_idx[physical_device_id];
+      acl_platform.physical_dev_id_to_doq_idx[physical_device_id] = -1;
+
+      acl_device_op_queue_t *cur_doq = acl_platform.device_op_queues[cur_doq_idx];
+      cur_doq->num_managed_devices--;
+    }
+#endif
+
     // We have to close all devices associated with this context so they can be
     // opened by other processes
     acl_get_hal()->close_devices(context->num_devices, context->device);
@@ -343,6 +356,22 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
       acl_free(context->command_queue);
     }
 
+
+#if 0
+    // disconnect devices managed by this context from the device op queue that
+    // manages them.
+    for (int i = 0; i < acl_platform.num_device_op_queues; i++) {
+      if (acl_platform.device_op_queues[i] != nullptr &&
+          acl_platform.device_op_queues[i]->num_managed_devices == 0) {
+        // Should all the ops on this queue be done by now? I hope so, we're about to 
+        // delete the context!
+        acl_print_debug_msg("Deleting device op queue %d as no devices are managed by it\n", i);
+        //acl_free (acl_platform.device_op_queues[i]);
+        //acl_platform.device_op_queues[i] = nullptr;
+      }
+    }
+#endif
+  
     clReleaseMemObject(context->unwrapped_host_mem);
 
     l_forcibly_release_allocations(context);
@@ -1042,6 +1071,8 @@ static void l_forcibly_release_allocations(cl_context context) {
     for (idevice = 0; idevice < context->num_devices; idevice++) {
       acl_release(context->device[idevice]);
     }
+
+    // acl_
 
     // Buffers might have been allocated.
     acl_forcibly_release_all_memory_for_context(context);

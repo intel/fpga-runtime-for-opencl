@@ -57,12 +57,12 @@ struct acl_pkg_file;
 /// @name Callback type declarations
 ///@{
 typedef void (*acl_event_update_callback)(cl_event event, int new_status);
-typedef void (*acl_kernel_update_callback)(int activation_id, cl_int status);
-typedef void (*acl_profile_callback)(int activation_id);
+typedef void (*acl_kernel_update_callback)(unsigned int physical_device_id, int activation_id, cl_int status);
+typedef void (*acl_profile_callback)(unsigned int physical_device_id, int activation_id);
 typedef void (*acl_device_update_callback)(
     unsigned physical_device_id, CL_EXCEPTION_TYPE_INTEL exception_type,
     void *user_private_info, size_t user_cb);
-typedef void (*acl_process_printf_buffer_callback)(int activation_id, int size,
+typedef void (*acl_process_printf_buffer_callback)(unsigned int physical_device_id, int activation_id, int size,
                                                    int debug_dump_printf);
 ///@}
 

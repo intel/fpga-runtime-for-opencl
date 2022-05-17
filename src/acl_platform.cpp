@@ -6,6 +6,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <algorithm> // for sort, binary_search
 
 #ifdef _WIN32
 #include <windows.h>
@@ -406,12 +407,19 @@ void acl_init_platform(void) {
   for (unsigned int i = 0; i < acl_platform.num_devices; i++) {
     // initialize static information for these devices
     l_add_device(static_cast<int>(i));
+
   }
 
   l_initialize_offline_devices(offline_mode);
 
-  // Device operation queue.
-  acl_init_device_op_queue(&acl_platform.device_op_queue);
+  // Device operation queue(s) and related map will be 
+  // allocated during the finalize stage
+  acl_platform.num_device_op_queues = 0;
+  for (unsigned int i = 0; i < ACL_MAX_DEVICE; i++) {
+    acl_platform.physical_dev_id_to_doq_idx[i] = -1;
+    acl_platform.device_op_queues[i] = nullptr; 
+  }
+  //acl_init_device_op_queue(&acl_platform.device_op_queue);
 
   // Initialize sampler allocator.
   for (int i = 0; i < ACL_MAX_SAMPLER; i++) {
@@ -653,6 +661,111 @@ static void l_initialize_offline_devices(int offline_mode) {
   l_show_devs("offline");
 }
 
+
+#define my_debug_msg acl_print_debug_msg
+
+// Assign devices to device operation queues.
+// All devices in one context are assigned to one dev op queue.
+// If two or more contexts share at least one device, all devices
+// in all such contexts are assigned to a single dev op queue.
+// Lowested numbered dev op queue is preferred, for ease of indexing
+// acl_platform.device_op_queues[]
+// This function is called is called ONCE PER CONTEXT, therefore it
+// assumes that set of devices in each call belong to different contexts.
+void l_assign_devices_to_dev_op_queues (unsigned int num_devices, const cl_device_id *devices) {
+
+  unsigned int i, j;
+  acl_assert_locked();
+  std::vector<int> doq_idx_found;
+
+  my_debug_msg("l_assign_devices_to_dev_op_queues with %d devices\n", num_devices);
+
+  // find lowest device op queue index for devices in this context
+  unsigned int num_platform_devices = acl_platform.num_devices;
+  for (i = 0; i < num_platform_devices; i++) {
+    for (j = 0; j < num_devices; j++) {
+      if (&(acl_platform.device[i]) == devices[j]) {
+        int doq_idx = acl_platform.physical_dev_id_to_doq_idx[i];
+        if ((doq_idx > -1)) {
+          my_debug_msg("  device id %d already belongs to queue idx %d\n", i, doq_idx);
+          doq_idx_found.push_back(doq_idx);
+        }
+        break;
+      }
+    }
+  }
+  
+
+  int cur_doq_idx = -1;
+  if (!doq_idx_found.empty()) {
+    // pick lowest existing device op queue index
+    std::sort(doq_idx_found.begin(), doq_idx_found.end());
+    cur_doq_idx = doq_idx_found[0];
+  } else {
+    // no existing device op queues. Create a new one.
+    my_debug_msg("  did not find any device op queues for these devices. Creatig a new one #%d\n", acl_platform.num_device_op_queues);
+    cur_doq_idx = acl_platform.num_device_op_queues;
+    acl_platform.num_device_op_queues++;
+    acl_platform.device_op_queues[cur_doq_idx] = 
+      (acl_device_op_queue_t *)acl_malloc(sizeof(acl_device_op_queue_t));
+
+    acl_init_device_op_queue(acl_platform.device_op_queues[cur_doq_idx]);
+  }
+
+  my_debug_msg("  all affected devices will be assigned to doq #%d\n", cur_doq_idx);
+
+  // all devices in passed in devices[] array are now on cur_doq_idx queue
+  // AND all devices that are on queues in doq_idx_found list as well!
+
+  // iterator i is the physical device id
+  for (i = 0; i < num_platform_devices; i++) {
+
+    int doq_idx = acl_platform.physical_dev_id_to_doq_idx[i];
+    bool doq_idx_in_found_list = std::binary_search(doq_idx_found.begin(), doq_idx_found.end(), doq_idx);
+    if (doq_idx_in_found_list && (doq_idx != cur_doq_idx)) {
+      
+      // this device is already used by another context.
+      // It is also using the queue to be merged.
+      acl_platform.device_op_queues[doq_idx]->num_managed_devices--;
+      acl_platform.device_op_queues[cur_doq_idx]->num_managed_devices++;
+
+      acl_platform.physical_dev_id_to_doq_idx[i] = cur_doq_idx;
+      my_debug_msg("  device %d reassigned from doq #%d doq #%d\n", i, doq_idx, cur_doq_idx);
+      // TODO: ARE ALL OPERATIONS ON THE doq_idx QUEUE ALREADY DONE?????
+      //       CONCERN IF THE USER CREATES A NEW CONTEXT WITH OVER-LAPPING
+      //       DEVICES BEFORE LETTING CURRENT OPS FINISH.
+    }
+    if (doq_idx == -1) {
+      // a device without an assigned device op queue may be in the passed
+      // devices[] list. If that's the case, assign it to cur_doq_idx queue.
+      // Will happen if this is the first context that is using this device.
+      for (j = 0; j < num_devices; j++) {
+        if (&(acl_platform.device[i]) == devices[j]) {
+          acl_platform.physical_dev_id_to_doq_idx[i] = cur_doq_idx;
+          acl_platform.device_op_queues[cur_doq_idx]->num_managed_devices++;
+          my_debug_msg("  device %d is assigned to doq #%d\n", i, cur_doq_idx);
+          break;
+        }
+      }
+    }
+  }
+
+  // NOTE: De-allocate unneeded device op queues when platform is 
+  // shut down. It is possible that the user will create another context 
+  // after already submitting some work to existing queues.
+  // Find all device_op_queues with num_managed_devices = 0, wait for them
+  // to finish, then recycle them somehow.
+}
+
+
+// Free device op queue associated with these devices if this device
+// op queue is not used by any other devices.
+void acl_free_device_op_queue (unsigned int num_devices,
+                               const cl_device_id *devices) {
+
+}
+
+
 // Initialize acl_platform with device information.
 // Also determine global mem address range.
 static void l_initialize_devices(const acl_system_def_t *present_board_def,
@@ -667,6 +780,8 @@ static void l_initialize_devices(const acl_system_def_t *present_board_def,
     acl_print_debug_msg("\n\nPresent board def:   %d\n",
                         present_board_def->num_devices);
   }
+
+  l_assign_devices_to_dev_op_queues (num_devices, devices);
 
   // shipped_board_def populated earlier in l_initialize_offline_devices
 
@@ -953,6 +1068,48 @@ void acl_receive_device_exception(unsigned physical_device_id,
 
   if (!acl_is_inside_sig()) {
     acl_unlock();
+  }
+}
+
+acl_device_op_queue_t *get_device_op_queue(unsigned int physical_device_id) {
+
+  int idx = 0;
+  if (idx >= ACL_MAX_DEVICE) {
+    return nullptr;
+  }
+  idx = acl_platform.physical_dev_id_to_doq_idx[physical_device_id];
+  if (idx == -1 || idx >= acl_platform.num_device_op_queues) {
+    return nullptr;
+  } else {
+    return acl_platform.device_op_queues[idx];
+  }
+}
+
+acl_device_op_queue_t *get_device_op_queue_from_context(cl_context context) {
+  if (context != nullptr && context->num_devices > 0) {
+    unsigned int physical_device_id = context->device[0]->def.physical_device_id;
+    return get_device_op_queue(physical_device_id);
+  } else {
+    return nullptr;
+  }
+}
+
+acl_locking_data_t *get_device_op_queue_locking_data(cl_device_id device) {
+  unsigned int physical_device_id = device->def.physical_device_id;
+  acl_device_op_queue_t *doq = get_device_op_queue(physical_device_id);
+  if (doq != nullptr) {
+    return &doq->locking_data;
+  } else {
+    return nullptr;
+  }
+}
+
+acl_locking_data_t *get_device_op_queue_locking_data_from_context(cl_context context) {
+  if (context != nullptr && context->num_devices > 0) {
+    // all devices in a context are on the same device op queue
+    return get_device_op_queue_locking_data(context->device[0]);
+  } else {
+    return nullptr;
   }
 }
 

@@ -1049,6 +1049,38 @@ MT_TEST(Context, compiler_mode) {
   }
 }
 
+MT_TEST(Context, create_overlapping_contexts) {
+  cl_int status;
+  cl_context_properties valid_properties[] = {
+      CL_CONTEXT_PLATFORM, (cl_context_properties)m_platform, 0};
+
+  // device #0 should be on dev op queue 0
+  status = CL_SUCCESS;
+  cl_context context0 = clCreateContext(valid_properties, 1, &m_device[0], 0, 0, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+
+  // devices #1 and #2 should be on dev op queue 1
+  cl_context context1 = clCreateContext(valid_properties, 2, &m_device[1], 0, 0, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+
+  syncThreads();
+  CHECK       (acl_platform.physical_dev_id_to_doq_idx[0] != acl_platform.physical_dev_id_to_doq_idx[1]);
+  CHECK_EQUAL (acl_platform.physical_dev_id_to_doq_idx[1], acl_platform.physical_dev_id_to_doq_idx[2]);
+
+  // now devices #0, #1, and #2 should all be on dev op queue 0
+  cl_context context2 = clCreateContext(valid_properties, 3, &m_device[0], 0, 0, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+
+  syncThreads();
+  CHECK_EQUAL (acl_platform.physical_dev_id_to_doq_idx[0], acl_platform.physical_dev_id_to_doq_idx[1]);
+  CHECK_EQUAL (acl_platform.physical_dev_id_to_doq_idx[0], acl_platform.physical_dev_id_to_doq_idx[2]);
+
+
+  clReleaseContext(context0);
+  clReleaseContext(context1);
+  clReleaseContext(context2);
+}
+
 MT_TEST(Context, offline_device) {
   cl_context_properties props[5]; // room enough to store two properties, their
                                   // values, and terminating NULL

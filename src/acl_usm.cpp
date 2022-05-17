@@ -1071,7 +1071,7 @@ int acl_submit_usm_memcpy(cl_event event) {
     return result;
   }
 
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_queue_t *doq = get_device_op_queue_from_context(event->context);
   acl_device_op_t *last_op = 0;
 
   // Precautionary, but it also nudges the device scheduler to try

@@ -26,6 +26,7 @@
 #include <acl_hostch.h>
 #include <acl_icd_dispatch.h>
 #include <acl_mem.h>
+#include <acl_platform.h>
 #include <acl_program.h>
 #include <acl_support.h>
 #include <acl_thread.h>
@@ -2035,7 +2036,7 @@ int acl_submit_program_device_op(cl_event event) {
     return result;
   }
   if (!event->last_device_op) {
-    acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+    acl_device_op_queue_t *doq = get_device_op_queue_from_context(event->context);
     acl_device_op_t *last_op = 0;
 
     // Precautionary, but it also nudges the device scheduler to try
