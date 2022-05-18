@@ -114,10 +114,12 @@ void acl_wait_for_device_update(cl_context context) {
       acl_get_hal()->get_debug_verbosity() > 0) {
     unsigned timeout = 5; // Seconds
     // Keep waiting until signal is received
-    while (acl_timed_wait_condvar(&locking_data->condvar, timeout))
+    //while (acl_timed_wait_condvar(&locking_data->condvar, timeout))
+    while (acl_timed_wait_condvar(&l_acl_global_condvar, timeout))
       acl_context_print_hung_device_status(context);
   } else {
-    acl_wait_condvar(&locking_data->condvar);
+    //acl_wait_condvar(&locking_data->condvar);
+    acl_wait_condvar(&l_acl_global_condvar);
   }
 }
 
