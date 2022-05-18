@@ -194,7 +194,9 @@ message(STATUS "Build with address sanitizer: ${ACL_WITH_ASAN}")
 if(ACL_WITH_ASAN)
   foreach(lang C CXX)
     if(CMAKE_${lang}_COMPILER_ID MATCHES "^(Clang|GNU)$")
-      set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+      # To continue after error, set environment variable ASAN_OPTIONS=halt_on_error=0
+      # https://github.com/google/sanitizers/wiki/AddressSanitizer#faq
+      set(CMAKE_${lang}_FLAGS "${CMAKE_${lang}_FLAGS} -fsanitize=address -fsanitize-recover=address -fno-omit-frame-pointer")
     else()
       message(FATAL_ERROR "cannot build with address sanitizer due to unsupported ${lang} compiler")
     endif()
