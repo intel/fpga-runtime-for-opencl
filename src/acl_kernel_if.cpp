@@ -92,8 +92,8 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
 #define KERNEL_CSR_LMEM_INVALID_BANK 11
 #define KERNEL_CSR_LSU_ACTIVE 12
 #define KERNEL_CSR_WR_ACTIVE 13
-#define KERNEL_CSR_VALID_IN 14
-#define KERNEL_CSR_STARTED 15
+#define KERNEL_CSR_BUSY 14
+#define KERNEL_CSR_RUNNING 15
 #define KERNEL_CSR_FIRST_VERSION_BIT 16
 #define KERNEL_CSR_LAST_VERSION_BIT 31
 
@@ -1573,7 +1573,7 @@ void acl_kernel_if_dump_status(acl_kernel_if *kern) {
     acl_kernel_cra_read(kern, k, KERNEL_OFFSET_CSR, &csr);
 
     kern->io.printf("  Kernel %2u Status: 0x%08x", k, csr);
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STARTED) &&
+    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_RUNNING) &&
         !ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED))
       kern->io.printf(" running");
     else if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED))
@@ -1582,8 +1582,8 @@ void acl_kernel_if_dump_status(acl_kernel_if *kern) {
       kern->io.printf(" idle");
     if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE))
       kern->io.printf(" finish-pending");
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_VALID_IN))
-      kern->io.printf(" valid_in");
+    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_BUSY))
+      kern->io.printf(" busy");
     if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_LSU_ACTIVE))
       kern->io.printf(" lsu_active");
     if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_WR_ACTIVE))
