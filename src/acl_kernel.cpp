@@ -26,6 +26,7 @@
 #include <acl_icd_dispatch.h>
 #include <acl_kernel.h>
 #include <acl_mem.h>
+#include <acl_platform.h>
 #include <acl_profiler.h>
 #include <acl_program.h>
 #include <acl_sampler.h>
@@ -1548,6 +1549,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernelIntelFPGA(
     const size_t *local_work_size, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
   cl_int ret;
+
+#if 0
+  acl_locking_data_t *locking_data = nullptr;
+  if (command_queue != nullptr) {
+    locking_data = get_device_op_queue_locking_data_from_context(command_queue->context);
+  }
+  acl_lock(locking_data);
+  #endif
   acl_lock();
 
   ret = l_enqueue_kernel_with_type(
@@ -3006,7 +3015,7 @@ int acl_submit_kernel_device_op(cl_event event) {
     return result;
   }
 
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_queue_t *doq = get_device_op_queue_from_context(event->context);
   acl_device_op_t *last_op = 0;
   int ok = 1;
 
@@ -3137,8 +3146,8 @@ void acl_launch_kernel(void *user_data, acl_device_op_t *op) {
 }
 
 // Called when we get a kernel interrupt indicating that profiling data is ready
-void acl_profile_update(int activation_id) {
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+void acl_profile_update(unsigned int physical_device_id, int activation_id) {
+  acl_device_op_queue_t *doq = get_device_op_queue(physical_device_id);
 
   if (activation_id >= 0 && activation_id < doq->max_ops) {
     // This address is stable, given a fixed activation_id.
@@ -3151,8 +3160,8 @@ void acl_profile_update(int activation_id) {
 
 // Handle a status update from within a HAL interrupt.
 // We can't do much: only update a flag in the right spot.
-void acl_receive_kernel_update(int activation_id, cl_int status) {
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+void acl_receive_kernel_update(unsigned int physical_device_id, int activation_id, cl_int status) {
+  acl_device_op_queue_t *doq = get_device_op_queue(physical_device_id);
 
   // This function can potentially be called by a HAL that does not use the
   // ACL global lock, so we need to use acl_lock() instead of

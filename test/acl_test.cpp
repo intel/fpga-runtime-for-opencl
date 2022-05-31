@@ -683,8 +683,8 @@ static void l_run_benchmark() {
 
       int activation_id = kernel_event->cmd.info.ndrange_kernel
                               .invocation_wrapper->image->activation_id;
-      acltest_call_kernel_update_callback(activation_id, CL_RUNNING);
-      acltest_call_kernel_update_callback(activation_id, CL_COMPLETE);
+      acltest_call_kernel_update_callback(device->def.physical_device_id, activation_id, CL_RUNNING);
+      acltest_call_kernel_update_callback(device->def.physical_device_id, activation_id, CL_COMPLETE);
 
       status = clWaitForEvents(1, &kernel_event);
       assert(status == CL_SUCCESS);

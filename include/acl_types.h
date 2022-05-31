@@ -24,6 +24,7 @@
 #include "acl_device_binary.h"
 #include "acl_hal.h"
 #include "acl_icd_dispatch.h"
+#include "acl_thread.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -234,12 +235,6 @@ typedef enum {
  * For example, in create-exe-library mode it's "aoc -rtl"
  */
 #define CL_CONTEXT_COMPILE_COMMAND_INTELFPGA ACL_EXPERIMENTAL_ENUM(1)
-
-/* An opaque type for critical section + condition variable.
- * Use indirection here so we don't force every module in the world to pull
- * in windows.h.
- */
-typedef struct acl_condvar_s *acl_condvar_t;
 
 typedef enum {
   ACL_INVALID_EXECUTION_TRANSITION = -1,
@@ -981,6 +976,7 @@ typedef struct _cl_context {
   cl_uint refcount;
   acl_compiler_mode_t compiler_mode;
 
+
   // Is this context in the middle of being freed?
   // Fix re-entrancy of clReleaseContext.
   int is_being_freed;
@@ -1524,12 +1520,20 @@ typedef struct acl_device_op_queue_t {
 
   acl_device_op_stats_t stats;
 
+// per-context condition variable for finer-grained locking.
+  // Only operations on devices in the current context are proected
+  // by this condvar.
+  acl_locking_data_t locking_data;
+  
   // The operations themselves.
   acl_device_op_t op[ACL_MAX_DEVICE_OPS];
 
   // Used to cache the devices; indexed by physical_id
   // Used for checking if the device has concurrent read/write support
   acl_device_def_t *devices[ACL_MAX_DEVICE];
+
+  // Number of physical devices managed by this queue
+  int num_managed_devices;
 
   // These function pointers must be set to the actions to be taken when
   // kicking off various device activities.
@@ -1633,7 +1637,22 @@ typedef struct _cl_platform_id
 
   // The device operation queue.
   // These are the operations that can run immediately on the device.
-  acl_device_op_queue_t device_op_queue;
+
+  // Map from physical device id to device op queue that this device belongs 
+  // to. All devices in a single context belong to the same device op queue.
+  // If multiple contexts share even a single device, all devices in all these
+  // contexts share a single device op queue. Only if multiple contexts do not
+  // share even a single device will these devices belong to separate device
+  // op queues.
+  int physical_dev_id_to_doq_idx[ACL_MAX_DEVICE];  // [0..num_devices-1]
+
+  // Array of device_op_queues. A new queue Will be allocated as required 
+  // during platform init time
+  int num_device_op_queues;
+  acl_device_op_queue_t *device_op_queues[ACL_MAX_DEVICE]; // [0..num_devices-1]
+
+  // TODO: REMOVE ME
+  // acl_device_op_queue_t device_op_queue;
 
   // Limits. See clGetDeviceInfo for semantics.
   unsigned int max_param_size;

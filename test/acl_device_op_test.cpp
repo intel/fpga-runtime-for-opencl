@@ -16,6 +16,7 @@
 #include <acl_device_op.h>
 #include <acl_event.h>
 #include <acl_globals.h>
+#include <acl_platform.h>
 #include <acl_types.h>
 #include <acl_util.h>
 
@@ -843,7 +844,7 @@ TEST(device_op, prune) {
   cl_event e0 = clCreateUserEvent(m_context, 0);
   CHECK(e0);
 
-  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_queue_t *doq = get_device_op_queue_from_context(m_context);
 
   acl_device_op_t *op0 = acl_propose_device_op(doq, ACL_DEVICE_OP_NONE, e0);
   acl_device_op_t *op1 = acl_propose_device_op(doq, ACL_DEVICE_OP_NONE, e0);

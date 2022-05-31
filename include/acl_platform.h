@@ -22,6 +22,11 @@ void acl_init_platform(void);
 void acl_finalize_init_platform(unsigned int num_devices,
                                 const cl_device_id *devices);
 const char *acl_platform_extensions(void);
+acl_device_op_queue_t *get_device_op_queue(unsigned int physical_device_id);
+acl_device_op_queue_t *get_device_op_queue_from_context(cl_context context);
+
+acl_locking_data_t *get_device_op_queue_locking_data(cl_device_id device);
+acl_locking_data_t *get_device_op_queue_locking_data_from_context(cl_context context);
 
 #if defined(__cplusplus)
 } /* extern "C" */

@@ -269,10 +269,9 @@ static void acl_offline_hal_launch_kernel(
   cl_int activation_id = invocation_wrapper->image->activation_id;
   acl_assert_locked();
 
-  physical_id = physical_id;
   // For emulating an offline device, just say we start and finish right away.
-  acl_offline_hal_kernel_callback(activation_id, CL_RUNNING);
-  acl_offline_hal_kernel_callback(activation_id, CL_COMPLETE);
+  acl_offline_hal_kernel_callback(physical_id, activation_id, CL_RUNNING);
+  acl_offline_hal_kernel_callback(physical_id, activation_id, CL_COMPLETE);
 }
 
 static void acl_offline_hal_unstall_kernel(unsigned int physical_id,

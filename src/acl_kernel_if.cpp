@@ -1252,7 +1252,7 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   // next to launch, its status will be set to CL_RUNNING and below call
   // to update status will do nothing
   if (kern->accel_queue_front[accel_id] == kern->accel_queue_back[accel_id]) {
-    acl_kernel_if_update_fn((int)(activation_id), CL_RUNNING);
+    acl_kernel_if_update_fn(kern->physical_device_id, (int)(activation_id), CL_RUNNING);
   }
   kern->accel_queue_front[accel_id] = next_launch_index;
 
@@ -1396,7 +1396,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                                 activation_id, printf_size);
         // update status, which will dump the printf buffer, set
         // debug_dump_printf = 0
-        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
+        acl_process_printf_buffer_fn(kern->physical_device_id, activation_id, (int)printf_size, 0);
 
         ACL_KERNEL_IF_DEBUG_MSG(
             kern, ":: Accelerator %d new csr is %x.\n", k,
@@ -1434,7 +1434,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
         // This is an autorun kernel
         acl_process_autorun_profiler_scan_chain(kern->physical_device_id, k);
       } else {
-        acl_kernel_profile_fn(activation_id);
+        acl_kernel_profile_fn(kern->physical_device_id, activation_id);
       }
       continue;
     }
@@ -1486,7 +1486,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                                 ":: Calling acl_process_printf_buffer_fn with "
                                 "activation_id=%d and printf_size=%u.\n",
                                 activation_id, printf_size);
-        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
+        acl_process_printf_buffer_fn(kern->physical_device_id, activation_id, (int)printf_size, 0);
       }
 
       // Executing the following update after reading from performance
@@ -1495,7 +1495,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       // completion timestamp - reading performance results through slave
       // ports before setting CL_COMPLETE adds to the apparent kernel time.
       //
-      acl_kernel_if_update_fn(activation_id, CL_COMPLETE);
+      acl_kernel_if_update_fn(kern->physical_device_id, activation_id, CL_COMPLETE);
       kern->accel_queue_back[k] = next_queue_back;
 
       if (kern->accel_queue_back[k] ==
@@ -1505,7 +1505,8 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
         next_queue_back = kern->accel_queue_back[k] + 1;
 
       if (kern->accel_job_ids[k][next_queue_back] > -1) {
-        acl_kernel_if_update_fn(kern->accel_job_ids[k][next_queue_back],
+        acl_kernel_if_update_fn(kern->physical_device_id,
+                                kern->accel_job_ids[k][next_queue_back],
                                 CL_RUNNING);
       }
     }
@@ -1546,7 +1547,7 @@ void acl_kernel_if_debug_dump_printf(acl_kernel_if *kern, unsigned k) {
                             activation_id, printf_size);
 
     // set debug_dump_printf to 1
-    acl_process_printf_buffer_fn(activation_id, (int)printf_size, 1);
+    acl_process_printf_buffer_fn(kern->physical_device_id, activation_id, (int)printf_size, 1);
   }
 }
 

@@ -205,7 +205,7 @@ MT_TEST(acl_thread, kernel_and_printf_callback) {
 
   if (threadNum() < (int)device_def->accel.size()) {
     // signal kernel is running
-    acltest_call_kernel_update_callback(activation_id, CL_RUNNING);
+    acltest_call_kernel_update_callback(sys_def->device[0].physical_device_id, activation_id, CL_RUNNING);
 
     // wait for kernel status to change
     cl_int execution_status = CL_QUEUED;
@@ -220,7 +220,7 @@ MT_TEST(acl_thread, kernel_and_printf_callback) {
 
   if (threadNum() < (int)device_def->accel.size()) {
     // signal kernel has printf buffer
-    acltest_call_printf_buffer_callback(activation_id, 100, 0);
+    acltest_call_printf_buffer_callback(sys_def->device[0].physical_device_id, activation_id, 100, 0);
 
     // wait for printf buffer to be cleared
     CHECK(kernel_event);
@@ -237,7 +237,7 @@ MT_TEST(acl_thread, kernel_and_printf_callback) {
 
   if (threadNum() < (int)device_def->accel.size()) {
     // signal kernel is finished
-    acltest_call_kernel_update_callback(activation_id, CL_COMPLETE);
+    acltest_call_kernel_update_callback(sys_def->device[0].physical_device_id, activation_id, CL_COMPLETE);
 
     status = clWaitForEvents(1, &kernel_event);
     CHECK_EQUAL(CL_SUCCESS, status);
