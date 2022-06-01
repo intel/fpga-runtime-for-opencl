@@ -485,6 +485,14 @@ struct acl_device_global_mem_def_t {
   uint32_t size;
 };
 
+// Mapping of logical to physical host pipes.
+struct acl_hostpipe_mapping {
+  std::string logical_name;
+  std::string physical_name;
+  bool implement_in_csr;
+  uintptr_t csr_address;
+};
+
 // Part of acl_device_def_t where members are populated from the information
 // in the autodiscovery string. This will get updated every time the device
 // is programmed with a new device binary as the new binary would contain a
@@ -507,6 +515,8 @@ typedef struct acl_device_def_autodiscovery_t {
   // Device global definition.
   std::unordered_map<std::string, acl_device_global_mem_def_t>
       device_global_mem_defs;
+
+  std::vector<acl_hostpipe_mapping> hostpipe_mappings;
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {
