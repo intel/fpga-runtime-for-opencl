@@ -484,7 +484,16 @@ typedef enum {
    *  memory bank. It is invalid to specify this property without also specifying
    *  AOCL_MMD_GLOBAL_MEMORY_INTERFACE.
    */
-  AOCL_MMD_MEM_PROPERTIES_MEMORY_BANK
+  AOCL_MMD_MEM_PROPERTIES_MEMORY_BANK,
+  /**
+   *  Specifies the buffer location used for USM API calls.  The buffer location
+   *  is an integer index that corresponds to a global memory location in the
+   *  board_spec.xml file.  Similar to AOCL_MMD_MEM_PROPERTIES_GLOBAL_MEMORY.
+   *  The buffer location value may not have been validated by the OpenCL
+   *  runtime, so it is the responsibility of the MMD layer to ensure the value
+   *  is valid.
+   */
+  AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION
 } aocl_mmd_mem_properties_t;
 
 /**
