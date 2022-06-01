@@ -230,7 +230,8 @@ typedef struct {
 
   /// Allocates USM host memory
   void *(*host_alloc)(const std::vector<cl_device_id> devices, size_t size,
-                      size_t alignment, int *error);
+                      size_t alignment, mem_properties_t *properties,
+                      int *error);
 
   /// Frees allocated memory by the MMD
   int (*free)(cl_context context, void *ptr);

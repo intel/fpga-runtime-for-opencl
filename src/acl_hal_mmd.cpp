@@ -65,7 +65,8 @@ void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
                                size_t alignment, mem_properties_t *properties,
                                int *error);
 void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> devices,
-                             size_t size, size_t alignment, int *error);
+                             size_t size, size_t alignment,
+                             mem_properties_t *properties, int *error);
 int acl_hal_mmd_free(cl_context context, void *mem);
 int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
                             cl_platform_id platform);
@@ -2519,7 +2520,7 @@ void *acl_hal_mmd_legacy_shared_alloc(cl_context context, size_t size,
     int error = 0;
     std::vector<cl_device_id> devices = std::vector<cl_device_id>(
         context->device, context->device + context->num_devices);
-    void *mem = acl_hal_mmd_host_alloc(devices, size, 0, &error);
+    void *mem = acl_hal_mmd_host_alloc(devices, size, 0, nullptr, &error);
     device_ptr_out = static_cast<unsigned long long *>(mem);
     if (error) {
       switch (error) {
@@ -2728,7 +2729,8 @@ void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
 }
 
 void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> devices,
-                             size_t size, size_t alignment, int *error) {
+                             size_t size, size_t alignment,
+                             mem_properties_t *properties, int *error) {
   // Note we do not support devices in the same context with different MMDs
   // Safe to get the mmd handle from first device
   void *result = NULL;
@@ -2749,8 +2751,9 @@ void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> devices,
     handles[i] = device_info[physical_device_id].handle;
   }
 
-  result = dispatch->aocl_mmd_host_alloc(handles, devices.size(), size,
-                                         alignment, nullptr, error);
+  result = dispatch->aocl_mmd_host_alloc(
+      handles, devices.size(), size, alignment,
+      (aocl_mmd_mem_properties_t *)properties, error);
   acl_delete_arr(handles);
 
   if (error) {
