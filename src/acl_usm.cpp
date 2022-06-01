@@ -3,9 +3,11 @@
 
 // System headers.
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdio>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -27,6 +29,8 @@
 #include <acl_types.h>
 #include <acl_usm.h>
 #include <acl_util.h>
+
+#include <MMD/aocl_mmd.h>
 
 #ifdef __GNUC__
 #pragma GCC visibility push(protected)
@@ -99,10 +103,14 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
   // Iterate over properties.
   // The end of the properties list is specified with a zero.
   cl_mem_alloc_flags_intel alloc_flags = 0;
+  std::optional<cl_uint> mem_id;
   while (properties != NULL && *properties != 0) {
     switch (*properties) {
     case CL_MEM_ALLOC_FLAGS_INTEL: {
       alloc_flags = *(properties + 1);
+    } break;
+    case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+      mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
       UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
@@ -138,6 +146,16 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
   }
 
   if (acl_get_hal()->host_alloc) {
+    std::array<mem_properties_t, 3> mmd_properties;
+    {
+      auto mmd_properties_it = mmd_properties.begin();
+      if (mem_id) {
+        *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
+        *mmd_properties_it++ = *mem_id;
+      }
+      *mmd_properties_it++ = 0;
+    }
+
     acl_usm_allocation_t *usm_alloc =
         (acl_usm_allocation_t *)acl_malloc(sizeof(acl_usm_allocation_t));
 
@@ -146,7 +164,8 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     }
 
     int error = 0;
-    void *mem = acl_get_hal()->host_alloc(devices, size, alignment, &error);
+    void *mem = acl_get_hal()->host_alloc(devices, size, alignment,
+                                          mmd_properties.data(), &error);
     if (error) {
       acl_free(usm_alloc);
       switch (error) {
@@ -380,6 +399,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
   // The end of the properties list is specified with a zero.
   cl_mem_alloc_flags_intel alloc_flags = 0;
   std::unordered_set<unsigned long long> seen_flags;
+  std::optional<cl_uint> mem_id;
   while (properties != NULL && *properties != 0) {
     switch (*properties) {
     case CL_MEM_ALLOC_FLAGS_INTEL: {
@@ -396,6 +416,14 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
       }
       alloc_flags = *(properties + 1);
     } break;
+    case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+      if (seen_flags.insert(CL_MEM_ALLOC_BUFFER_LOCATION_INTEL).second ==
+          false) {
+        UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context,
+                         "Property specified multiple times");
+      }
+      mem_id = (cl_uint) * (properties + 1);
+    } break;
     default: {
       UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
     }
@@ -404,6 +432,16 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
   }
 
   if (acl_get_hal()->shared_alloc) {
+    std::array<mem_properties_t, 3> mmd_properties;
+    {
+      auto mmd_properties_it = mmd_properties.begin();
+      if (mem_id) {
+        *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
+        *mmd_properties_it++ = *mem_id;
+      }
+      *mmd_properties_it++ = 0;
+    }
+
     acl_usm_allocation_t *usm_alloc =
         (acl_usm_allocation_t *)acl_malloc(sizeof(acl_usm_allocation_t));
 
@@ -412,8 +450,8 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     }
 
     int error;
-    void *mem =
-        acl_get_hal()->shared_alloc(device, size, alignment, nullptr, &error);
+    void *mem = acl_get_hal()->shared_alloc(device, size, alignment,
+                                            mmd_properties.data(), &error);
     if (mem == NULL) {
       acl_free(usm_alloc);
       switch (error) {
