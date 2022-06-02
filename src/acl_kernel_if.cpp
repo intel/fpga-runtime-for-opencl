@@ -1266,6 +1266,13 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   }
   kern->accel_queue_front[accel_id] = next_launch_index;
 
+  if (kern->streaming_control_kernel_names[accel_id]) {
+    acl_get_hal()->simulation_streaming_kernel_start(
+        kern->physical_device_id,
+        *kern->streaming_control_kernel_names[accel_id]);
+    return;
+  }
+
   unsigned int new_csr = 0;
   acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &new_csr);
   ACL_KERNEL_SET_BIT(new_csr, KERNEL_CSR_GO);
