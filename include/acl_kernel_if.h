@@ -12,6 +12,10 @@
 #include "acl_hal.h"
 #include "acl_types.h"
 
+#include <optional>
+#include <string>
+#include <vector>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -34,6 +38,8 @@ typedef struct {
   acl_kernel_if_addr_range *accel_csr;
   acl_kernel_if_addr_range *accel_perf_mon;
   unsigned int *accel_num_printfs;
+
+  std::vector<std::optional<std::string>> streaming_control_kernel_names;
 
   // Track potential hangs
   time_ns last_kern_update;
