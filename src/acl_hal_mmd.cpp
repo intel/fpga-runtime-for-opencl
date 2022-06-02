@@ -153,6 +153,12 @@ int acl_hal_mmd_set_profile_start_count(unsigned int physical_device_id,
 int acl_hal_mmd_set_profile_stop_count(unsigned int physical_device_id,
                                        unsigned int accel_id, uint64_t value);
 
+void acl_hal_mmd_simulation_streaming_kernel_start(
+    unsigned int physical_device_id, const std::string &kernel_name);
+void acl_hal_mmd_simulation_streaming_kernel_done(
+    unsigned int physical_device_id, const std::string &kernel_name,
+    unsigned int &finish_counter);
+
 static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
                                  size_t size);
 static size_t acl_kernel_if_write(acl_bsp_io *io, dev_addr_t dest,
@@ -343,7 +349,9 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_close_devices,                    // close_devices
     acl_hal_mmd_host_alloc,                       // host_alloc
     acl_hal_mmd_free,                             // free
-    acl_hal_mmd_shared_alloc                      // shared_alloc
+    acl_hal_mmd_shared_alloc,                     // shared_alloc
+    acl_hal_mmd_simulation_streaming_kernel_start, // simulation_streaming_kernel_start
+    acl_hal_mmd_simulation_streaming_kernel_done, // simulation_streaming_kernel_done
 };
 
 // This will contain the device physical id to tell us which device across all
@@ -2823,4 +2831,19 @@ unsigned acl_convert_mmd_capabilities(unsigned mmd_capabilities) {
     capability |= ACL_MEM_CAPABILITY_P2P;
   }
   return capability;
+}
+
+void acl_hal_mmd_simulation_streaming_kernel_start(
+    unsigned int physical_device_id, const std::string &kernel_name) {
+  device_info[physical_device_id]
+      .mmd_dispatch->aocl_mmd_simulation_streaming_kernel_start(
+          device_info[physical_device_id].handle, kernel_name);
+}
+
+void acl_hal_mmd_simulation_streaming_kernel_done(
+    unsigned int physical_device_id, const std::string &kernel_name,
+    unsigned int &finish_counter) {
+  device_info[physical_device_id]
+      .mmd_dispatch->aocl_mmd_simulation_streaming_kernel_done(
+          device_info[physical_device_id].handle, kernel_name, finish_counter);
 }

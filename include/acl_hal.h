@@ -238,6 +238,12 @@ typedef struct {
   /// Allocate USM shared memory
   void *(*shared_alloc)(cl_device_id device, size_t size, size_t alignment,
                         mem_properties_t *properties, int *error);
+
+  void (*simulation_streaming_kernel_start)(unsigned int physical_device_id,
+                                            const std::string &kernel_name);
+  void (*simulation_streaming_kernel_done)(unsigned int physical_device_id,
+                                           const std::string &kernel_name,
+                                           unsigned int &finish_counter);
 } acl_hal_t;
 
 /// Linked list of MMD library names to load.
