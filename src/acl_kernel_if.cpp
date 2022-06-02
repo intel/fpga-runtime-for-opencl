@@ -948,6 +948,16 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
         break;
       }
     }
+
+    kern->streaming_control_kernel_names.clear();
+    kern->streaming_control_kernel_names.reserve(devdef.accel.size());
+    for (const auto &accel : devdef.accel) {
+      std::optional<std::string> kernel_name;
+      if (accel.streaming_control_info_available) {
+        kernel_name = accel.iface.name;
+      }
+      kern->streaming_control_kernel_names.emplace_back(kernel_name);
+    }
   }
 
   // Do reset
