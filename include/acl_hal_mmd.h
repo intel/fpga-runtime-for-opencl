@@ -136,6 +136,19 @@ typedef struct {
   void (*aocl_mmd_simulation_streaming_kernel_args)(
       int handle,
       const std::vector<aocl_mmd_streaming_kernel_arg_info_t> &streaming_args);
+
+  // Submits streaming kernel control start signal to simulator.
+  void (*aocl_mmd_simulation_streaming_kernel_start)(
+      int handle, const std::string &kernel_name);
+
+  // Queries streaming kernel control done signal from simulator.
+  // Returns non-negative number of finished kernels invocations.
+  //
+  // It is the responsibility of the simulator to ensure that any kernel
+  // invocations that finish *while* this function is invoked are properly
+  // accounted and returned in a subsequent invocation of this function.
+  void (*aocl_mmd_simulation_streaming_kernel_done)(
+      int handle, const std::string &kernel_name, unsigned int &finish_counter);
 } acl_mmd_dispatch_t;
 
 typedef struct {
