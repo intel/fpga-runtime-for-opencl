@@ -1299,9 +1299,8 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
   // Get the state of kernel_cra address span extender segment prior to IRQ in
   // hardware If IRQ is received in middle of segment change, segment value in
   // cache and hardware could go out of sync
-  uintptr_t segment;
-  acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
-                         (unsigned int *)&segment);
+  unsigned int segment;
+  acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT, &segment);
 
   // Zero upper 32-bits on 64-bit machines
   kern->cur_segment = segment & 0xffffffff;
