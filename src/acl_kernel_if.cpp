@@ -1509,8 +1509,15 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
 
     unsigned int finish_counter = 0;
     unsigned int printf_size = 0;
-    acl_kernel_if_update_status_query(kern, accel_id, activation_id,
-                                      finish_counter, printf_size);
+
+    if (kern->streaming_control_kernel_names[accel_id]) {
+      acl_get_hal()->simulation_streaming_kernel_done(
+          kern->physical_device_id,
+          *kern->streaming_control_kernel_names[accel_id], finish_counter);
+    } else {
+      acl_kernel_if_update_status_query(kern, accel_id, activation_id,
+                                        finish_counter, printf_size);
+    }
 
     if (!(finish_counter > 0)) {
       continue;
@@ -1524,8 +1531,10 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       // Tell the host library this job is done
       kern->accel_job_ids[accel_id][next_queue_back] = -1;
 
-      acl_kernel_if_update_status_finish(kern, accel_id, activation_id,
-                                         printf_size);
+      if (!kern->streaming_control_kernel_names[accel_id]) {
+        acl_kernel_if_update_status_finish(kern, accel_id, activation_id,
+                                           printf_size);
+      }
 
       // Executing the following update after reading from performance
       // and efficiency monitors will clobber the throughput reported by
