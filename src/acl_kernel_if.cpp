@@ -1285,6 +1285,132 @@ void acl_kernel_if_launch_kernel(acl_kernel_if *kern,
                                             activation_id);
 }
 
+// Queries status of pending kernel invocations. Returns the number of finished
+// kernel invocations in `finish_counter`, or 0 if no invocations have finished.
+static void acl_kernel_if_update_status_query(acl_kernel_if *kern,
+                                              const unsigned int accel_id,
+                                              const int activation_id,
+                                              unsigned int &finish_counter,
+                                              unsigned int &printf_size) {
+  // Default return value.
+  finish_counter = 0;
+
+  // Read the accelerator's status register
+  unsigned int csr = 0;
+  acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &csr);
+
+  // Ignore non-status bits.
+  // Required by Option 3 wrappers which now have a version info in
+  // top 16 bits.
+  csr = ACL_KERNEL_READ_BIT_RANGE(csr, KERNEL_CSR_LAST_STATUS_BIT, 0);
+
+  // Check for updated status bits
+  if (0 == (csr & KERNEL_CSR_STATUS_BITS_MASK)) {
+    return;
+  }
+
+  // Clear the status bits that we read
+  ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d reporting status %x.\n",
+                          accel_id, csr);
+
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 1) {
+    ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is done.\n", accel_id);
+  }
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 1) {
+    ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is stalled.\n", accel_id);
+  }
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_UNSTALL) == 1) {
+    ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is unstalled.\n",
+                            accel_id);
+  }
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 1) {
+    ACL_KERNEL_IF_DEBUG_MSG(
+        kern, ":: Accelerator %d ready for temporal profile readback.\n",
+        accel_id);
+  }
+
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 0 &&
+      ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 0 &&
+      ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 0) {
+    return;
+  }
+
+  // read the printf buffer size from the kernel cra, just after the
+  // kernel arguments
+  printf_size = 0;
+  if (kern->accel_num_printfs[accel_id] > 0) {
+    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
+                        &printf_size);
+    assert(printf_size <= ACL_PRINTF_BUFFER_TOTAL_SIZE);
+    ACL_KERNEL_IF_DEBUG_MSG(kern,
+                            ":: Accelerator %d printf buffer size is %d.\n",
+                            accel_id, printf_size);
+
+    // kernel is stalled because the printf buffer is full
+    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 1) {
+      // clear interrupt
+      unsigned int new_csr = 0;
+      acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &new_csr);
+      ACL_KERNEL_CLEAR_BIT(new_csr, KERNEL_CSR_STALLED);
+
+      ACL_KERNEL_IF_DEBUG_MSG(kern,
+                              ":: Calling acl_process_printf_buffer_fn with "
+                              "activation_id=%d and printf_size=%u.\n",
+                              activation_id, printf_size);
+      // update status, which will dump the printf buffer, set
+      // debug_dump_printf = 0
+      acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
+
+      ACL_KERNEL_IF_DEBUG_MSG(
+          kern, ":: Accelerator %d new csr is %x.\n", accel_id,
+          ACL_KERNEL_READ_BIT_RANGE(new_csr, KERNEL_CSR_LAST_STATUS_BIT, 0));
+
+      acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, new_csr);
+      return;
+    }
+  }
+
+  // Start profile counter readback if profile interrupt and not done
+  if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) != 0 &&
+      ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 0) {
+    ACL_KERNEL_IF_DEBUG_MSG(
+        kern, ":: Issuing profile reset command:: Accelerator %d.\n", accel_id);
+
+    // Reset temporal profiling counter
+    unsigned int ctrl_val;
+    if (acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &ctrl_val)) {
+      ACL_KERNEL_IF_DEBUG_MSG(
+          kern, ":: Got bad status reading CSR ctrl reg:: Accelerator %d.\n",
+          accel_id);
+    }
+    ACL_KERNEL_SET_BIT(ctrl_val, KERNEL_CSR_PROFILE_TEMPORAL_RESET);
+    if (acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, ctrl_val)) {
+      ACL_KERNEL_IF_DEBUG_MSG(
+          kern, ":: Got bad status writing CSR ctrl reg:: Accelerator %d.\n",
+          accel_id);
+    }
+
+    if (activation_id < 0) {
+      // This is an autorun kernel
+      acl_process_autorun_profiler_scan_chain(kern->physical_device_id,
+                                              accel_id);
+    } else {
+      acl_kernel_profile_fn(activation_id);
+    }
+    return;
+  }
+
+  if (kern->csr_version == CSR_VERSION_ID_18_1) {
+    // Only expect single completion for older csr version
+    finish_counter = 1;
+  } else {
+    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_FINISH_COUNTER,
+                        &finish_counter);
+    ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d has %d finishes.\n",
+                            accel_id, finish_counter);
+  }
+}
+
 // Called when we receive a kernel status interrupt.  Cycle through all of
 // the running accelerators and check for updated status.
 void acl_kernel_if_update_status(acl_kernel_if *kern) {
@@ -1325,127 +1451,18 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       }
     }
 
-    // Read the accelerator's status register
-    unsigned int csr = 0;
-    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &csr);
-
-    // Ignore non-status bits.
-    // Required by Option 3 wrappers which now have a version info in
-    // top 16 bits.
-    csr = ACL_KERNEL_READ_BIT_RANGE(csr, KERNEL_CSR_LAST_STATUS_BIT, 0);
-
-    // Check for updated status bits
-    if (0 == (csr & KERNEL_CSR_STATUS_BITS_MASK)) {
-      continue;
-    }
-
-    // Clear the status bits that we read
-    ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d reporting status %x.\n",
-                            accel_id, csr);
-
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 1) {
-      ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is done.\n", accel_id);
-    }
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 1) {
-      ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is stalled.\n",
-                              accel_id);
-    }
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_UNSTALL) == 1) {
-      ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d is unstalled.\n",
-                              accel_id);
-    }
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 1) {
-      ACL_KERNEL_IF_DEBUG_MSG(
-          kern, ":: Accelerator %d ready for temporal profile readback.\n",
-          accel_id);
-    }
-
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 0 &&
-        ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 0 &&
-        ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 0) {
-      continue;
-    }
-
     const int activation_id = kern->accel_job_ids[accel_id][next_queue_back];
 
-    // read the printf buffer size from the kernel cra, just after the
-    // kernel arguments
+    unsigned int finish_counter = 0;
     unsigned int printf_size = 0;
-    if (kern->accel_num_printfs[accel_id] > 0) {
-      acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
-                          &printf_size);
-      assert(printf_size <= ACL_PRINTF_BUFFER_TOTAL_SIZE);
-      ACL_KERNEL_IF_DEBUG_MSG(kern,
-                              ":: Accelerator %d printf buffer size is %d.\n",
-                              accel_id, printf_size);
+    acl_kernel_if_update_status_query(kern, accel_id, activation_id,
+                                      finish_counter, printf_size);
 
-      // kernel is stalled because the printf buffer is full
-      if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 1) {
-        // clear interrupt
-        unsigned int new_csr = 0;
-        acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &new_csr);
-        ACL_KERNEL_CLEAR_BIT(new_csr, KERNEL_CSR_STALLED);
-
-        ACL_KERNEL_IF_DEBUG_MSG(kern,
-                                ":: Calling acl_process_printf_buffer_fn with "
-                                "activation_id=%d and printf_size=%u.\n",
-                                activation_id, printf_size);
-        // update status, which will dump the printf buffer, set
-        // debug_dump_printf = 0
-        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
-
-        ACL_KERNEL_IF_DEBUG_MSG(
-            kern, ":: Accelerator %d new csr is %x.\n", accel_id,
-            ACL_KERNEL_READ_BIT_RANGE(new_csr, KERNEL_CSR_LAST_STATUS_BIT, 0));
-
-        acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, new_csr);
-        continue;
-      }
-    }
-
-    // Start profile counter readback if profile interrupt and not done
-    if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) != 0 &&
-        ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 0) {
-      ACL_KERNEL_IF_DEBUG_MSG(
-          kern, ":: Issuing profile reset command:: Accelerator %d.\n",
-          accel_id);
-
-      // Reset temporal profiling counter
-      unsigned int ctrl_val;
-      if (acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &ctrl_val)) {
-        ACL_KERNEL_IF_DEBUG_MSG(
-            kern, ":: Got bad status reading CSR ctrl reg:: Accelerator %d.\n",
-            accel_id);
-      }
-      ACL_KERNEL_SET_BIT(ctrl_val, KERNEL_CSR_PROFILE_TEMPORAL_RESET);
-      if (acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, ctrl_val)) {
-        ACL_KERNEL_IF_DEBUG_MSG(
-            kern, ":: Got bad status writing CSR ctrl reg:: Accelerator %d.\n",
-            accel_id);
-      }
-
-      if (activation_id < 0) {
-        // This is an autorun kernel
-        acl_process_autorun_profiler_scan_chain(kern->physical_device_id,
-                                                accel_id);
-      } else {
-        acl_kernel_profile_fn(activation_id);
-      }
+    if (!(finish_counter > 0)) {
       continue;
     }
 
     kern->last_kern_update = acl_kernel_if_get_time_us(kern);
-
-    unsigned int finish_counter = 0;
-    if (kern->csr_version == CSR_VERSION_ID_18_1) {
-      // Only expect single completion for older csr version
-      finish_counter = 1;
-    } else {
-      acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_FINISH_COUNTER,
-                          &finish_counter);
-      ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d has %d finishes.\n",
-                              accel_id, finish_counter);
-    }
 
     for (unsigned int i = 0; i < finish_counter; i++) {
       const int activation_id = kern->accel_job_ids[accel_id][next_queue_back];
