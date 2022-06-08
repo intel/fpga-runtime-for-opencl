@@ -1411,6 +1411,43 @@ static void acl_kernel_if_update_status_query(acl_kernel_if *kern,
   }
 }
 
+// Processes finished kernel invocation.
+static void acl_kernel_if_update_status_finish(acl_kernel_if *kern,
+                                               const unsigned int accel_id,
+                                               const int activation_id,
+                                               const unsigned int printf_size) {
+#ifdef TEST_PROFILING_HARDWARE
+  // Test readback of fake profile data using the acl_hal_mmd function that
+  // would be called from the acl runtime.
+  ACL_KERNEL_IF_DEBUG_MSG(kern, ":: testing profile hardware on accel_id=%u.\n",
+                          accel_id);
+
+  uint64_t data[10];
+  acl_hal_mmd_get_profile_data(kern->physical_device_id, accel_id, data, 6);
+  acl_hal_mmd_reset_profile_counters(kern->physical_device_id, accel_id);
+  acl_hal_mmd_get_profile_data(kern->physical_device_id, accel_id, data, 6);
+#endif
+
+  // Just clear the "done" bit.  The "go" bit should already have been
+  // cleared, but this is harmless anyway.
+  // Since csr version 19, done bit is cleared when finish counter is read.
+  // Since csr version 2022.3, done bit needs to be cleared explicitly.
+  if (kern->csr_version == CSR_VERSION_ID_18_1 ||
+      kern->csr_version >= CSR_VERSION_ID_2022_3) {
+    unsigned int dum;
+    acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, 0);
+    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &dum);
+  }
+
+  if (kern->accel_num_printfs[accel_id] > 0) {
+    ACL_KERNEL_IF_DEBUG_MSG(kern,
+                            ":: Calling acl_process_printf_buffer_fn with "
+                            "activation_id=%d and printf_size=%u.\n",
+                            activation_id, printf_size);
+    acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
+  }
+}
+
 // Called when we receive a kernel status interrupt.  Cycle through all of
 // the running accelerators and check for updated status.
 void acl_kernel_if_update_status(acl_kernel_if *kern) {
@@ -1470,36 +1507,8 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       // Tell the host library this job is done
       kern->accel_job_ids[accel_id][next_queue_back] = -1;
 
-#ifdef TEST_PROFILING_HARDWARE
-      // Test readback of fake profile data using the acl_hal_mmd function that
-      // would be called from the acl runtime.
-      ACL_KERNEL_IF_DEBUG_MSG(
-          kern, ":: testing profile hardware on accel_id=%u.\n", accel_id);
-
-      uint64_t data[10];
-      acl_hal_mmd_get_profile_data(kern->physical_device_id, accel_id, data, 6);
-      acl_hal_mmd_reset_profile_counters(kern->physical_device_id, accel_id);
-      acl_hal_mmd_get_profile_data(kern->physical_device_id, accel_id, data, 6);
-#endif
-
-      // Just clear the "done" bit.  The "go" bit should already have been
-      // cleared, but this is harmless anyway.
-      // Since csr version 19, done bit is cleared when finish counter is read.
-      // Since csr version 2022.3, done bit needs to be cleared explicitly.
-      if (kern->csr_version == CSR_VERSION_ID_18_1 ||
-          kern->csr_version >= CSR_VERSION_ID_2022_3) {
-        unsigned int dum;
-        acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, 0);
-        acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &dum);
-      }
-
-      if (kern->accel_num_printfs[accel_id] > 0) {
-        ACL_KERNEL_IF_DEBUG_MSG(kern,
-                                ":: Calling acl_process_printf_buffer_fn with "
-                                "activation_id=%d and printf_size=%u.\n",
-                                activation_id, printf_size);
-        acl_process_printf_buffer_fn(activation_id, (int)printf_size, 0);
-      }
+      acl_kernel_if_update_status_finish(kern, accel_id, activation_id,
+                                         printf_size);
 
       // Executing the following update after reading from performance
       // and efficiency monitors will clobber the throughput reported by
