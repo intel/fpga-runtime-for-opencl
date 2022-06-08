@@ -1288,16 +1288,7 @@ void acl_kernel_if_launch_kernel(acl_kernel_if *kern,
 // Called when we receive a kernel status interrupt.  Cycle through all of
 // the running accelerators and check for updated status.
 void acl_kernel_if_update_status(acl_kernel_if *kern) {
-  unsigned int k, i;
-  unsigned int csr;
-  int activation_id;
-  unsigned int printf_size;
-  uintptr_t segment, segment_pre_irq;
   acl_assert_locked_or_sig();
-
-#ifdef TEST_PROFILING_HARDWARE
-  uint64_t data[10];
-#endif
 
 #ifdef POLLING
   ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(kern, 10, ":: Updating kernel status.\n");
@@ -1308,22 +1299,23 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
   // Get the state of kernel_cra address span extender segment prior to IRQ in
   // hardware If IRQ is received in middle of segment change, segment value in
   // cache and hardware could go out of sync
+  uintptr_t segment;
   acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
                          (unsigned int *)&segment);
 
   // Zero upper 32-bits on 64-bit machines
   kern->cur_segment = segment & 0xffffffff;
-  segment_pre_irq = kern->cur_segment;
+  uintptr_t segment_pre_irq = kern->cur_segment;
 
   // Check which accelerators are done and update their status appropriately
-  for (k = 0; k < kern->num_accel; ++k) {
+  for (unsigned int k = 0; k < kern->num_accel; ++k) {
     int next_queue_back;
-    unsigned int finish_counter = 0;
-
-    if (kern->accel_queue_back[k] == (int)kern->accel_invoc_queue_depth[k] - 1)
+    if (kern->accel_queue_back[k] ==
+        (int)kern->accel_invoc_queue_depth[k] - 1) {
       next_queue_back = 0;
-    else
+    } else {
       next_queue_back = kern->accel_queue_back[k] + 1;
+    }
 
     // Skip idle kernel
     if (kern->accel_job_ids[k][next_queue_back] < 0) {
@@ -1335,7 +1327,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
     }
 
     // Read the accelerator's status register
-    csr = 0;
+    unsigned int csr = 0;
     acl_kernel_cra_read(kern, k, KERNEL_OFFSET_CSR, &csr);
 
     // Ignore non-status bits.
@@ -1344,8 +1336,9 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
     csr = ACL_KERNEL_READ_BIT_RANGE(csr, KERNEL_CSR_LAST_STATUS_BIT, 0);
 
     // Check for updated status bits
-    if (0 == (csr & KERNEL_CSR_STATUS_BITS_MASK))
+    if (0 == (csr & KERNEL_CSR_STATUS_BITS_MASK)) {
       continue;
+    }
 
     // Clear the status bits that we read
     ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d reporting status %x.\n", k,
@@ -1367,14 +1360,15 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
 
     if (ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_DONE) == 0 &&
         ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_STALLED) == 0 &&
-        ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 0)
+        ACL_KERNEL_READ_BIT(csr, KERNEL_CSR_PROFILE_TEMPORAL_STATUS) == 0) {
       continue;
+    }
 
-    activation_id = kern->accel_job_ids[k][next_queue_back];
+    const int activation_id = kern->accel_job_ids[k][next_queue_back];
 
     // read the printf buffer size from the kernel cra, just after the
     // kernel arguments
-    printf_size = 0;
+    unsigned int printf_size = 0;
     if (kern->accel_num_printfs[k] > 0) {
       acl_kernel_cra_read(kern, k, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
                           &printf_size);
@@ -1414,17 +1408,14 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
           kern, ":: Issuing profile reset command:: Accelerator %d.\n", k);
 
       // Reset temporal profiling counter
-      int status;
       unsigned int ctrl_val;
-      status = acl_kernel_cra_read(kern, k, KERNEL_OFFSET_CSR, &ctrl_val);
-      if (status) {
+      if (acl_kernel_cra_read(kern, k, KERNEL_OFFSET_CSR, &ctrl_val)) {
         ACL_KERNEL_IF_DEBUG_MSG(
             kern, ":: Got bad status reading CSR ctrl reg:: Accelerator %d.\n",
             k);
       }
       ACL_KERNEL_SET_BIT(ctrl_val, KERNEL_CSR_PROFILE_TEMPORAL_RESET);
-      status = acl_kernel_cra_write(kern, k, KERNEL_OFFSET_CSR, ctrl_val);
-      if (status) {
+      if (acl_kernel_cra_write(kern, k, KERNEL_OFFSET_CSR, ctrl_val)) {
         ACL_KERNEL_IF_DEBUG_MSG(
             kern, ":: Got bad status writing CSR ctrl reg:: Accelerator %d.\n",
             k);
@@ -1441,6 +1432,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
 
     kern->last_kern_update = acl_kernel_if_get_time_us(kern);
 
+    unsigned int finish_counter = 0;
     if (kern->csr_version == CSR_VERSION_ID_18_1) {
       // Only expect single completion for older csr version
       finish_counter = 1;
@@ -1451,8 +1443,8 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                               finish_counter);
     }
 
-    for (i = 0; i < finish_counter; i++) {
-      activation_id = kern->accel_job_ids[k][next_queue_back];
+    for (unsigned int i = 0; i < finish_counter; i++) {
+      const int activation_id = kern->accel_job_ids[k][next_queue_back];
 
       // Tell the host library this job is done
       kern->accel_job_ids[k][next_queue_back] = -1;
@@ -1463,10 +1455,9 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       ACL_KERNEL_IF_DEBUG_MSG(
           kern, ":: testing profile hardware on accel_id=%u.\n", k);
 
+      uint64_t data[10];
       acl_hal_mmd_get_profile_data(kern->physical_device_id, k, data, 6);
-
       acl_hal_mmd_reset_profile_counters(kern->physical_device_id, k);
-
       acl_hal_mmd_get_profile_data(kern->physical_device_id, k, data, 6);
 #endif
 
@@ -1499,10 +1490,11 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       kern->accel_queue_back[k] = next_queue_back;
 
       if (kern->accel_queue_back[k] ==
-          (int)kern->accel_invoc_queue_depth[k] - 1)
+          (int)kern->accel_invoc_queue_depth[k] - 1) {
         next_queue_back = 0;
-      else
+      } else {
         next_queue_back = kern->accel_queue_back[k] + 1;
+      }
 
       if (kern->accel_job_ids[k][next_queue_back] > -1) {
         acl_kernel_if_update_fn(kern->accel_job_ids[k][next_queue_back],
