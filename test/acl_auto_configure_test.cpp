@@ -1232,11 +1232,12 @@ TEST(auto_configure, streaming) {
   const std::string config_str{
       "23 26 " RANDOM_HASH
       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
-      "0 0 0 1 3 device_global_name 256 128 1 103 _ZTS3CRCILi0EE 0 256 1 0 0 1 "
+      "0 0 0 1 3 device_global_name 256 128 1 105 _ZTS3CRCILi0EE 0 256 1 0 0 1 "
       "0 1 0 9 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg0 8 2 1 8 1024 0 3 1 "
       "k0_ZTS3CRCILi0EE_arg1 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg2 7 0 0 8 1 0 "
       "0 0 7 0 0 8 1 0 0 0 7 2 1 8 1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 "
-      "7 0 0 8 1 0 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 1"};
+      "7 0 0 8 1 0 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 1 "
+      "k0_ZTS3CRCILi0EE_streaming_start k0_ZTS3CRCILi0EE_streaming_done "};
 
   acl_device_def_autodiscovery_t devdef;
   {
@@ -1252,6 +1253,10 @@ TEST(auto_configure, streaming) {
 
   CHECK(!devdef.accel[0].is_sycl_compile);
   CHECK(devdef.accel[0].streaming_control_info_available);
+  CHECK("k0_ZTS3CRCILi0EE_streaming_start" ==
+        devdef.accel[0].streaming_control_info.start);
+  CHECK("k0_ZTS3CRCILi0EE_streaming_done" ==
+        devdef.accel[0].streaming_control_info.done);
 
   const auto &args = devdef.accel[0].iface.args;
   CHECK_EQUAL(9, args.size());
@@ -1274,13 +1279,14 @@ TEST(auto_configure, one_streaming_arg_and_streaming_kernel) {
   const std::string config_str{
       "23 27 531091a097f0d7096b21f349b4b283f9e206ebc0 pac_s10 0 1 17 DDR 2 4 "
       "24 1 2 0 8589934592 8589934592 17179869184 17179869184 25769803776 "
-      "25769803776 34359738368 0 - 0 0 0 0 0 0 1 123 _ZTS15binomial_kernel 0 "
+      "25769803776 34359738368 0 - 0 0 0 0 0 0 1 125 _ZTS15binomial_kernel 0 "
       "256 0 0 0 0 0 1 0 8 7 2 1 8 1024 0 2 0 8 0 0 8 1 0 0 1 "
       "k0_ZTS15binomial_kernel_arg1 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 2 1 8 "
       "1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 0 0 16 2 64 "
       "8196 65 8196 66 8196 67 8196 68 8196 69 8196 70 8196 71 8196 72 8196 73 "
       "8196 74 8196 75 8196 76 8196 77 8196 78 8196 79 8196 1 1 1 3 1 1 1 3 1 "
-      "1 1"};
+      "1 1 k0_ZTS15binomial_kernel_streaming_start "
+      "k0_ZTS15binomial_kernel_streaming_done "};
 
   acl_device_def_autodiscovery_t devdef;
   {
@@ -1295,6 +1301,10 @@ TEST(auto_configure, one_streaming_arg_and_streaming_kernel) {
   CHECK_EQUAL(1, devdef.accel.size());
 
   CHECK(devdef.accel[0].streaming_control_info_available);
+  CHECK("k0_ZTS15binomial_kernel_streaming_start" ==
+        devdef.accel[0].streaming_control_info.start);
+  CHECK("k0_ZTS15binomial_kernel_streaming_done" ==
+        devdef.accel[0].streaming_control_info.done);
 
   const auto &args = devdef.accel[0].iface.args;
   CHECK_EQUAL(8, args.size());
@@ -1314,13 +1324,14 @@ TEST(auto_configure, two_streaming_args_and_streaming_kernel) {
   const std::string config_str{
       "23 27 531091a097f0d7096b21f349b4b283f9e206ebc0 pac_s10 0 1 17 DDR 2 4 "
       "24 1 2 0 8589934592 8589934592 17179869184 17179869184 25769803776 "
-      "25769803776 34359738368 0 - 0 0 0 0 0 0 1 124 _ZTS15binomial_kernel 0 "
+      "25769803776 34359738368 0 - 0 0 0 0 0 0 1 126 _ZTS15binomial_kernel 0 "
       "256 0 0 0 0 0 1 0 8 8 2 1 8 1024 0 2 1 k0_ZTS15binomial_kernel_arg0 8 0 "
       "0 8 1 0 0 1 k0_ZTS15binomial_kernel_arg1 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 "
       "0 7 2 1 8 1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 0 "
       "0 16 2 64 8196 65 8196 66 8196 67 8196 68 8196 69 8196 70 8196 71 8196 "
       "72 8196 73 8196 74 8196 75 8196 76 8196 77 8196 78 8196 79 8196 1 1 1 3 "
-      "1 1 1 3 1 1 1"};
+      "1 1 1 3 1 1 1 k0_ZTS15binomial_kernel_streaming_start "
+      "k0_ZTS15binomial_kernel_streaming_done "};
 
   acl_device_def_autodiscovery_t devdef;
   {
@@ -1336,6 +1347,10 @@ TEST(auto_configure, two_streaming_args_and_streaming_kernel) {
 
   CHECK(devdef.accel[0].is_sycl_compile);
   CHECK(devdef.accel[0].streaming_control_info_available);
+  CHECK("k0_ZTS15binomial_kernel_streaming_start" ==
+        devdef.accel[0].streaming_control_info.start);
+  CHECK("k0_ZTS15binomial_kernel_streaming_done" ==
+        devdef.accel[0].streaming_control_info.done);
 
   const auto &args = devdef.accel[0].iface.args;
   CHECK_EQUAL(8, args.size());

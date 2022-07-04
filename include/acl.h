@@ -199,6 +199,12 @@ typedef struct {
   std::string format_string;
 } acl_printf_info_t;
 
+// Signal names for streaming control kernel.
+struct acl_streaming_kernel_control_info {
+  std::string start;
+  std::string done;
+};
+
 /* The definition of a single accelerator.
  * It can run a single kernel type.
  * We assume binary compilation only.
@@ -241,6 +247,7 @@ typedef struct {
   unsigned int is_sycl_compile; /* [1] SYCL compile; [0] OpenCL compile*/
 
   bool streaming_control_info_available;
+  acl_streaming_kernel_control_info streaming_control_info;
 } acl_accel_def_t;
 
 /* An ACL system definition.
