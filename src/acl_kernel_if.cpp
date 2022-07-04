@@ -949,14 +949,14 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
       }
     }
 
-    kern->streaming_control_kernel_names.clear();
-    kern->streaming_control_kernel_names.reserve(devdef.accel.size());
+    kern->streaming_control_signal_names.clear();
+    kern->streaming_control_signal_names.reserve(devdef.accel.size());
     for (const auto &accel : devdef.accel) {
-      std::optional<std::string> kernel_name;
+      std::optional<acl_streaming_kernel_control_info> signal_names;
       if (accel.streaming_control_info_available) {
-        kernel_name = accel.iface.name;
+        signal_names = accel.streaming_control_info;
       }
-      kern->streaming_control_kernel_names.emplace_back(kernel_name);
+      kern->streaming_control_signal_names.emplace_back(signal_names);
     }
   }
 
@@ -1266,10 +1266,10 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   }
   kern->accel_queue_front[accel_id] = next_launch_index;
 
-  if (kern->streaming_control_kernel_names[accel_id]) {
+  if (kern->streaming_control_signal_names[accel_id]) {
     acl_get_hal()->simulation_streaming_kernel_start(
         kern->physical_device_id,
-        *kern->streaming_control_kernel_names[accel_id]);
+        kern->streaming_control_signal_names[accel_id]->start);
     return;
   }
 
@@ -1510,10 +1510,10 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
     unsigned int finish_counter = 0;
     unsigned int printf_size = 0;
 
-    if (kern->streaming_control_kernel_names[accel_id]) {
+    if (kern->streaming_control_signal_names[accel_id]) {
       acl_get_hal()->simulation_streaming_kernel_done(
           kern->physical_device_id,
-          *kern->streaming_control_kernel_names[accel_id], finish_counter);
+          kern->streaming_control_signal_names[accel_id]->done, finish_counter);
     } else {
       acl_kernel_if_update_status_query(kern, accel_id, activation_id,
                                         finish_counter, printf_size);
@@ -1531,7 +1531,7 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
       // Tell the host library this job is done
       kern->accel_job_ids[accel_id][next_queue_back] = -1;
 
-      if (!kern->streaming_control_kernel_names[accel_id]) {
+      if (!kern->streaming_control_signal_names[accel_id]) {
         acl_kernel_if_update_status_finish(kern, accel_id, activation_id,
                                            printf_size);
       }
