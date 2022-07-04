@@ -663,14 +663,22 @@ static bool read_kernel_args(const std::string &config_str,
   return result;
 }
 
-static bool
-read_streaming_kernel_control_info(const std::string &config_str,
-                                   std::string::size_type &curr_pos,
-                                   bool &streaming_control_info_available,
-                                   std::vector<int> &counters) noexcept {
+static bool read_streaming_kernel_control_info(
+    const std::string &config_str, std::string::size_type &curr_pos,
+    bool &streaming_control_info_available,
+    acl_streaming_kernel_control_info &streaming_control_info,
+    std::vector<int> &counters) noexcept {
   unsigned int value = 0;
   bool result = read_uint_counters(config_str, curr_pos, value, counters);
   streaming_control_info_available = value;
+
+  if (result && streaming_control_info_available) {
+    streaming_control_info = acl_streaming_kernel_control_info{};
+    result = read_string_counters(config_str, curr_pos,
+                                  streaming_control_info.start, counters);
+    result = read_string_counters(config_str, curr_pos,
+                                  streaming_control_info.done, counters);
+  }
 
   return result;
 }
@@ -915,7 +923,7 @@ static bool read_accel_defs(const std::string &config_str,
     if (result && counters.back() > 0) {
       result = read_streaming_kernel_control_info(
           config_str, curr_pos, accel[i].streaming_control_info_available,
-          counters);
+          accel[i].streaming_control_info, counters);
     }
 
     // forward compatibility: bypassing remaining fields at the end of kernel
