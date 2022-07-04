@@ -39,7 +39,8 @@ typedef struct {
   acl_kernel_if_addr_range *accel_perf_mon;
   unsigned int *accel_num_printfs;
 
-  std::vector<std::optional<std::string>> streaming_control_kernel_names;
+  std::vector<std::optional<acl_streaming_kernel_control_info>>
+      streaming_control_signal_names;
 
   // Track potential hangs
   time_ns last_kern_update;
