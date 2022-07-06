@@ -675,8 +675,8 @@ static bool read_streaming_kernel_control_info(
   if (result && streaming_control_info_available) {
     streaming_control_info = acl_streaming_kernel_control_info{};
     result = read_string_counters(config_str, curr_pos,
-                                  streaming_control_info.start, counters);
-    result = read_string_counters(config_str, curr_pos,
+                                  streaming_control_info.start, counters) &&
+             read_string_counters(config_str, curr_pos,
                                   streaming_control_info.done, counters);
   }
 
