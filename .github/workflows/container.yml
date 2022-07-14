@@ -54,6 +54,7 @@ jobs:
       matrix:
         container:
           - rockylinux-8-dev
+          - rockylinux-9-dev
           - debian-11-arm-dev
           - opensuse-leap-15-dev
           - ubuntu-18.04-dev
