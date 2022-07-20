@@ -45,8 +45,7 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
 // address map.
 #define CSR_VERSION_ID_18_1 (3)
 #define CSR_VERSION_ID_19_1 (4)
-#define CSR_VERSION_ID_2022_3 (5)
-#define CSR_VERSION_ID CSR_VERSION_ID_2022_3
+#define CSR_VERSION_ID CSR_VERSION_ID_19_1
 
 // Address map
 // For unit tests to work, these defines must match those in the unit test
@@ -1447,10 +1446,8 @@ static void acl_kernel_if_update_status_finish(acl_kernel_if *kern,
 
   // Just clear the "done" bit.  The "go" bit should already have been
   // cleared, but this is harmless anyway.
-  // Since csr version 19, done bit is cleared when finish counter is read.
-  // Since csr version 2022.3, done bit needs to be cleared explicitly.
-  if (kern->csr_version == CSR_VERSION_ID_18_1 ||
-      kern->csr_version >= CSR_VERSION_ID_2022_3) {
+  // Since csr version 4, done bit is cleared when finish counter is read.
+  if (kern->csr_version == CSR_VERSION_ID_18_1) {
     unsigned int dum;
     acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, 0);
     acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &dum);
