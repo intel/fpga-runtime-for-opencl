@@ -168,8 +168,9 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     }
 
     int error = 0;
-    void *mem = acl_get_hal()->host_alloc(devices, size, alignment,
-                                          mmd_properties.data(), &error);
+    void *mem = acl_get_hal()->host_alloc(
+        devices, size, alignment,
+        mmd_properties[0] ? mmd_properties.data() : nullptr, &error);
     if (error) {
       acl_free(usm_alloc);
       switch (error) {
@@ -458,8 +459,9 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     }
 
     int error;
-    void *mem = acl_get_hal()->shared_alloc(device, size, alignment,
-                                            mmd_properties.data(), &error);
+    void *mem = acl_get_hal()->shared_alloc(
+        device, size, alignment,
+        mmd_properties[0] ? mmd_properties.data() : nullptr, &error);
     if (mem == NULL) {
       acl_free(usm_alloc);
       switch (error) {
