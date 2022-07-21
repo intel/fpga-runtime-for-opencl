@@ -68,7 +68,7 @@ SimpleString Failure::getTestName() const
 	return testName;
 }
 
-int Failure::getLineNumber() const
+long Failure::getLineNumber() const
 {
 	return lineNumber;
 }

@@ -56,7 +56,7 @@ public:
 
 	virtual SimpleString getFileName() const;
 	virtual SimpleString getTestName() const;
-	virtual int getLineNumber() const;
+	virtual long getLineNumber() const;
 	virtual SimpleString getMessage() const;
 
 protected:
