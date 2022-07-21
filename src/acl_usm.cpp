@@ -50,32 +50,32 @@ ACL_EXPORT
 CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     cl_context context, const cl_mem_properties_intel *properties, size_t size,
     cl_uint alignment, cl_int *errcode_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
   }
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
 
   if (size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Memory buffer cannot be of size zero");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Memory buffer cannot be of size zero");
   }
 
   // Spec only allows for power of 2 allignment.
   // Alignment of '0' means use the default
   if (alignment & (alignment - 1)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
+    BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
   }
 
   // Spec specifies that alignment is no bigger than the largest supported data
   // type
   if (alignment > sizeof(cl_long16)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Requested alignment greater than largest data type "
-                     "supported by device (long16)");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "Requested alignment greater than largest data type "
+              "supported by device (long16)");
   }
 
   std::vector<cl_device_id> devices = std::vector<cl_device_id>(
@@ -113,7 +113,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
       mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
-      UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
+      BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
     }
     }
     properties += 2;
@@ -122,7 +122,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
   for (const auto dev : devices) {
     if (!acl_usm_has_access_capability(dev,
                                        CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL)) {
-      UNLOCK_BAIL_INFO(
+      BAIL_INFO(
           CL_INVALID_OPERATION, context,
           "Device does not support host Unified Shared Memory allocations: " +
               dev->def.autodiscovery_def.name);
@@ -132,16 +132,14 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     cl_int ret = clGetDeviceInfo(dev, CL_DEVICE_MAX_MEM_ALLOC_SIZE,
                                  sizeof(max_alloc), &max_alloc, 0);
     if (ret) {
-      UNLOCK_BAIL_INFO(
-          ret, context,
-          "Failed to query CL_DEVICE_MAX_MEM_ALLOC_SIZE for device: " +
-              dev->def.autodiscovery_def.name);
+      BAIL_INFO(ret, context,
+                "Failed to query CL_DEVICE_MAX_MEM_ALLOC_SIZE for device: " +
+                    dev->def.autodiscovery_def.name);
     }
     if (size > max_alloc) {
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_BUFFER_SIZE, context,
-          "Size larger than allocation size supported by device: " +
-              dev->def.autodiscovery_def.name);
+      BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+                "Size larger than allocation size supported by device: " +
+                    dev->def.autodiscovery_def.name);
     }
   }
 
@@ -164,7 +162,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
         (acl_usm_allocation_t *)acl_malloc(sizeof(acl_usm_allocation_t));
 
     if (!usm_alloc) {
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Out of host memory");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Out of host memory");
     }
 
     int error = 0;
@@ -175,21 +173,21 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
       acl_free(usm_alloc);
       switch (error) {
       case CL_OUT_OF_HOST_MEMORY:
-        UNLOCK_BAIL_INFO(error, context,
-                         "Error: Unable to allocate " + std::to_string(size) +
-                             " bytes");
+        BAIL_INFO(error, context,
+                  "Error: Unable to allocate " + std::to_string(size) +
+                      " bytes");
         break;
       case CL_INVALID_VALUE:
-        UNLOCK_BAIL_INFO(error, context,
-                         "Error: Unsupported alignment of " +
-                             std::to_string(alignment));
+        BAIL_INFO(error, context,
+                  "Error: Unsupported alignment of " +
+                      std::to_string(alignment));
         break;
       case CL_INVALID_PROPERTY:
-        UNLOCK_BAIL_INFO(error, context, "Error: Unsuported properties");
+        BAIL_INFO(error, context, "Error: Unsuported properties");
         break;
       default:
-        UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                         "Error: Unable to allocate memory");
+        BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                  "Error: Unable to allocate memory");
         break;
       }
     }
@@ -203,12 +201,11 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     usm_alloc->alignment = alignment;
 
     l_add_usm_alloc_to_context(context, usm_alloc);
-    UNLOCK_RETURN(mem);
+    return mem;
   }
 
-  UNLOCK_BAIL_INFO(
-      CL_INVALID_VALUE, context,
-      "Host allocation is not supported for devices in this context");
+  BAIL_INFO(CL_INVALID_VALUE, context,
+            "Host allocation is not supported for devices in this context");
 }
 
 ACL_EXPORT
@@ -216,22 +213,22 @@ CL_API_ENTRY void *CL_API_CALL
 clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
                       const cl_mem_properties_intel *properties, size_t size,
                       cl_uint alignment, cl_int *errcode_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Valid argument check
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
   if (!acl_device_is_valid(device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+    BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
   }
   if (!acl_context_uses_device(context, device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                     "Device is not associated with the context");
+    BAIL_INFO(CL_INVALID_DEVICE, context,
+              "Device is not associated with the context");
   }
   if (size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Memory buffer cannot be of size zero");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Memory buffer cannot be of size zero");
   }
 
   cl_ulong max_alloc = 0;
@@ -239,9 +236,8 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
                   &max_alloc, 0);
 
   if (size > max_alloc) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_BUFFER_SIZE, context,
-        "Memory buffer size is larger than max size supported by device");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Memory buffer size is larger than max size supported by device");
   }
 
   // Spec allows for power of 2 allignment.
@@ -252,11 +248,10 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
     alignment = ACL_MEM_ALIGN;
   }
   if (alignment & (alignment - 1)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
+    BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
   }
   if (alignment > ACL_MEM_ALIGN) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Alignment value is not supported");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Alignment value is not supported");
   }
   alignment = ACL_MEM_ALIGN;
 
@@ -273,7 +268,7 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
       mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
+      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
     }
     }
     properties += 2;
@@ -287,20 +282,19 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
   cl_mem usm_device_buffer = clCreateBufferWithPropertiesINTEL(
       context, props, CL_MEM_READ_WRITE, size, NULL, &status);
   if (status != CL_SUCCESS) {
-    UNLOCK_BAIL_INFO(status, context, "Failed to allocate device memory");
+    BAIL_INFO(status, context, "Failed to allocate device memory");
   }
   // Runtime will do device allocation on bind to device
   if (!acl_bind_buffer_to_device(device, usm_device_buffer)) {
     clReleaseMemObjectIntelFPGA(usm_device_buffer);
-    UNLOCK_BAIL_INFO(CL_OUT_OF_RESOURCES, context,
-                     "Failed to allocate device memory");
+    BAIL_INFO(CL_OUT_OF_RESOURCES, context, "Failed to allocate device memory");
   }
   acl_usm_allocation_t *usm_alloc =
       (acl_usm_allocation_t *)acl_malloc(sizeof(acl_usm_allocation_t));
 
   if (!usm_alloc) {
     clReleaseMemObjectIntelFPGA(usm_device_buffer);
-    UNLOCK_BAIL_INFO(CL_OUT_OF_RESOURCES, context, "Out of host memory");
+    BAIL_INFO(CL_OUT_OF_RESOURCES, context, "Out of host memory");
   }
 
   void *ptr = acl_get_physical_address(usm_device_buffer, device);
@@ -320,7 +314,7 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
     *errcode_ret = CL_SUCCESS;
   }
 
-  UNLOCK_RETURN(ptr);
+  return ptr;
 }
 
 ACL_EXPORT
@@ -328,28 +322,28 @@ CL_API_ENTRY void *CL_API_CALL
 clSharedMemAllocINTEL(cl_context context, cl_device_id device,
                       const cl_mem_properties_intel *properties, size_t size,
                       cl_uint alignment, cl_int *errcode_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
   }
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
   if (device != nullptr && !acl_device_is_valid(device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+    BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
   }
   if (device != nullptr && !acl_context_uses_device(context, device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                     "Device is not associated with the context");
+    BAIL_INFO(CL_INVALID_DEVICE, context,
+              "Device is not associated with the context");
   }
   if (size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Allocation cannot be of size zero");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Allocation cannot be of size zero");
   }
   // USM spec allows only power-of-2 alignment, or 0 (default alignment)
   if (alignment & (alignment - 1)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
+    BAIL_INFO(CL_INVALID_VALUE, context, "alignment must be power of 2");
   }
 
   // Ensure the specified device, or at least one of the devices in the context
@@ -364,7 +358,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
   for (const auto dev : devices) {
     if (!acl_usm_has_access_capability(
             dev, CL_DEVICE_SINGLE_DEVICE_SHARED_MEM_CAPABILITIES_INTEL)) {
-      UNLOCK_BAIL_INFO(
+      BAIL_INFO(
           CL_INVALID_OPERATION, context,
           "Device does not support shared Unified Shared Memory allocations");
     }
@@ -373,9 +367,9 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
   // Spec specifies that alignment is no bigger than the largest supported data
   // type
   if (alignment > sizeof(cl_long16)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Requested alignment greater than largest data type "
-                     "supported by device (long16)");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "Requested alignment greater than largest data type "
+              "supported by device (long16)");
   }
 
   // Ensure requested size is valid and supported by the specified device, or at
@@ -385,17 +379,16 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     cl_int ret = clGetDeviceInfo(device, CL_DEVICE_MAX_MEM_ALLOC_SIZE,
                                  sizeof(dev_alloc), &dev_alloc, 0);
     if (ret) {
-      UNLOCK_BAIL_INFO(
-          ret, context,
-          "Failed to query CL_DEVICE_MAX_MEM_ALLOC_SIZE for device");
+      BAIL_INFO(ret, context,
+                "Failed to query CL_DEVICE_MAX_MEM_ALLOC_SIZE for device");
     }
     if (size > dev_alloc) {
-      UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                       "Size larger than allocation size supported by device");
+      BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+                "Size larger than allocation size supported by device");
     }
   }
   if (device == nullptr && (size > context->max_mem_alloc_size)) {
-    UNLOCK_BAIL_INFO(
+    BAIL_INFO(
         CL_INVALID_BUFFER_SIZE, context,
         "Size larger than allocation size supported by any device in context");
   }
@@ -409,28 +402,27 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     switch (*properties) {
     case CL_MEM_ALLOC_FLAGS_INTEL: {
       if (seen_flags.insert(CL_MEM_ALLOC_FLAGS_INTEL).second == false) {
-        UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context,
-                         "Property specified multiple times");
+        BAIL_INFO(CL_INVALID_PROPERTY, context,
+                  "Property specified multiple times");
       }
       switch (*(properties + 1)) {
       case CL_MEM_ALLOC_WRITE_COMBINED_INTEL:
         break;
       default:
-        UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context,
-                         "Invalid value for property");
+        BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid value for property");
       }
       alloc_flags = *(properties + 1);
     } break;
     case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
       if (seen_flags.insert(CL_MEM_ALLOC_BUFFER_LOCATION_INTEL).second ==
           false) {
-        UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context,
-                         "Property specified multiple times");
+        BAIL_INFO(CL_INVALID_PROPERTY, context,
+                  "Property specified multiple times");
       }
       mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
-      UNLOCK_BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
+      BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
     }
     }
     properties += 2;
@@ -455,7 +447,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
         (acl_usm_allocation_t *)acl_malloc(sizeof(acl_usm_allocation_t));
 
     if (!usm_alloc) {
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Out of host memory");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Out of host memory");
     }
 
     int error;
@@ -466,21 +458,21 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
       acl_free(usm_alloc);
       switch (error) {
       case CL_OUT_OF_HOST_MEMORY:
-        UNLOCK_BAIL_INFO(error, context,
-                         "Error: Unable to allocate " + std::to_string(size) +
-                             " bytes");
+        BAIL_INFO(error, context,
+                  "Error: Unable to allocate " + std::to_string(size) +
+                      " bytes");
         break;
       case CL_INVALID_VALUE:
-        UNLOCK_BAIL_INFO(error, context,
-                         "Error: Unsupported alignment of " +
-                             std::to_string(alignment));
+        BAIL_INFO(error, context,
+                  "Error: Unsupported alignment of " +
+                      std::to_string(alignment));
         break;
       case CL_INVALID_PROPERTY:
-        UNLOCK_BAIL_INFO(error, context, "Error: Unsuported properties");
+        BAIL_INFO(error, context, "Error: Unsuported properties");
         break;
       default:
-        UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                         "Error: Unable to allocate memory");
+        BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                  "Error: Unable to allocate memory");
         break;
       }
     }
@@ -494,45 +486,43 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     usm_alloc->alignment = alignment;
 
     l_add_usm_alloc_to_context(context, usm_alloc);
-    UNLOCK_RETURN(mem);
+    return mem;
   }
 
   // After all the error check, still error out
   // Shared allocation is not supported yet
-  UNLOCK_BAIL_INFO(
-      CL_INVALID_VALUE, context,
-      "Shared allocation is not supported for devices in this context");
+  BAIL_INFO(CL_INVALID_VALUE, context,
+            "Shared allocation is not supported for devices in this context");
 }
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clMemFreeINTEL(cl_context context, void *ptr) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
 
   // NULL is valid input where nothing happens
   if (ptr == NULL) {
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
 
   acl_usm_allocation_t *usm_alloc = acl_get_usm_alloc_from_ptr(context, ptr);
   if (!usm_alloc) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Memory must be USM allocation in context");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Memory must be USM allocation in context");
   }
   if (usm_alloc->range.begin != ptr) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Pointer must be exact value returned by allocation");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Pointer must be exact value returned by allocation");
   }
 
   switch (usm_alloc->type) {
   case CL_MEM_TYPE_HOST_INTEL: {
     if (acl_get_hal()->free) {
       if (acl_get_hal()->free(context, const_cast<void *>(ptr))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Failed to free host allocation");
+        ERR_RET(CL_INVALID_VALUE, context, "Failed to free host allocation");
       }
     }
     break;
@@ -540,22 +530,20 @@ CL_API_ENTRY cl_int CL_API_CALL clMemFreeINTEL(cl_context context, void *ptr) {
   case CL_MEM_TYPE_DEVICE_INTEL: {
     cl_int status = clReleaseMemObjectIntelFPGA(usm_alloc->mem);
     if (status != CL_SUCCESS) {
-      UNLOCK_RETURN(status);
+      return status;
     }
     break;
   }
   case CL_MEM_TYPE_SHARED_INTEL: {
     if (acl_get_hal()->free) {
       if (acl_get_hal()->free(context, const_cast<void *>(ptr))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Failed to free shared allocation");
+        ERR_RET(CL_INVALID_VALUE, context, "Failed to free shared allocation");
       }
     }
     break;
   }
   default: {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Pointer must be from USM allocation");
+    ERR_RET(CL_INVALID_VALUE, context, "Pointer must be from USM allocation");
     break;
   }
   }
@@ -563,31 +551,31 @@ CL_API_ENTRY cl_int CL_API_CALL clMemFreeINTEL(cl_context context, void *ptr) {
   l_remove_usm_alloc_from_context(context, usm_alloc);
   acl_free(usm_alloc);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clMemBlockingFreeINTEL(cl_context context,
                                                        void *ptr) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
 
   // NULL is valid input where nothing happens
   if (ptr == NULL) {
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
 
   acl_usm_allocation_t *usm_alloc = acl_get_usm_alloc_from_ptr(context, ptr);
   if (!usm_alloc) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Memory must be USM allocation in context");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Memory must be USM allocation in context");
   }
   if (usm_alloc->range.begin != ptr) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Pointer must be exact value returned by allocation");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Pointer must be exact value returned by allocation");
   }
 
   // wait for enqueued commands that uses ptr to finish before free
@@ -597,8 +585,7 @@ CL_API_ENTRY cl_int CL_API_CALL clMemBlockingFreeINTEL(cl_context context,
   case CL_MEM_TYPE_HOST_INTEL: {
     if (acl_get_hal()->free) {
       if (acl_get_hal()->free(context, const_cast<void *>(ptr))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Failed to free host allocation");
+        ERR_RET(CL_INVALID_VALUE, context, "Failed to free host allocation");
       }
     }
     break;
@@ -606,22 +593,20 @@ CL_API_ENTRY cl_int CL_API_CALL clMemBlockingFreeINTEL(cl_context context,
   case CL_MEM_TYPE_DEVICE_INTEL: {
     cl_int status = clReleaseMemObjectIntelFPGA(usm_alloc->mem);
     if (status != CL_SUCCESS) {
-      UNLOCK_RETURN(status);
+      return status;
     }
     break;
   }
   case CL_MEM_TYPE_SHARED_INTEL: {
     if (acl_get_hal()->free) {
       if (acl_get_hal()->free(context, const_cast<void *>(ptr))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Failed to free shared allocation");
+        ERR_RET(CL_INVALID_VALUE, context, "Failed to free shared allocation");
       }
     }
     break;
   }
   default: {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Pointer must be from USM allocation");
+    ERR_RET(CL_INVALID_VALUE, context, "Pointer must be from USM allocation");
     break;
   }
   }
@@ -629,20 +614,20 @@ CL_API_ENTRY cl_int CL_API_CALL clMemBlockingFreeINTEL(cl_context context,
   l_remove_usm_alloc_from_context(context, usm_alloc);
   acl_free(usm_alloc);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
     cl_context context, const void *ptr, cl_mem_info_intel param_name,
     size_t param_value_size, void *param_value, size_t *param_value_size_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   // Get USM allocation associated with ptr
   acl_usm_allocation_t *usm_alloc = acl_get_usm_alloc_from_ptr(context, ptr);
@@ -701,8 +686,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
   } break;
 
   default: {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Param name is not a valid query");
+    ERR_RET(CL_INVALID_VALUE, context, "Param name is not a valid query");
   } break;
   }
 
@@ -710,8 +694,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
     // Try to return the param value.
     if (param_value_size < result.size) {
       // Buffer is too small to hold the return value.
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Param value size is smaller than query return type");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Param value size is smaller than query return type");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -719,7 +703,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 // clEnqueueMemsetINTEL has been removed in the latest OpenCL spec, but SYCl
@@ -741,60 +725,59 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
     size_t pattern_size, size_t size, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
   char *ptr;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (dst_ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (((uintptr_t)dst_ptr) % (pattern_size) != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer not aligned with pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer not aligned with pattern size");
   }
   if (pattern == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pattern argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pattern argument cannot be NULL");
   }
   if (pattern_size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pattern size argument cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pattern size argument cannot be 0");
   }
   // Pattern size must be less than largest supported int/float vec type
   if (pattern_size > sizeof(double) * 16) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Patern size must be less than double16");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Patern size must be less than double16");
   }
   // Pattern size can only be power of 2
   if (pattern_size & (pattern_size - 1)) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Patern size must be power of 2");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Patern size must be power of 2");
   }
   if (size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Size cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context, "Size cannot be 0");
   }
   if (size % pattern_size != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Size must be multiple of pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Size must be multiple of pattern size");
   }
 
   // This array is passed to clSetEventCallback for releasing the
   // allocated memory and releasing the event, if *event is null.
   void **callback_data = (void **)acl_malloc(sizeof(void *) * 2);
   if (!callback_data) {
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   acl_aligned_ptr_t *aligned_ptr =
       (acl_aligned_ptr_t *)acl_malloc(sizeof(acl_aligned_ptr_t));
   if (!aligned_ptr) {
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   // Replicating the value, size times.
@@ -803,8 +786,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
   if (!ptr) {
     acl_free(aligned_ptr);
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   for (cl_uint i = 0; i < size / pattern_size; i++) {
@@ -822,8 +805,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
       acl_mem_aligned_free(command_queue->context, aligned_ptr);
       acl_free(aligned_ptr);
       acl_free(callback_data);
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Size accesses outside of USM allocation dst_ptr range");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Size accesses outside of USM allocation dst_ptr range");
     }
     if (usm_alloc->type == CL_MEM_TYPE_DEVICE_INTEL) {
       dst_device = usm_alloc->device;
@@ -838,8 +821,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
     acl_mem_aligned_free(command_queue->context, aligned_ptr);
     acl_free(aligned_ptr);
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Memory allocation needs to be on command queue device");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Memory allocation needs to be on command queue device");
   }
 
   cl_event tmp_event = NULL;
@@ -853,7 +836,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
     acl_mem_aligned_free(command_queue->context, aligned_ptr);
     acl_free(aligned_ptr);
     acl_free(callback_data);
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   }
   tmp_event->cmd.info.usm_xfer.src_ptr = ptr;
   tmp_event->cmd.info.usm_xfer.dst_ptr = dst_ptr;
@@ -878,7 +861,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemFillINTEL(
                      acl_free_allocation_after_event_completion,
                      (void *)callback_data);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -886,30 +869,30 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
     cl_command_queue command_queue, cl_bool blocking, void *dst_ptr,
     const void *src_ptr, size_t size, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (dst_ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (src_ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer size cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer size cannot be 0");
   }
 
   if (((char *)src_ptr < (char *)dst_ptr &&
        (char *)src_ptr + size > (char *)dst_ptr) ||
       ((char *)dst_ptr < (char *)src_ptr &&
        (char *)dst_ptr + size > (char *)src_ptr)) {
-    UNLOCK_ERR_RET(CL_MEM_COPY_OVERLAP, command_queue->context,
-                   "Source and destination memory overlaps");
+    ERR_RET(CL_MEM_COPY_OVERLAP, command_queue->context,
+            "Source and destination memory overlaps");
   }
 
   acl_usm_allocation_t *dst_usm_alloc =
@@ -919,8 +902,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
   cl_device_id dst_device = NULL;
   if (dst_usm_alloc) {
     if (l_ptr_in_usm_alloc_range(dst_usm_alloc, dst_ptr, size) != CL_TRUE) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Size accesses outside of USM allocation dst_ptr range");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Size accesses outside of USM allocation dst_ptr range");
     }
     if (dst_usm_alloc->type == CL_MEM_TYPE_DEVICE_INTEL) {
       dst_device = dst_usm_alloc->device;
@@ -936,8 +919,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
   // Even if src_ptr is not USM pointer, continue assuming it's system mem
   if (src_usm_alloc) {
     if (l_ptr_in_usm_alloc_range(src_usm_alloc, src_ptr, size) != CL_TRUE) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Size accesses outside of USM allocation src_ptr range");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Size accesses outside of USM allocation src_ptr range");
     }
     if (src_usm_alloc->type == CL_MEM_TYPE_DEVICE_INTEL) {
       src_device = src_usm_alloc->device;
@@ -947,8 +930,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
 
   if ((dst_device && dst_device->id != command_queue->device->id) ||
       (src_device && src_device->id != command_queue->device->id)) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Memory allocation needs to be on command queue's device");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Memory allocation needs to be on command queue's device");
   }
 
   cl_event tmp_event = NULL;
@@ -958,7 +941,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
       acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
                        CL_COMMAND_MEMCPY_INTEL, &tmp_event);
   if (status != CL_SUCCESS) {
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   }
   tmp_event->cmd.info.usm_xfer.src_ptr = src_ptr;
   tmp_event->cmd.info.usm_xfer.dst_ptr = dst_ptr;
@@ -982,10 +965,10 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemcpyINTEL(
   }
 
   if (blocking && status == CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST) {
-    UNLOCK_RETURN(status);
+    return status;
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 // Unused argument names are commented out to avoid Windows compile warning:
@@ -996,14 +979,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemINTEL(
     cl_command_queue command_queue, const void *ptr, size_t /* size */,
     cl_mem_migration_flags /* flags */, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument can not be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument can not be NULL");
   }
 
   // Migrate currently doesn't do anything
@@ -1015,7 +998,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemINTEL(
                        CL_COMMAND_MIGRATEMEM_INTEL, &local_event);
 
   if (result != CL_SUCCESS) {
-    UNLOCK_RETURN(result);
+    return result;
   }
 
   if (event) {
@@ -1023,7 +1006,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemINTEL(
   } else {
     clReleaseEvent(local_event);
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 // Unused argument names are commented out to avoid Windows compile warning:
@@ -1034,14 +1017,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemAdviseINTEL(
     cl_command_queue command_queue, const void *ptr, size_t /* size */,
     cl_mem_advice_intel /* advice */, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument can not be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument can not be NULL");
   }
 
   // MemAdvise currently doesn't do anything
@@ -1053,7 +1036,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemAdviseINTEL(
                        CL_COMMAND_MEMADVISE_INTEL, &local_event);
 
   if (result != CL_SUCCESS) {
-    UNLOCK_RETURN(result);
+    return result;
   }
 
   if (event) {
@@ -1061,7 +1044,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMemAdviseINTEL(
   } else {
     clReleaseEvent(local_event);
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 void acl_usm_memcpy(void *, acl_device_op_t *op) {

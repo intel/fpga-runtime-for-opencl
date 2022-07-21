@@ -89,7 +89,7 @@ ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clGetPlatformIDsIntelFPGA(cl_uint num_entries, cl_platform_id *platforms,
                           cl_uint *num_platforms_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Set this in case of early return due to error in other arguments.
   if (num_platforms_ret) {
@@ -97,10 +97,10 @@ clGetPlatformIDsIntelFPGA(cl_uint num_entries, cl_platform_id *platforms,
   }
 
   if (platforms && num_entries <= 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
   if (num_platforms_ret == 0 && platforms == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   // We want to support two kinds of flows:
@@ -133,21 +133,21 @@ clGetPlatformIDsIntelFPGA(cl_uint num_entries, cl_platform_id *platforms,
     // acl_platform.initialized = 1.
     result = acl_init_from_hal_discovery();
     if (!result) {
-      UNLOCK_RETURN(CL_PLATFORM_NOT_FOUND_KHR);
+      return CL_PLATFORM_NOT_FOUND_KHR;
     }
   }
   if (!acl_get_hal()) {
-    UNLOCK_RETURN(CL_PLATFORM_NOT_FOUND_KHR);
+    return CL_PLATFORM_NOT_FOUND_KHR;
   }
   if (!acl_platform.initialized) {
-    UNLOCK_RETURN(CL_PLATFORM_NOT_FOUND_KHR);
+    return CL_PLATFORM_NOT_FOUND_KHR;
   }
 
   // Return some data
   if (platforms) {
     platforms[0] = &acl_platform;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -170,14 +170,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetPlatformInfoIntelFPGA(
     size_t param_value_size, void *param_value, size_t *param_value_size_ret) {
   const char *str = 0;
   size_t result_len;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_platform_is_valid(platform)) {
-    UNLOCK_RETURN(CL_INVALID_PLATFORM);
+    return CL_INVALID_PLATFORM;
   }
 
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, 0);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          0);
 
   switch (param_name) {
   // We don't offer an online compiler.
@@ -200,7 +200,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetPlatformInfoIntelFPGA(
     str = acl_platform.suffix;
     break;
   default:
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
     break;
   }
   assert(str);
@@ -210,7 +210,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetPlatformInfoIntelFPGA(
     // Actually try to return the string.
     if (param_value_size < result_len) {
       // Buffer is too small to hold the return value.
-      UNLOCK_RETURN(CL_INVALID_VALUE);
+      return CL_INVALID_VALUE;
     }
     strncpy((char *)param_value, str, result_len);
   }
@@ -219,7 +219,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetPlatformInfoIntelFPGA(
     *param_value_size_ret = result_len;
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -234,13 +234,13 @@ ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clUnloadPlatformCompilerIntelFPGA(cl_platform_id platform) {
   // Not fully implemented yet.
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_platform_is_valid(platform)) {
-    UNLOCK_RETURN(CL_INVALID_PLATFORM);
+    return CL_INVALID_PLATFORM;
   }
   // For the sake of MSVC compiler warnings.
   // We don't have any platform compilers, so unloading is successful!
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -896,8 +896,9 @@ void acl_receive_device_exception(unsigned physical_device_id,
   // acl_assert_locked_or_sig() instead of just acl_assert_locked().
   CL_EXCEPTION_TYPE_INTEL current_exception, listen_mask;
 
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
   current_exception =
       acl_platform.device[physical_device_id].device_exception_status;
@@ -950,22 +951,16 @@ void acl_receive_device_exception(unsigned physical_device_id,
     // callback
     acl_signal_device_update();
   }
-
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
-  }
 }
 
 ACL_EXPORT
 CL_API_ENTRY void CL_API_CALL
 clTrackLiveObjectsIntelFPGA(cl_platform_id platform) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (platform == &acl_platform) {
     acl_platform.track_leaked_objects = 1;
   }
-
-  acl_unlock();
 }
 
 ACL_EXPORT
@@ -973,7 +968,7 @@ CL_API_ENTRY void CL_API_CALL clReportLiveObjectsIntelFPGA(
     cl_platform_id platform,
     void(CL_CALLBACK *report_fn)(void *, void *, const char *, cl_uint),
     void *user_data) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (platform == &acl_platform) {
     acl_cl_object_node_t *node = acl_platform.cl_obj_head;
@@ -1010,16 +1005,15 @@ CL_API_ENTRY void CL_API_CALL clReportLiveObjectsIntelFPGA(
       }
       if (report_fn) {
         void *object = node->object;
-        int lock_count = acl_suspend_lock();
-        report_fn(user_data, object, name, refcount);
-        acl_resume_lock(lock_count);
+        {
+          acl_suspend_lock_guard lock{acl_mutex_wrapper};
+          report_fn(user_data, object, name, refcount);
+        }
       }
 
       node = next;
     }
   }
-
-  acl_unlock();
 }
 
 #ifdef __GNUC__

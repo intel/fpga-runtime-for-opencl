@@ -38,22 +38,22 @@
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clEnqueueBarrierIntelFPGA(cl_command_queue command_queue) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // For in order queue, since every event is executed in sequence,
   // there is an implicit barrier after each event.
   // enqueue barrier does not need to do anything
   if (!(command_queue->properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE)) {
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
   // OpenCL 1.2 spec: If event_wait_list is NULL, then this particular command
   // waits until all previous enqueued commands to command_queue have completed.
   cl_int status = clEnqueueBarrierWithWaitList(command_queue, 0, 0, NULL);
-  UNLOCK_RETURN(status);
+  return status;
 }
 
 ACL_EXPORT
@@ -66,18 +66,18 @@ ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clEnqueueMarkerIntelFPGA(cl_command_queue command_queue, cl_event *event) {
   cl_int result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (!event)
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
 
   result = acl_create_event(command_queue, 0, 0, CL_COMMAND_MARKER, event);
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -91,13 +91,13 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWaitForEventsIntelFPGA(
     cl_command_queue command_queue, cl_uint num_event, const cl_event *events) {
   cl_int result;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (num_event == 0 || events == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
   cl_event event = NULL;
   result = acl_create_event(command_queue, num_event, events,
@@ -110,7 +110,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWaitForEventsIntelFPGA(
     result = CL_INVALID_EVENT;
   }
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -129,16 +129,16 @@ clWaitForEventsIntelFPGA(cl_uint num_events, const cl_event *event_list) {
   cl_context context;
   bool first_yield_to_hal = true;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (num_events == 0 || event_list == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
 #ifndef REMOVE_VALID_CHECKS
   result = acl_check_events(num_events, event_list);
   if (result != CL_SUCCESS) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
 #endif
 
@@ -193,12 +193,12 @@ clWaitForEventsIntelFPGA(cl_uint num_events, const cl_event *event_list) {
     cl_uint i = 0;
     for (i = 0; i < num_events; ++i) {
       if (event_list[i]->execution_status < 0)
-        UNLOCK_RETURN(CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST);
+        return CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST;
     }
   }
 #endif
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -214,10 +214,10 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMarkerWithWaitListIntelFPGA(
   cl_int result;
   cl_event ret_event = NULL;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // Spec says:
@@ -248,7 +248,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueMarkerWithWaitListIntelFPGA(
   if (ret_event)
     clReleaseEvent(ret_event); // free the ret event if the caller doesn't want
                                // to return it
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -265,12 +265,12 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueBarrierWithWaitListIntelFPGA(
     const cl_event *event_wait_list, cl_event *event) {
   cl_int result;
   cl_event local_event;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   result = clEnqueueMarkerWithWaitList(command_queue, num_events_in_wait_list,
                                        event_wait_list, &local_event);
   if (result != CL_SUCCESS) {
-    UNLOCK_RETURN(result);
+    return result;
   }
 
   if (command_queue->properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) {
@@ -282,7 +282,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueBarrierWithWaitListIntelFPGA(
   } else {
     clReleaseEvent(local_event);
   }
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT

@@ -91,24 +91,24 @@ int main(int argc, const char **argv) {
 }
 
 void acl_test_setup_generic_system() {
-  acl_lock();
+  acl_mutex_wrapper.lock();
   acl_set_hal(acl_test_get_simple_hal());
   acl_init(acl_test_get_complex_system_def());
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 }
 
 void acl_test_setup_empty_system() {
-  acl_lock();
+  acl_mutex_wrapper.lock();
   acl_set_hal(acl_test_get_simple_hal());
   acl_init(acl_test_get_empty_system_def());
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 }
 
 void acl_test_setup_sample_default_board_system(void) {
-  acl_lock();
+  acl_mutex_wrapper.lock();
   acl_set_hal(acl_test_get_simple_hal());
   acl_init(&acl_test_example_binary_sysdef);
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 }
 
 void acl_test_teardown_sample_default_board_system(void) {
@@ -117,11 +117,11 @@ void acl_test_teardown_sample_default_board_system(void) {
 
 void acl_test_teardown_generic_system(void) { acl_test_teardown_system(); }
 void acl_test_teardown_system(void) {
-  acl_lock();
+  acl_mutex_wrapper.lock();
   acl_reset();
   acl_reset_hal();
   acltest_hal_teardown();
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 }
 
 void acl_hal_test_setup_generic_system(void) { return; };
@@ -482,8 +482,8 @@ static void l_run_benchmark() {
     times = &results["acl_lock/acl_unlock"];
     for (int inner_rep = 0; inner_rep < INNER_REPS; ++inner_rep) {
       start_time = l_get_timestamp();
-      acl_lock();
-      acl_unlock();
+      acl_mutex_wrapper.lock();
+      acl_mutex_wrapper.unlock();
       end_time = l_get_timestamp();
       times->push_back(end_time - start_time);
     }
@@ -491,11 +491,11 @@ static void l_run_benchmark() {
     std::cout << "Measuring acl_assert_locked..." << std::endl;
     times = &results["acl_assert_locked"];
     for (int inner_rep = 0; inner_rep < INNER_REPS; ++inner_rep) {
-      acl_lock();
+      acl_mutex_wrapper.lock();
       start_time = l_get_timestamp();
       acl_assert_locked();
       end_time = l_get_timestamp();
-      acl_unlock();
+      acl_mutex_wrapper.unlock();
       times->push_back(end_time - start_time);
     }
 

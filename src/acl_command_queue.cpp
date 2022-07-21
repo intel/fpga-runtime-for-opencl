@@ -114,17 +114,17 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
   cl_command_queue result = 0;
   cl_command_queue_properties cq_properties = 0;
   cl_uint q_size_properties = 0, idx = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
   if (!acl_device_is_valid(device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+    BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
   }
   if (!acl_context_uses_device(context, device)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                     "Device is not associated with the context");
+    BAIL_INFO(CL_INVALID_DEVICE, context,
+              "Device is not associated with the context");
   }
 
   // Get the properties. Only two possible properties: CL_QUEUE_PROPERTIES and
@@ -138,9 +138,9 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
       if (q_size_properties == 0)
         q_size_properties = (cl_uint)properties[idx + 1];
       else // This property was already given.
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
+        BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
     } else {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
+      BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
     }
     idx += 2;
   }
@@ -152,14 +152,14 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
         CL_QUEUE_PROFILING_ENABLE | CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE |
         CL_QUEUE_ON_DEVICE | CL_QUEUE_ON_DEVICE_DEFAULT;
     if (cq_properties & ~(valid_properties)) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
+      BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
     }
     // Also check the dependency of options:
     if (((cq_properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) == 0 &&
          (cq_properties & CL_QUEUE_ON_DEVICE)) ||
         ((cq_properties & CL_QUEUE_ON_DEVICE) == 0 &&
          (cq_properties & CL_QUEUE_ON_DEVICE_DEFAULT))) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
+      BAIL_INFO(CL_INVALID_VALUE, context, "Invalid queue properties");
     }
   }
   {
@@ -169,13 +169,11 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
     // queried from current version of clGetDeviceInfo. So manually failing on
     // those properties for now.
     if (cq_properties & (CL_QUEUE_ON_DEVICE | CL_QUEUE_ON_DEVICE_DEFAULT))
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_QUEUE_PROPERTIES, context,
-          "Device does not support the specified queue properties");
+      BAIL_INFO(CL_INVALID_QUEUE_PROPERTIES, context,
+                "Device does not support the specified queue properties");
     if (q_size_properties != 0) { // not supported yet.
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_QUEUE_PROPERTIES, context,
-          "Device does not support the specified queue properties");
+      BAIL_INFO(CL_INVALID_QUEUE_PROPERTIES, context,
+                "Device does not support the specified queue properties");
     }
 
     // Internal user may want to turn off support for OOO Queues
@@ -183,9 +181,8 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
         acl_getenv("CL_CONTEXT_DISABLE_OOO_QUEUES_INTELFPGA");
     if (disable_oooq &&
         (cq_properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE)) {
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_QUEUE_PROPERTIES, context,
-          "Device does not support the specified queue properties");
+      BAIL_INFO(CL_INVALID_QUEUE_PROPERTIES, context,
+                "Device does not support the specified queue properties");
     }
 
     // What does the device support?
@@ -195,24 +192,23 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
     clGetDeviceInfo(device, CL_DEVICE_QUEUE_PROPERTIES, sizeof(device_props),
                     &device_props, 0);
     if (cq_properties & ~(device_props)) {
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_QUEUE_PROPERTIES, context,
-          "Device does not support the specified queue properties");
+      BAIL_INFO(CL_INVALID_QUEUE_PROPERTIES, context,
+                "Device does not support the specified queue properties");
     }
   }
 
   // Now actually allocate the command queue.
   result = acl_alloc_cl_command_queue();
   if (result == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a command queue");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a command queue");
   }
 
   // Fail to double the capacity of the pointer array
   if (!l_init_queue(result, cq_properties, context, device)) {
     acl_free_cl_command_queue(result);
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a command queue");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a command queue");
   }
 
   if (errcode_ret) {
@@ -220,7 +216,7 @@ clCreateCommandQueueWithPropertiesIntelFPGA(
   }
 
   acl_track_object(ACL_OBJ_COMMAND_QUEUE, result);
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -255,13 +251,13 @@ CL_API_ENTRY cl_command_queue CL_API_CALL clCreateCommandQueue(
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clRetainCommandQueueIntelFPGA(cl_command_queue command_queue) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   acl_retain(command_queue);
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -273,10 +269,10 @@ clRetainCommandQueue(cl_command_queue command_queue) {
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clReleaseCommandQueueIntelFPGA(cl_command_queue command_queue) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   acl_release(command_queue);
@@ -288,7 +284,7 @@ clReleaseCommandQueueIntelFPGA(cl_command_queue command_queue) {
     acl_delete_command_queue(command_queue);
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -302,10 +298,10 @@ CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfoIntelFPGA(
     cl_command_queue command_queue, cl_command_queue_info param_name,
     size_t param_value_size, void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   RESULT_INIT;
@@ -328,14 +324,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfoIntelFPGA(
   }
 
   if (result.size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Invalid or unsupported command queue property");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Invalid or unsupported command queue property");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -343,7 +339,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetCommandQueueInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -360,23 +356,23 @@ CL_API_ENTRY cl_int CL_API_CALL clSetCommandQueuePropertyIntelFPGA(
     cl_command_queue command_queue, cl_command_queue_properties properties,
     cl_bool enable, cl_command_queue_properties *old_properties) {
   cl_command_queue_properties bad_properties;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   bad_properties =
       ~((cl_command_queue_properties)CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE |
         (cl_command_queue_properties)CL_QUEUE_PROFILING_ENABLE);
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // Internal user may want to turn off support for OOO Queues
   const char *disable_oooq =
       acl_getenv("CL_CONTEXT_DISABLE_OOO_QUEUES_INTELFPGA");
   if (disable_oooq && (properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE)) {
-    UNLOCK_ERR_RET(CL_INVALID_QUEUE_PROPERTIES, command_queue->context,
-                   "Can't set CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE property, "
-                   "unsupported");
+    ERR_RET(CL_INVALID_QUEUE_PROPERTIES, command_queue->context,
+            "Can't set CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE property, "
+            "unsupported");
   }
 
   if (old_properties) {
@@ -384,8 +380,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetCommandQueuePropertyIntelFPGA(
   }
 
   if (properties & bad_properties) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Invalid or unsupported command queue property");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Invalid or unsupported command queue property");
   }
 
   if (enable) {
@@ -397,7 +393,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetCommandQueuePropertyIntelFPGA(
   // No queue synchronization is required because we don't support
   // out-of-order execution.
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -415,10 +411,10 @@ CL_API_ENTRY cl_int CL_API_CALL
 clFlushIntelFPGA(cl_command_queue command_queue) {
   bool any_queued = false;
   const acl_hal_t *hal = acl_get_hal();
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // Context is valid too.  Force a schedule update.
@@ -428,7 +424,7 @@ clFlushIntelFPGA(cl_command_queue command_queue) {
     any_queued = 0;
     acl_idle_update(context);
     if (command_queue->num_commands == 0) {
-      UNLOCK_RETURN(CL_SUCCESS);
+      return CL_SUCCESS;
     }
 
     // Find if at least one event is not SUBMITTED
@@ -454,7 +450,7 @@ clFlushIntelFPGA(cl_command_queue command_queue) {
 
   } while (any_queued);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -467,10 +463,10 @@ CL_API_ENTRY cl_int CL_API_CALL
 clFinishIntelFPGA(cl_command_queue command_queue) {
   cl_event event = 0;
   cl_int result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // Spec says:
@@ -483,7 +479,7 @@ clFinishIntelFPGA(cl_command_queue command_queue) {
     result = clWaitForEvents(1, &event);
     clReleaseEvent(event);
   }
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT

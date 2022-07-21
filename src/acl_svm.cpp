@@ -42,18 +42,18 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
   // this context supports SVM
   cl_bool context_has_svm;
 #endif
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Valid context
 #ifndef REMOVE_VALID_CHECKS
 
   if (!acl_context_is_valid(context))
-    UNLOCK_RETURN(NULL);
+    return NULL;
 
   // Check for invalid enum bits
   if (flags & ~(CL_MEM_READ_WRITE | CL_MEM_READ_ONLY | CL_MEM_WRITE_ONLY |
                 CL_MEM_SVM_FINE_GRAIN_BUFFER | CL_MEM_SVM_ATOMICS)) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 
   // Check for exactly one read/write spec
@@ -65,32 +65,32 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
     num_rw_specs++;
   // Default to CL_MEM_READ_WRITE.
   if (num_rw_specs > 1)
-    UNLOCK_RETURN(NULL);
+    return NULL;
   if (num_rw_specs == 0)
     flags |= CL_MEM_READ_WRITE;
 
   // Cannot specify SVM atomics without fine grain
   if ((flags & CL_MEM_SVM_ATOMICS) && !(flags & CL_MEM_SVM_FINE_GRAIN_BUFFER)) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 
   // If SVM atomics specified, check if any device in context supports SVM
   // atomics Right now though, we don't support SVM atomics so just return NULL
   if (flags & CL_MEM_SVM_ATOMICS) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 
   // If fine grain specified, check if any device in context supports fine grain
   // Right now though, we don't support SVM fine grain so just return NULL
   if (flags & CL_MEM_SVM_FINE_GRAIN_BUFFER) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 
   // size is 0 or > CL_DEVICE_MAX_MEM_ALLOC_SIZE value for any device in context
   if (size == 0)
-    UNLOCK_RETURN(NULL);
+    return NULL;
   if (size > context->max_mem_alloc_size) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 
   // alignment is not a power of two or the OpenCL implementation cannot support
@@ -101,7 +101,7 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
   if (alignment == 0)
     alignment = ACL_MEM_ALIGN;
   if (alignment != ACL_MEM_ALIGN)
-    UNLOCK_RETURN(NULL);
+    return NULL;
 
 #endif // !REMOVE_VALID_CHECKS
 
@@ -111,7 +111,7 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
 #else // LINUX
   mem_result = posix_memalign(&result, alignment, size);
   if (mem_result != 0) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
 #endif
 #else
@@ -135,7 +135,7 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
 #else // LINUX
     mem_result = posix_memalign(&result, alignment, size);
     if (mem_result != 0) {
-      UNLOCK_RETURN(NULL);
+      return NULL;
     }
 #endif
   } else {
@@ -161,7 +161,7 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
   context->svm_list->ptr = result;
   context->svm_list->size = size;
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -177,7 +177,7 @@ CL_API_ENTRY void clSVMFreeIntelFPGA(cl_context context, void *svm_pointer) {
   acl_svm_entry_t *next_entry;
   unsigned int idevice;
   cl_bool context_has_svm;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   context_has_svm = CL_FALSE;
   if (acl_get_hal()) {
     for (idevice = 0; idevice < context->num_devices; ++idevice) {
@@ -189,15 +189,15 @@ CL_API_ENTRY void clSVMFreeIntelFPGA(cl_context context, void *svm_pointer) {
   }
 #ifndef REMOVE_VALID_CHECKS
   if (!acl_context_is_valid(context))
-    UNLOCK_RETURN_VOID;
+    return;
 
   if (svm_pointer == NULL)
-    UNLOCK_RETURN_VOID;
+    return;
 
 #endif // !REMOVE_VALID_CHECKS
   // Only free the SVM pointer if it is from this context
   if (context->svm_list == NULL)
-    UNLOCK_RETURN_VOID;
+    return;
 
   last_entry = NULL;
   next_entry = context->svm_list;
@@ -233,8 +233,6 @@ CL_API_ENTRY void clSVMFreeIntelFPGA(cl_context context, void *svm_pointer) {
     last_entry = next_entry;
     next_entry = next_entry->next;
   }
-
-  acl_unlock();
 }
 
 ACL_EXPORT
@@ -249,31 +247,31 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemcpyIntelFPGA(
     const cl_event *event_wait_list, cl_event *event) {
   cl_event local_event = 0; // used for blocking
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (src_ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (dst_ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer size cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer size cannot be 0");
   }
 
   if (((char *)src_ptr < (char *)dst_ptr &&
        (char *)src_ptr + size > (char *)dst_ptr) ||
       ((char *)dst_ptr < (char *)src_ptr &&
        (char *)dst_ptr + size > (char *)src_ptr)) {
-    UNLOCK_ERR_RET(CL_MEM_COPY_OVERLAP, command_queue->context,
-                   "Source and destination memory overlaps");
+    ERR_RET(CL_MEM_COPY_OVERLAP, command_queue->context,
+            "Source and destination memory overlaps");
   }
 
   // Create an event/command to actually move the data at the appropriate
@@ -282,7 +280,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemcpyIntelFPGA(
       acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
                        CL_COMMAND_SVM_MEMCPY, &local_event);
   if (status != CL_SUCCESS)
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   local_event->cmd.info.svm_xfer.src_ptr = src_ptr;
   local_event->cmd.info.svm_xfer.dst_ptr = dst_ptr;
   local_event->cmd.info.svm_xfer.src_size = size;
@@ -303,7 +301,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemcpyIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -322,42 +320,42 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemFillIntelFPGA(
     const cl_event *event_wait_list, cl_event *event) {
   cl_event local_event = 0; // used for blocking
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (svm_ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (((uintptr_t)svm_ptr) % (pattern_size * 8) != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer not aligned with pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer not aligned with pattern size");
   }
   if (pattern == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pattern argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pattern argument cannot be NULL");
   }
   if (pattern_size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pattern size argument cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pattern size argument cannot be 0");
   }
   if (pattern_size != 1 && pattern_size != 2 && pattern_size != 4 &&
       pattern_size != 8 && pattern_size != 16 && pattern_size != 32 &&
       pattern_size != 64 && pattern_size != 128) {
-    UNLOCK_ERR_RET(
+    ERR_RET(
         CL_INVALID_VALUE, command_queue->context,
         "Pattern size argument must be one of {1, 2, 4, 8, 16, 32, 64, 128}");
   }
   if (size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer size cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer size cannot be 0");
   }
   if (size % pattern_size != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer size must be multiple of pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer size must be multiple of pattern size");
   }
 
   // Create an event/command to actually move the data at the appropriate
@@ -366,7 +364,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemFillIntelFPGA(
       acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
                        CL_COMMAND_SVM_MEMFILL, &local_event);
   if (status != CL_SUCCESS)
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   local_event->cmd.info.svm_xfer.src_ptr = pattern;
   local_event->cmd.info.svm_xfer.dst_ptr = svm_ptr;
   local_event->cmd.info.svm_xfer.src_size = pattern_size;
@@ -383,7 +381,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemFillIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMemFill(
@@ -401,22 +399,22 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMapIntelFPGA(
     const cl_event *event_wait_list, cl_event *event) {
   cl_event local_event = 0; // used for blocking
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (svm_ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer size cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer size cannot be 0");
   }
   if (flags & ~(CL_MAP_READ | CL_MAP_WRITE)) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Invalid or unsupported flags");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Invalid or unsupported flags");
   }
 
   // Create an event/command to actually move the data at the appropriate
@@ -424,7 +422,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMapIntelFPGA(
   status = acl_create_event(command_queue, num_events_in_wait_list,
                             event_wait_list, CL_COMMAND_SVM_MAP, &local_event);
   if (status != CL_SUCCESS)
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   // We don't use this right now, but if we ever have to sync up caches we will
   // need this.
   local_event->cmd.info.svm_xfer.dst_ptr = svm_ptr;
@@ -445,7 +443,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMapIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMMap(
@@ -463,14 +461,14 @@ clEnqueueSVMUnmapIntelFPGA(cl_command_queue command_queue, void *svm_ptr,
                            const cl_event *event_wait_list, cl_event *event) {
   cl_event local_event = 0; // used for blocking
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (svm_ptr == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
 
   // Create an event/command to actually move the data at the appropriate
@@ -479,7 +477,7 @@ clEnqueueSVMUnmapIntelFPGA(cl_command_queue command_queue, void *svm_ptr,
       acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
                        CL_COMMAND_SVM_UNMAP, &local_event);
   if (status != CL_SUCCESS)
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   // We don't use this right now, but if we ever have to sync up caches we will
   // need this.
   local_event->cmd.info.svm_xfer.dst_ptr = svm_ptr;
@@ -495,7 +493,7 @@ clEnqueueSVMUnmapIntelFPGA(cl_command_queue command_queue, void *svm_ptr,
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL
@@ -517,18 +515,18 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMFreeIntelFPGA(
     const cl_event *event_wait_list, cl_event *event) {
   cl_event local_event = 0; // used for blocking
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (svm_pointers == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "List of SVM pointers argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "List of SVM pointers argument cannot be NULL");
   }
   if (num_svm_pointers == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Number of SVM pointers cannot be 0");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Number of SVM pointers cannot be 0");
   }
 
   // Create an event/command to actually move the data at the appropriate
@@ -536,7 +534,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMFreeIntelFPGA(
   status = acl_create_event(command_queue, num_events_in_wait_list,
                             event_wait_list, CL_COMMAND_SVM_FREE, &local_event);
   if (status != CL_SUCCESS)
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   // We don't use this right now, but if we ever have to sync up caches we will
   // need this.
   local_event->cmd.info.svm_free.pfn_free_func = pfn_free_func;
@@ -555,7 +553,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMFreeIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clEnqueueSVMFree(

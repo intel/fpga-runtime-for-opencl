@@ -1,9 +1,6 @@
 // Copyright (C) 2015-2021 Intel Corporation
 // SPDX-License-Identifier: BSD-3-Clause
 
-// System headers.
-#include <thread>
-
 // External library headers.
 #include <acl_threadsupport/acl_threadsupport.h>
 
@@ -16,13 +13,14 @@
 ACL_TLS int acl_global_lock_count = 0;
 ACL_TLS int acl_inside_sig_flag = 0;
 ACL_TLS int acl_inside_sig_old_lock_count = 0;
+acl_mutex_wrapper_t acl_mutex_wrapper;
 
 static struct acl_condvar_s l_acl_global_condvar;
 
 // l_init_once() is defined in an OS-specific section below
 static void l_init_once();
 
-void acl_lock() {
+void acl_mutex_wrapper_t::lock() {
   l_init_once();
   if (acl_global_lock_count == 0) {
     acl_acquire_condvar(&l_acl_global_condvar);
@@ -30,7 +28,7 @@ void acl_lock() {
   acl_global_lock_count++;
 }
 
-void acl_unlock() {
+void acl_mutex_wrapper_t::unlock() {
   acl_assert_locked();
   acl_global_lock_count--;
   if (acl_global_lock_count == 0) {
@@ -40,7 +38,7 @@ void acl_unlock() {
 
 int acl_is_locked_callback(void) { return (acl_global_lock_count > 0); }
 
-int acl_suspend_lock() {
+int acl_mutex_wrapper_t::suspend_lock() {
   int old_lock_count = acl_global_lock_count;
   acl_global_lock_count = 0;
   if (old_lock_count > 0)
@@ -48,7 +46,7 @@ int acl_suspend_lock() {
   return old_lock_count;
 }
 
-void acl_resume_lock(int lock_count) {
+void acl_mutex_wrapper_t::resume_lock(int lock_count) {
   acl_assert_unlocked();
   if (lock_count > 0)
     acl_acquire_condvar(&l_acl_global_condvar);
@@ -100,6 +98,7 @@ static void l_init_once() {
 
 __attribute__((constructor)) static void l_global_lock_init() {
   acl_init_condvar(&l_acl_global_condvar);
+  acl_mutex_wrapper = acl_mutex_wrapper_t();
 }
 
 __attribute__((destructor)) static void l_global_lock_uninit() {
@@ -124,6 +123,7 @@ static BOOL CALLBACK l_init_once_callback(PINIT_ONCE InitOnce, PVOID Parameter,
   (void)(Context);
 
   acl_init_condvar(&l_acl_global_condvar);
+  acl_mutex_wrapper = acl_mutex_wrapper_t();
   return TRUE;
 }
 
@@ -140,8 +140,7 @@ static void l_init_once() {
 // e.g. polling BSPs (using yield) to prevent one thread from hogging the mutex
 // while waiting for something like clFinish.
 void acl_yield_lock_and_thread() {
-  int lock_count;
-  lock_count = acl_suspend_lock();
+  acl_suspend_lock_guard lock{acl_mutex_wrapper};
 #ifdef __arm__
   // arm-linux-gnueabihf-g++ version used is 4.7.1.
   // std::this_thread::yield can be enabled for it by defining
@@ -152,5 +151,4 @@ void acl_yield_lock_and_thread() {
 #else
   std::this_thread::yield();
 #endif
-  acl_resume_lock(lock_count);
 }

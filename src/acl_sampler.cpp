@@ -40,7 +40,7 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
   cl_sampler sampler;
   int next_free_sampler_head;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   sampler_id = acl_platform.free_sampler_head;
   sampler = &(acl_platform.sampler[sampler_id]);
@@ -53,7 +53,7 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
   sampler->filter_mode = 0xFFFFFFFF;
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
 
   sampler->context = context;
@@ -73,8 +73,8 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
     }
   }
   if (!some_device_supports_images) {
-    UNLOCK_BAIL_INFO(CL_INVALID_OPERATION, context,
-                     "No devices in context support images");
+    BAIL_INFO(CL_INVALID_OPERATION, context,
+              "No devices in context support images");
   }
 
   iprop = 0;
@@ -82,21 +82,20 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
     if (sampler_properties[iprop] == CL_SAMPLER_NORMALIZED_COORDS) {
       ++iprop;
       if (sampler->normalized_coords != 0xFFFFFFFF) {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_VALUE, context,
             "Normalized coords property specified more than once for sampler");
       }
       if (sampler_properties[iprop] != CL_FALSE &&
           sampler_properties[iprop] != CL_TRUE) {
-        UNLOCK_BAIL_INFO(
-            CL_INVALID_VALUE, context,
-            "Invalid value for normalized coords property of sampler");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Invalid value for normalized coords property of sampler");
       }
       sampler->normalized_coords = sampler_properties[iprop];
     } else if (sampler_properties[iprop] == CL_SAMPLER_ADDRESSING_MODE) {
       ++iprop;
       if (sampler->addressing_mode != 0xFFFFFFFF) {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_VALUE, context,
             "Addressing mode property specified more than once for sampler");
       }
@@ -105,29 +104,27 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
           sampler_properties[iprop] != CL_ADDRESS_CLAMP_TO_EDGE &&
           sampler_properties[iprop] != CL_ADDRESS_CLAMP &&
           sampler_properties[iprop] != CL_ADDRESS_NONE) {
-        UNLOCK_BAIL_INFO(
-            CL_INVALID_VALUE, context,
-            "Invalid value for addressing mode property of sampler");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Invalid value for addressing mode property of sampler");
       }
       sampler->addressing_mode = sampler_properties[iprop];
     } else if (sampler_properties[iprop] == CL_SAMPLER_FILTER_MODE) {
       ++iprop;
       if (sampler->filter_mode != 0xFFFFFFFF) {
-        UNLOCK_BAIL_INFO(
-            CL_INVALID_VALUE, context,
-            "Filter mode property specified more than once for sampler");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Filter mode property specified more than once for sampler");
       }
       if (sampler_properties[iprop] != CL_FILTER_NEAREST &&
           sampler_properties[iprop] != CL_FILTER_LINEAR) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "Invalid value for filter mode property of sampler");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Invalid value for filter mode property of sampler");
       }
       sampler->filter_mode = sampler_properties[iprop];
     } else {
       std::stringstream msg;
       msg << "Invalid sampler property name " << sampler_properties[iprop]
           << "\n";
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, msg.str().c_str());
+      BAIL_INFO(CL_INVALID_VALUE, context, msg.str().c_str());
     }
     ++iprop;
   }
@@ -155,7 +152,7 @@ CL_API_ENTRY cl_sampler clCreateSamplerWithPropertiesIntelFPGA(
 
   acl_track_object(ACL_OBJ_MEM_OBJECT, result);
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -196,9 +193,9 @@ clCreateSampler(cl_context context, cl_bool normalized_coords,
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainSamplerIntelFPGA(cl_sampler sampler) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_sampler_is_valid(sampler)) {
-    UNLOCK_RETURN(CL_INVALID_SAMPLER);
+    return CL_INVALID_SAMPLER;
   }
   acl_retain(sampler);
 
@@ -207,7 +204,6 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainSamplerIntelFPGA(cl_sampler sampler) {
                       acl_ref_count(sampler));
 #endif
 
-  acl_unlock();
   return CL_SUCCESS;
 }
 
@@ -218,11 +214,11 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainSampler(cl_sampler sampler) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseSamplerIntelFPGA(cl_sampler sampler) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   // In the double-free case, we'll error out here because the reference count
   // will be 0.
   if (!acl_sampler_is_valid(sampler)) {
-    UNLOCK_RETURN(CL_INVALID_SAMPLER);
+    return CL_INVALID_SAMPLER;
   }
 
   acl_release(sampler);
@@ -250,7 +246,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseSamplerIntelFPGA(cl_sampler sampler) {
     clReleaseContext(context);
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -266,9 +262,9 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfoIntelFPGA(
   cl_context context;
   RESULT_INIT;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_sampler_is_valid(sampler)) {
-    UNLOCK_RETURN(CL_INVALID_SAMPLER);
+    return CL_INVALID_SAMPLER;
   }
 
   context = sampler->context;
@@ -295,8 +291,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfoIntelFPGA(
   }
 
   if (result.size == 0)
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid or unsupported sampler object query");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid or unsupported sampler object query");
 
   if (param_value) {
     if (param_value_size < result.size)
@@ -308,7 +304,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSamplerInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT

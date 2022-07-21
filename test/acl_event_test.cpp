@@ -292,7 +292,7 @@ MT_TEST(acl_event, acl_create_event) {
 
   // Bad command queue
   struct _cl_command_queue fake_cq = {0};
-  acl_lock();
+  acl_mutex_wrapper.lock();
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE,
               acl_create_event(0, 0, 0, CL_COMMAND_MARKER, &user_event));
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE,
@@ -338,7 +338,7 @@ MT_TEST(acl_event, acl_create_event) {
   CHECK(cq0);
   acl_update_queue(cq0);
 
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 
   // Check the callback functions initialization.
   CHECK_EQUAL(NULL, event[0]->callback_list);
@@ -614,7 +614,7 @@ MT_TEST(acl_event, event_liveness) {
   CHECK_EQUAL(CL_SUCCESS, status);
   CHECK(cq0);
 
-  acl_lock();
+  acl_mutex_wrapper.lock();
   cl_event event;
   status = acl_create_event(cq0, 0, 0, CL_COMMAND_MARKER, &event);
   CHECK_EQUAL(CL_SUCCESS, status);
@@ -659,7 +659,7 @@ MT_TEST(acl_event, event_liveness) {
   acl_set_execution_status(event, CL_QUEUED);
   CHECK(acl_event_is_live(event));
   acl_retain(event);
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 
   this->kill_event(event);
 
@@ -690,7 +690,7 @@ MT_TEST(acl_event, event_callbacks) {
   CHECK_EQUAL(CL_SUCCESS, status);
   CHECK(cq0);
 
-  acl_lock();
+  acl_mutex_wrapper.lock();
   cl_event event, event2, event3;
   status = acl_create_event(cq0, 0, 0, CL_COMMAND_MARKER, &event);
   CHECK_EQUAL(CL_SUCCESS, status);
@@ -807,7 +807,7 @@ MT_TEST(acl_event, event_callbacks) {
     CHECK_EQUAL(1, call_flags_event3[i]);
   }
   clReleaseEvent(user_event);
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
 
   this->kill_event(event);
   this->kill_event(event2);

@@ -81,12 +81,12 @@ static void l_record_milestone(cl_event event, cl_profiling_info milestone);
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainEventIntelFPGA(cl_event event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
   acl_retain(event);
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -96,14 +96,14 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainEvent(cl_event event) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseEventIntelFPGA(cl_event event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
   if (!acl_is_retained(event)) {
-    UNLOCK_ERR_RET(CL_INVALID_EVENT, event->context,
-                   "Trying to release an event that is not retained");
+    ERR_RET(CL_INVALID_EVENT, event->context,
+            "Trying to release an event that is not retained");
   }
   acl_release(event);
 
@@ -134,7 +134,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseEventIntelFPGA(cl_event event) {
     }
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -147,10 +147,10 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventInfoIntelFPGA(
     cl_event event, cl_event_info param_name, size_t param_value_size,
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
 
   // Give the scheduler a nudge.
@@ -159,8 +159,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventInfoIntelFPGA(
     acl_idle_update(event->context);
   }
 
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, event->context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          event->context);
 
   RESULT_INIT;
 
@@ -193,14 +193,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventInfoIntelFPGA(
   }
 
   if (result.size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, event->context,
-                   "Invalid or unsupported event query");
+    ERR_RET(CL_INVALID_VALUE, event->context,
+            "Invalid or unsupported event query");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, event->context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, event->context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -208,7 +208,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -226,21 +226,21 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventProfilingInfoIntelFPGA(
     cl_event event, cl_profiling_info param_name, size_t param_value_size,
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, event->context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          event->context);
 
   // check if the event supports the profiling and error out accordingly
   if (event->cmd.type == CL_COMMAND_USER) {
-    UNLOCK_ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, event->context,
-                   "Profiling information is not available for user events");
+    ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, event->context,
+            "Profiling information is not available for user events");
   } else if (!event->support_profiling) {
     // since user event will not have command_queue set, no need to check again
-    UNLOCK_ERR_RET(
+    ERR_RET(
         CL_PROFILING_INFO_NOT_AVAILABLE, event->context,
         "Profiling information is not available because "
         "CL_QUEUE_PROFILING_ENABLE was not set on the event's command queue");
@@ -266,14 +266,13 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventProfilingInfoIntelFPGA(
   }
 
   if (result.size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, event->context,
-                   "Invalid event profiling query");
+    ERR_RET(CL_INVALID_VALUE, event->context, "Invalid event profiling query");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, event->context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, event->context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -281,7 +280,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetEventProfilingInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -297,10 +296,10 @@ CL_API_ENTRY cl_event CL_API_CALL
 clCreateUserEventIntelFPGA(cl_context context, cl_int *errcode_ret) {
   cl_event result = 0;
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   // Create the user event on the user_event_queue.
   // In our model, every event is attached to some command queue.
@@ -310,7 +309,7 @@ clCreateUserEventIntelFPGA(cl_context context, cl_int *errcode_ret) {
                             0, // depends on nothing else.
                             CL_COMMAND_USER, &result);
   if (status != CL_SUCCESS)
-    UNLOCK_BAIL(status); // already signaled error
+    BAIL(status); // already signaled error
 
   // As per spec.
   acl_set_execution_status(result, CL_SUBMITTED);
@@ -318,7 +317,7 @@ clCreateUserEventIntelFPGA(cl_context context, cl_int *errcode_ret) {
   if (errcode_ret)
     *errcode_ret = CL_SUCCESS;
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -330,16 +329,16 @@ CL_API_ENTRY cl_event CL_API_CALL clCreateUserEvent(cl_context context,
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL
 clSetUserEventStatusIntelFPGA(cl_event event, cl_int execution_status) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
 
   // Either negative, or CL_COMPLETE (which itself is 0)
   if (execution_status <= CL_COMPLETE) {
     if (event->execution_status <= CL_COMPLETE) {
-      UNLOCK_ERR_RET(
+      ERR_RET(
           CL_INVALID_OPERATION, event->context,
           "User event has already been completed or terminated with an error");
     }
@@ -349,10 +348,9 @@ clSetUserEventStatusIntelFPGA(cl_event event, cl_int execution_status) {
     // Nudge the scheduler.
     acl_idle_update(event->context);
 
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   } else {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, event->context,
-                   "Invalid execution status");
+    ERR_RET(CL_INVALID_VALUE, event->context, "Invalid execution status");
   }
 }
 
@@ -371,24 +369,24 @@ CL_API_ENTRY cl_int clSetEventCallbackIntelFPGA(
                                         void *user_data),
     void *user_data) {
   acl_event_user_callback *cb;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
 
   if (pfn_event_notify == NULL) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
   if (command_exec_callback_type != CL_SUBMITTED &&
       command_exec_callback_type != CL_RUNNING &&
       command_exec_callback_type != CL_COMPLETE) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   cb = (acl_event_user_callback *)acl_malloc(sizeof(acl_event_user_callback));
   if (!cb)
-    UNLOCK_RETURN(CL_OUT_OF_HOST_MEMORY);
+    return CL_OUT_OF_HOST_MEMORY;
 
   cb->notify_user_data = user_data;
   cb->event_notify_fn = pfn_event_notify;
@@ -403,7 +401,7 @@ CL_API_ENTRY cl_int clSetEventCallbackIntelFPGA(
   // status is already passed.
   acl_event_callback(event, event->execution_status);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 // registers a user callback function for a specific command execution status.
@@ -421,7 +419,6 @@ CL_API_ENTRY cl_int clSetEventCallback(
 // Internals
 
 void acl_event_callback(cl_event event, cl_int event_command_exec_status) {
-  int lock_count;
   // This function should not be called from a signal handler, but from within a
   // lock, as it calls user defined callback functions. So a lock is required.
   acl_assert_locked();
@@ -454,10 +451,10 @@ void acl_event_callback(cl_event event, cl_int event_command_exec_status) {
         temp = cb_head;
         cb_head = cb_head->next;
         acl_free(temp);
-
-        lock_count = acl_suspend_lock();
-        event_notify_fn(event, event_command_exec_status, notify_user_data);
-        acl_resume_lock(lock_count);
+        {
+          acl_suspend_lock_guard lock{acl_mutex_wrapper};
+          event_notify_fn(event, event_command_exec_status, notify_user_data);
+        }
         release++;
       } else {
         pre = cb_head;
@@ -669,8 +666,9 @@ void acl_set_execution_status(cl_event event, int new_status) {
   // signal handler, which can't lock mutexes, so we don't lock in that case.
   // All functions called from this one therefore have to use
   // acl_assert_locked_or_sig() instead of just acl_assert_locked().
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
   if (event) { // just being defensive
@@ -741,10 +739,6 @@ void acl_set_execution_status(cl_event event, int new_status) {
 
     // Signal all waiters.
     acl_signal_device_update();
-  }
-
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
   }
 }
 

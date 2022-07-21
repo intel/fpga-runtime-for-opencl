@@ -997,8 +997,9 @@ void acl_schedule_printf_buffer_pickup(int activation_id, int size,
   // signal handler, which can't lock mutexes, so we don't lock in that case.
   // All functions called from this one therefore have to use
   // acl_assert_locked_or_sig() instead of just acl_assert_locked().
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
 #ifdef DEBUG
@@ -1016,10 +1017,6 @@ void acl_schedule_printf_buffer_pickup(int activation_id, int size,
   }
   // Signal all waiters.
   acl_signal_device_update();
-
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
-  }
 }
 
 void acl_process_printf_buffer(void *user_data, acl_device_op_t *op) {

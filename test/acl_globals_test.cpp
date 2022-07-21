@@ -693,12 +693,12 @@ const acl_system_def_t *acl_test_get_empty_system_def() {
   return &acltest_empty_system;
 }
 
-TEST_GROUP(acl_globals_undef){void setup(){acl_lock();
+TEST_GROUP(acl_globals_undef){void setup(){acl_mutex_wrapper.lock();
 acl_set_hal(acl_test_get_simple_hal());
 }
 void teardown() {
   acl_reset_hal();
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
   acl_test_run_standard_teardown_checks();
 }
 

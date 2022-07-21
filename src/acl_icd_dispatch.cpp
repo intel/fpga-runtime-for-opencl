@@ -78,11 +78,11 @@ clGetExtensionFunctionAddressIntelFPGA(const char *func_name) {
 ACL_EXPORT
 CL_API_ENTRY void *CL_API_CALL clGetBoardExtensionFunctionAddressIntelFPGA(
     const char *func_name, cl_device_id device) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   {
     void *ret = acl_get_hal()->get_board_extension_function_address(
         func_name, device->def.physical_device_id);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -97,11 +97,11 @@ CL_API_ENTRY void *CL_API_CALL
 clGetExtensionFunctionAddressForPlatformIntelFPGA(cl_platform_id platform,
                                                   const char *func_name) {
   // We currently only have one platform
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_platform_is_valid(platform)) {
-    UNLOCK_RETURN(NULL);
+    return NULL;
   }
-  UNLOCK_RETURN(clGetExtensionFunctionAddressIntelFPGA(func_name));
+  return clGetExtensionFunctionAddressIntelFPGA(func_name);
 }
 
 ACL_EXPORT

@@ -12,6 +12,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+// System headers.
+#include <mutex>
+#include <thread>
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -23,9 +27,14 @@ extern "C" {
 #define ACL_TLS __declspec(thread)
 #endif
 
+// Foward declaration
+class acl_mutex_wrapper_t;
+
 extern ACL_TLS int acl_global_lock_count;
 extern ACL_TLS int acl_inside_sig_flag;
 extern ACL_TLS int acl_inside_sig_old_lock_count;
+
+extern acl_mutex_wrapper_t acl_mutex_wrapper;
 
 // -- signal handler functions --
 // When we enter a signal handler, we save "acl_global_lock_count" to
@@ -75,10 +84,6 @@ static inline void acl_sig_unblock_signals() {
 
 // -- global lock functions --
 
-void acl_lock();
-void acl_unlock();
-int acl_suspend_lock();
-void acl_resume_lock(int lock_count);
 void acl_wait_for_device_update(cl_context context);
 void acl_signal_device_update();
 
@@ -104,5 +109,32 @@ void acl_yield_lock_and_thread();
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif
+
+// -- RAII wrapper classes --
+
+// To follow RAII, provide a mutex class acl_mutex_wrapper_t which may be used
+// with std::scoped_lock and std::unique_lock. Note that std::scoped_lock may
+// only be constructed with a single instance of acl_mutex_wrapper_t since the
+// latter only implements BasicLockable but not Lockable, due to a lack of
+// try_lock() functionality in acl_threadsupport.
+class acl_mutex_wrapper_t {
+public:
+  void lock();
+  void unlock();
+  int suspend_lock();
+  void resume_lock(int lock_count);
+};
+
+class acl_suspend_lock_guard {
+public:
+  explicit acl_suspend_lock_guard(acl_mutex_wrapper_t &mutex) : mutex(mutex) {
+    lock_count = mutex.suspend_lock();
+  };
+  ~acl_suspend_lock_guard() { mutex.resume_lock(lock_count); }
+
+private:
+  int lock_count;
+  acl_mutex_wrapper_t &mutex;
+};
 
 #endif // ACL_THREAD_H

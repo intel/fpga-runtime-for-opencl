@@ -293,8 +293,9 @@ int write_profile_info_to_file(unsigned num_profile_counters,
   if (!profile_enable)
     return 0;
 
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
   acl_open_profiler_file();
@@ -303,9 +304,6 @@ int write_profile_info_to_file(unsigned num_profile_counters,
   if (opened_count < 1) {
     acl_print_debug_msg("Profiler output file is not opened: " STR(
         ACL_PROFILER_OUTPUT_FILENAME) "\n");
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
@@ -339,17 +337,8 @@ int write_profile_info_to_file(unsigned num_profile_counters,
   if (bytes_written < 0 ||
       (unsigned long int)bytes_written != temp_buf.size()) {
     acl_print_debug_msg("Could not write profile data to file!\n");
-
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
-
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
-  }
-
   return 1;
 }
 
@@ -467,9 +456,8 @@ unsigned long is_profile_enabled() { return profile_enable; }
 unsigned long is_profile_timer_on() { return profile_timer_on; }
 
 void acl_set_autorun_start_time() {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   autorun_start_time = acl_get_hal()->get_timestamp();
-  acl_unlock();
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clGetProfileInfoIntelFPGA(cl_event event) {
@@ -482,16 +470,16 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileInfoIntelFPGA(cl_event event) {
   int i;
   _cl_command_queue *command_queue;
   cl_device_id device_id;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_event_is_valid(event)) {
     acl_print_debug_msg("clGetProfileInfoIntelFPGA is called for NULL event\n");
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
   if (event->execution_status != CL_RUNNING) {
     acl_print_debug_msg(
         "clGetProfileInfoIntelFPGA is called for non-running event\n");
-    UNLOCK_RETURN(CL_INVALID_EVENT);
+    return CL_INVALID_EVENT;
   }
 
   context = event->context;
@@ -499,29 +487,27 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileInfoIntelFPGA(cl_event event) {
   if (!acl_context_is_valid(context)) {
     acl_print_debug_msg(
         "clGetProfileInfoIntelFPGA is called for NULL context\n");
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
 
   command_queue = event->command_queue;
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_ERR_RET(
-        CL_INVALID_COMMAND_QUEUE, context,
-        "clGetProfileInfoIntelFPGA is called for NULL command_queue");
+    ERR_RET(CL_INVALID_COMMAND_QUEUE, context,
+            "clGetProfileInfoIntelFPGA is called for NULL command_queue");
   }
 
   device_id = command_queue->device;
 
   if (!acl_device_is_valid(device_id)) {
-    UNLOCK_ERR_RET(CL_INVALID_DEVICE, context,
-                   "clGetProfileInfoIntelFPGA is called for NULL device_id");
+    ERR_RET(CL_INVALID_DEVICE, context,
+            "clGetProfileInfoIntelFPGA is called for NULL device_id");
   }
 
   profile_data = 0;
   kernel = event->cmd.info.ndrange_kernel.kernel;
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_ERR_RET(CL_INVALID_KERNEL, context,
-                   "Invalid kernel attached to event");
+    ERR_RET(CL_INVALID_KERNEL, context, "Invalid kernel attached to event");
   }
 
   // use autodiscovery info to find out how many words will be read from the
@@ -531,8 +517,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileInfoIntelFPGA(cl_event event) {
   if (num_profile_counters == 0) {
     // there is not profiler data and we are not printing timers
     // nothing to print
-    UNLOCK_ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, context,
-                   "No profile information");
+    ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, context, "No profile information");
   }
 
   // this kernel has profiling data, get it
@@ -569,11 +554,10 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileInfoIntelFPGA(cl_event event) {
           profile_data, ACL_DEVICE_OP_KERNEL,
           (unsigned long long)event->timestamp[CL_RUNNING],
           (unsigned long long)0, curr_shared_counters)) {
-    UNLOCK_ERR_RET(CL_OUT_OF_RESOURCES, context,
-                   "Unabled to dump profile data");
+    ERR_RET(CL_OUT_OF_RESOURCES, context, "Unabled to dump profile data");
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
@@ -597,16 +581,16 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
   param_value_size_ret = param_value_size_ret;
   errcode_ret = errcode_ret;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Check if valid device_id
   if (!acl_device_is_valid(device_id)) {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
 
   // Check if valid program
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
 
   // If program is valid, then context is valid because acl_program_is_valid
@@ -628,7 +612,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
           ACL_PROFILE_AUTORUN_KERNEL_NAME) " for autorun profiling. Make sure "
                                            "the .aocx was compiled with "
                                            "autorun kernel profiling enabled";
-      UNLOCK_ERR_RET(status, program->context, message);
+      ERR_RET(status, program->context, message);
     }
 
     // use autodiscovery info to find out how many words will be read from the
@@ -642,8 +626,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
       const char *message = "No profile information for kernel " STR(
           ACL_PROFILE_AUTORUN_KERNEL_NAME) " for reading back autorun profile "
                                            "data";
-      UNLOCK_ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, program->context,
-                     message);
+      ERR_RET(CL_PROFILING_INFO_NOT_AVAILABLE, program->context, message);
     } else {
       uint64_t *readback_profile_data;
       readback_profile_data = (uint64_t *)acl_malloc(
@@ -677,12 +660,12 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
               device_id, context, accel_def->iface.name.c_str(),
               readback_profile_data, ACL_DEVICE_OP_KERNEL, autorun_start_time,
               profiled_time, num_profile_counters, curr_shared_counters)) {
-        UNLOCK_RETURN(CL_OUT_OF_RESOURCES);
+        return CL_OUT_OF_RESOURCES;
       }
     }
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 int acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
@@ -694,25 +677,20 @@ int acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
   uint64_t *profile_data = nullptr;
   std::string name = "";
 
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
   const acl_device_binary_t *binary =
       acl_get_platform()->device[physical_device_id].loaded_bin;
   if (binary == nullptr) {
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
   const acl_accel_def_t *accel_def =
       binary->get_dev_prog()->get_kernel_accel_def(
           ACL_PROFILE_AUTORUN_KERNEL_NAME);
   if (accel_def == nullptr) {
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
@@ -730,9 +708,6 @@ int acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
                                     num_profile_counters);
   } else {
     // There is no profiler data - nothing to print
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
@@ -750,9 +725,6 @@ int acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
     acl_free(profile_data);
   }
 
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
-  }
   return 1;
 }
 
@@ -770,8 +742,9 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
   cl_command_type op_type;
   _cl_command_queue *command_queue;
   cl_device_id device_id;
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
   char name[MAX_NAME_SIZE];
@@ -787,25 +760,16 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     if (!acl_event_is_valid(event)) {
       acl_print_debug_msg(
           "acl_process_profiler_scan_chain is called for an invalid event\n");
-      if (!acl_is_inside_sig()) {
-        acl_unlock();
-      }
       return 0;
     }
     if (!acl_command_queue_is_valid(event->command_queue)) {
       acl_print_debug_msg("acl_process_profiler_scan_chain is called for an "
                           "event with an invalid command_queue\n");
-      if (!acl_is_inside_sig()) {
-        acl_unlock();
-      }
       return 0;
     }
     if (acl_event_is_done(event)) {
       acl_print_debug_msg(
           "acl_process_profiler_scan_chain is called for a completed event\n");
-      if (!acl_is_inside_sig()) {
-        acl_unlock();
-      }
       return 0;
     }
   }
@@ -816,18 +780,12 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
   if (!device_id) {
     acl_print_debug_msg(
         "acl_process_profiler_scan_chain is called for NULL device_id\n");
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
   // this is not a kernel event and we are not printing timers
   // so nothing to print
   if (op_type != ACL_DEVICE_OP_KERNEL && profile_timer_on != 1) {
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
@@ -842,9 +800,6 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     if (num_profile_counters == 0 && profile_timer_on != 1) {
       // there is not profiler data and we are not printing timers
       // nothing to print
-      if (!acl_is_inside_sig()) {
-        acl_unlock();
-      }
       return 0;
     }
 
@@ -867,9 +822,6 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
   } else if (profile_timer_on != 1) {
     // if ACL_PROFILE_TIMER is not set, do not print info about the rest of
     // the events
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   } else if (op_type == ACL_DEVICE_OP_MEM_TRANSFER_COPY) {
     snprintf(name, MAX_NAME_SIZE, ".mem_transfer_copy");
@@ -887,9 +839,6 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     // Ignore unknown op_type (don't attempt to extract any profiling from it or
     // get timestamps)
     acl_print_debug_msg("Unknown device op type: '%d'\n", int(op_type));
-    if (!acl_is_inside_sig()) {
-      acl_unlock();
-    }
     return 0;
   }
 
@@ -916,9 +865,6 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     dump_profile_buffer_to_file();
   }
 
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
-  }
   return 1;
 }
 
