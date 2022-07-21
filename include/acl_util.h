@@ -116,17 +116,6 @@ void acl_dump_mem(cl_mem mem);
 #endif
 /////////////////////
 
-#define UNLOCK_RETURN(ret)                                                     \
-  do {                                                                         \
-    acl_unlock();                                                              \
-    return (ret);                                                              \
-  } while (0)
-#define UNLOCK_RETURN_VOID                                                     \
-  do {                                                                         \
-    acl_unlock();                                                              \
-    return;                                                                    \
-  } while (0)
-
 // This macro is used to signal failure from a function via "errcode_ret"
 // and return 0.
 #define BAIL(STATUS)                                                           \
@@ -136,13 +125,6 @@ void acl_dump_mem(cl_mem mem);
     }                                                                          \
     return 0;                                                                  \
   } while (0)
-#define UNLOCK_BAIL(STATUS)                                                    \
-  do {                                                                         \
-    if (errcode_ret) {                                                         \
-      *errcode_ret = (STATUS);                                                 \
-    }                                                                          \
-    UNLOCK_RETURN(0);                                                          \
-  } while (0)
 
 // This is used to callback for a context error, assuming C is an
 // initialized context.
@@ -151,42 +133,31 @@ void acl_dump_mem(cl_mem mem);
     acl_context_callback(C, STR);                                              \
     BAIL(STATUS);                                                              \
   } while (0)
-#define UNLOCK_BAIL_INFO(STATUS, C, STR)                                       \
-  do {                                                                         \
-    acl_context_callback(C, STR);                                              \
-    UNLOCK_BAIL(STATUS);                                                       \
-  } while (0)
 
 #define ERR_RET(STATUS, C, STR)                                                \
   do {                                                                         \
     acl_context_callback(C, STR);                                              \
     return STATUS;                                                             \
   } while (0)
-#define UNLOCK_ERR_RET(STATUS, C, STR)                                         \
-  do {                                                                         \
-    acl_context_callback(C, STR);                                              \
-    UNLOCK_RETURN(STATUS);                                                     \
-  } while (0)
 
 // Caller only partly specified the buffer?
 // Caller isn't asking for any info at all?
-#define UNLOCK_VALIDATE_ARRAY_OUT_ARGS(buf_size, buf, answer_size_out,         \
-                                       context)                                \
+#define VALIDATE_ARRAY_OUT_ARGS(buf_size, buf, answer_size_out, context)       \
   do {                                                                         \
     if (buf && buf_size <= 0) {                                                \
       acl_context_callback(context,                                            \
                            #buf " is specified but " #buf_size " is zero");    \
-      UNLOCK_RETURN(CL_INVALID_VALUE);                                         \
+      return CL_INVALID_VALUE;                                                 \
     }                                                                          \
     if (buf == 0 && buf_size > 0) {                                            \
       acl_context_callback(context, #buf " is not specified but " #buf_size    \
                                          " is positive");                      \
-      UNLOCK_RETURN(CL_INVALID_VALUE);                                         \
+      return CL_INVALID_VALUE;                                                 \
     }                                                                          \
     if (answer_size_out == 0 && buf == 0) {                                    \
       acl_context_callback(context,                                            \
                            #buf " and " #answer_size_out " are both zero");    \
-      UNLOCK_RETURN(CL_INVALID_VALUE);                                         \
+      return CL_INVALID_VALUE;                                                 \
     }                                                                          \
   } while (0)
 

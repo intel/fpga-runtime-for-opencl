@@ -19,14 +19,14 @@
 #include <stdio.h>
 #include <string.h>
 
-TEST_GROUP(acl_hal_mmd){void setup(){acl_lock();
+TEST_GROUP(acl_hal_mmd){void setup(){acl_mutex_wrapper.lock();
 acl_hal_test_setup_generic_system();
 this->load();
 }
 void teardown() {
   this->unload();
   acl_hal_test_teardown_generic_system();
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
   acl_test_run_standard_teardown_checks();
 }
 

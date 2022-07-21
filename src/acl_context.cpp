@@ -83,24 +83,24 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
     cl_int *errcode_ret) {
   cl_context context;
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   context = l_create_context(properties, pfn_notify, user_data, &status);
   if (context == NULL || status != CL_SUCCESS) {
     acl_free_cl_context(context);
-    UNLOCK_BAIL(status);
+    BAIL(status);
   }
 
   // Now check the devices.
   if (num_devices == 0) {
     acl_context_callback(context, "No devices specified");
     acl_free_cl_context(context);
-    UNLOCK_BAIL(CL_INVALID_VALUE);
+    BAIL(CL_INVALID_VALUE);
   }
   if (devices == 0) {
     acl_context_callback(context, "No device array specified");
     acl_free_cl_context(context);
-    UNLOCK_BAIL(CL_INVALID_VALUE);
+    BAIL(CL_INVALID_VALUE);
   }
 
   // Make sure all mentioned devices are valid.
@@ -108,7 +108,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
     if (!acl_device_is_valid_ptr(devices[i])) {
       acl_context_callback(context, "Invalid device specified");
       acl_free_cl_context(context);
-      UNLOCK_BAIL(CL_INVALID_DEVICE);
+      BAIL(CL_INVALID_DEVICE);
     }
 
     if (devices[i]->opened_count) {
@@ -118,7 +118,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
                      "device in the device list is currently in use in another "
                      "context created with reprogramming disabled.");
         acl_free_cl_context(context);
-        UNLOCK_BAIL(CL_INVALID_VALUE);
+        BAIL(CL_INVALID_VALUE);
       } else if (!context->uses_dynamic_sysdef &&
                  devices[i]->mode_lock == BINARY) {
         acl_context_callback(
@@ -126,7 +126,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
                      "device in the device list is currently in use in another "
                      "context created with reprogramming enabled.");
         acl_free_cl_context(context);
-        UNLOCK_BAIL(CL_INVALID_VALUE);
+        BAIL(CL_INVALID_VALUE);
       }
     } else {
       // Since this is the first time creating a context for this device, we
@@ -142,7 +142,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
   status = l_finalize_context(context, num_devices, devices);
 
   if (status != CL_SUCCESS) {
-    UNLOCK_BAIL(status);
+    BAIL(status);
   }
 
   // Open the profiler output file after the first context creation
@@ -153,7 +153,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
   }
   // the context is created successfully, add it to the set
   acl_platform.contexts_set.insert(context);
-  UNLOCK_RETURN(context);
+  return context;
 }
 
 ACL_EXPORT
@@ -172,12 +172,12 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromTypeIntelFPGA(
   cl_uint num_devices = 0;
   cl_int status;
   cl_device_id devices[ACL_MAX_DEVICE];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   context = l_create_context(properties, pfn_notify, user_data, &status);
   if (context == NULL || status != CL_SUCCESS) {
     acl_free_cl_context(context);
-    UNLOCK_BAIL(status);
+    BAIL(status);
   }
 
   // Determine device IDs.
@@ -186,7 +186,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromTypeIntelFPGA(
   if (status != CL_SUCCESS || num_devices == 0) {
     acl_context_callback(context, "Device not found");
     acl_free_cl_context(context);
-    UNLOCK_BAIL(CL_DEVICE_NOT_FOUND);
+    BAIL(CL_DEVICE_NOT_FOUND);
   }
 
   // Filter out devices.
@@ -220,21 +220,21 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromTypeIntelFPGA(
                    "devices of the given device type are currently in use in "
                    "other contexts created with reprogramming disabled.");
       acl_free_cl_context(context);
-      UNLOCK_BAIL(CL_DEVICE_NOT_AVAILABLE);
+      BAIL(CL_DEVICE_NOT_AVAILABLE);
     } else {
       acl_context_callback(
           context, "Could not create context with reprogramming disabled. All "
                    "devices of the given device type are currently in use in "
                    "other contexts created with reprogramming enabled.");
       acl_free_cl_context(context);
-      UNLOCK_BAIL(CL_DEVICE_NOT_AVAILABLE);
+      BAIL(CL_DEVICE_NOT_AVAILABLE);
     }
   }
 
   status = l_finalize_context(context, num_devices, devices);
 
   if (status != CL_SUCCESS) {
-    UNLOCK_BAIL(status);
+    BAIL(status);
   }
 
   // Open the profiler output file after the first context creation
@@ -243,7 +243,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromTypeIntelFPGA(
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
   }
-  UNLOCK_RETURN(context);
+  return context;
 }
 
 ACL_EXPORT
@@ -256,7 +256,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromType(
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainContextIntelFPGA(cl_context context) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Note: Context creation uses acl_retain<> directly, but users must use
   // clRetainContext.
@@ -264,10 +264,10 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainContextIntelFPGA(cl_context context) {
   // That's why we use acl_context_is_valid() here instead of just
   // acl_is_valid_ptr().
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
   acl_retain(context);
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -277,11 +277,11 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainContext(cl_context context) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Error out if the reference count is already 0
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
 
   // Must mirror what is retained in clRetainContext.
@@ -303,7 +303,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
     // recursively trying to delete them again.
     if (context->is_being_freed) {
       acl_release(context);
-      UNLOCK_RETURN(CL_SUCCESS);
+      return CL_SUCCESS;
     }
     context->is_being_freed = 1;
 
@@ -358,7 +358,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
     acl_close_profiler_file();
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -371,13 +371,13 @@ CL_API_ENTRY cl_int CL_API_CALL clGetContextInfoIntelFPGA(
     cl_context context, cl_context_info param_name, size_t param_value_size,
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   RESULT_INIT;
 
@@ -403,14 +403,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetContextInfoIntelFPGA(
                context->num_property_entries * sizeof(cl_context_properties));
     break;
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid or unsupported context info query");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid or unsupported context info query");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -418,7 +418,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetContextInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -464,10 +464,10 @@ static cl_context l_create_context(const cl_context_properties *properties,
   cl_context context = 0;
   cl_int status;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (user_data && !pfn_notify) {
-    UNLOCK_BAIL(CL_INVALID_VALUE);
+    BAIL(CL_INVALID_VALUE);
   }
 
   {
@@ -478,12 +478,13 @@ static cl_context l_create_context(const cl_context_properties *properties,
     if (!allow_mp && platform_owner_pid != 0 &&
         platform_owner_pid != acl_get_pid()) {
       if (pfn_notify) {
-        int lock_count = acl_suspend_lock();
-        (pfn_notify)("Cannot create contexts in more than one process", 0, 0,
-                     user_data);
-        acl_resume_lock(lock_count);
+        {
+          acl_suspend_lock_guard lock{acl_mutex_wrapper};
+          (pfn_notify)("Cannot create contexts in more than one process", 0, 0,
+                       user_data);
+        }
       }
-      UNLOCK_BAIL(CL_OUT_OF_RESOURCES);
+      BAIL(CL_OUT_OF_RESOURCES);
     }
   }
 
@@ -491,11 +492,12 @@ static cl_context l_create_context(const cl_context_properties *properties,
   context = acl_alloc_cl_context();
   if (context == 0) {
     if (pfn_notify) {
-      int lock_count = acl_suspend_lock();
-      (pfn_notify)("Could not allocate a context object", 0, 0, user_data);
-      acl_resume_lock(lock_count);
+      {
+        acl_suspend_lock_guard lock{acl_mutex_wrapper};
+        (pfn_notify)("Could not allocate a context object", 0, 0, user_data);
+      }
     }
-    UNLOCK_BAIL(CL_OUT_OF_HOST_MEMORY);
+    BAIL(CL_OUT_OF_HOST_MEMORY);
   }
 
   context->notify_fn = pfn_notify;
@@ -505,26 +507,26 @@ static cl_context l_create_context(const cl_context_properties *properties,
   status = l_load_properties(context, properties);
   if (status != CL_SUCCESS) {
     acl_free_cl_context(context);
-    UNLOCK_BAIL(status);
+    BAIL(status);
   } // already called context error callback
 
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
   }
 
-  UNLOCK_RETURN(context);
+  return context;
 }
 
 static cl_int l_finalize_context(cl_context context, cl_uint num_devices,
                                  const cl_device_id *devices) {
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   status = acl_get_hal()->try_devices(num_devices, devices, &acl_platform);
   if (status) {
     acl_context_callback(context, "Could not open devices");
     acl_free_cl_context(context);
-    UNLOCK_RETURN(status);
+    return status;
   }
 
   acl_retain(context);
@@ -533,12 +535,12 @@ static cl_int l_finalize_context(cl_context context, cl_uint num_devices,
   if (status != CL_SUCCESS) {
     l_forcibly_release_allocations(context);
     acl_free_cl_context(context);
-    UNLOCK_RETURN(status); // already signaled callback
+    return status; // already signaled callback
   }
 
   acl_track_object(ACL_OBJ_CONTEXT, context);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 // Analyze and load the context properties.
@@ -1119,10 +1121,11 @@ void acl_update_context(cl_context context) {
                  ++i) {
               CL_EXCEPTION_TYPE_INTEL exception_type = 1ULL << i;
               if (device->device_exception_status & exception_type) {
-                int lock_count = acl_suspend_lock();
-                notify_fn(exception_type, device->exception_private_info[i],
-                          device->exception_cb[i], notify_user_data);
-                acl_resume_lock(lock_count);
+                {
+                  acl_suspend_lock_guard lock{acl_mutex_wrapper};
+                  notify_fn(exception_type, device->exception_private_info[i],
+                            device->exception_cb[i], notify_user_data);
+                }
               }
             }
 
@@ -1309,10 +1312,10 @@ void acl_context_callback(cl_context context, const std::string errinfo) {
   if (context && context->notify_fn) {
     acl_notify_fn_t notify_fn = context->notify_fn;
     void *notify_user_data = context->notify_user_data;
-
-    int lock_count = acl_suspend_lock();
-    notify_fn(errinfo.c_str(), 0, 0, notify_user_data);
-    acl_resume_lock(lock_count);
+    {
+      acl_suspend_lock_guard lock{acl_mutex_wrapper};
+      notify_fn(errinfo.c_str(), 0, 0, notify_user_data);
+    }
   }
 }
 

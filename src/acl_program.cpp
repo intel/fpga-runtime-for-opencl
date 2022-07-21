@@ -112,12 +112,12 @@ l_device_memory_definition_copy(acl_device_def_autodiscovery_t *dest_dev,
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainProgramIntelFPGA(cl_program program) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
   acl_retain(program);
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -127,9 +127,9 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainProgram(cl_program program) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseProgramIntelFPGA(cl_program program) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
   acl_release(program);
   if (!acl_ref_count(program)) {
@@ -145,7 +145,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseProgramIntelFPGA(cl_program program) {
     if (program)
       l_free_program(program);
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -172,28 +172,28 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSourceIntelFPGA(
   int pass;
   cl_program program = 0;
   struct acl_file_handle_t *capture_fp = NULL;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   if (count == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Count parameter is zero");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Count parameter is zero");
   }
   if (strings == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "No source strings specified");
+    BAIL_INFO(CL_INVALID_VALUE, context, "No source strings specified");
   }
   for (i = 0; i < count; i++) {
     if (strings[i] == 0) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "A string pointers is NULL");
+      BAIL_INFO(CL_INVALID_VALUE, context, "A string pointers is NULL");
     }
   }
 
   // Go ahead and allocate it.
   program = acl_alloc_cl_program();
   if (program == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a program object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a program object");
   }
 
   l_init_program(program, context);
@@ -233,8 +233,8 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSourceIntelFPGA(
         if (capture_fp) {
           acl_fclose(capture_fp);
         }
-        UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                         "Could not allocate memory to store program source");
+        BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                  "Could not allocate memory to store program source");
       }
       program->source_text = buffer;
     }
@@ -273,7 +273,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSourceIntelFPGA(
 
   acl_track_object(ACL_OBJ_PROGRAM, program);
 
-  UNLOCK_RETURN(program);
+  return program;
 }
 
 ACL_EXPORT
@@ -292,38 +292,38 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
   cl_uint i;
   cl_uint idev;
   cl_program program = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   if (num_devices == 0 || device_list == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
   }
 
   for (i = 0; i < num_devices; i++) {
     if (!acl_device_is_valid(device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
     }
     if (!acl_context_uses_device(context, device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                       "Device is not associated with the context");
+      BAIL_INFO(CL_INVALID_DEVICE, context,
+                "Device is not associated with the context");
     }
     if (lengths[i] == 0 || binaries[i] == 0) {
       if (binary_status) {
         binary_status[i] = CL_INVALID_VALUE;
       }
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                       lengths[i] == 0 ? "A binary length is zero"
-                                       : "A binary pointer is NULL");
+      BAIL_INFO(CL_INVALID_VALUE, context,
+                lengths[i] == 0 ? "A binary length is zero"
+                                : "A binary pointer is NULL");
     }
   }
 
   // Go ahead and allocate it.
   program = acl_alloc_cl_program();
   if (program == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a program object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a program object");
   }
 
   l_init_program(program, context);
@@ -347,7 +347,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
             if (binary_status) {
               binary_status[idev] = CL_INVALID_BINARY;
             }
-            UNLOCK_BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
+            BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
           }
         } else {
           assert(context->uses_dynamic_sysdef);
@@ -384,7 +384,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
                 if (binary_status) {
                   binary_status[idev] = CL_INVALID_BINARY;
                 }
-                UNLOCK_BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
+                BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
               }
 
               // Need to unload the binary and only load it on an as needed
@@ -410,8 +410,8 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
       if (binary_status) {
         binary_status[idev] = CL_INVALID_VALUE;
       }
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate memory to store program binaries");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate memory to store program binaries");
     }
 
     // Wait to set status until after failures may have occurred for this
@@ -431,7 +431,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
 
   l_try_to_eagerly_program_device(program);
 
-  UNLOCK_RETURN(program);
+  return program;
 }
 
 ACL_EXPORT
@@ -453,40 +453,40 @@ clCreateProgramWithBinaryAndProgramDeviceIntelFPGA(
   cl_uint i;
   cl_uint idev;
   cl_program program = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   // split_kernel mode is not supported in this special extension API which is
   // not part of the OpenCL standard.
   assert(context->split_kernel == 0);
 
   if (num_devices == 0 || device_list == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
   }
 
   for (i = 0; i < num_devices; i++) {
     if (!acl_device_is_valid(device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
     }
     if (!acl_context_uses_device(context, device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                       "Device is not associated with the context");
+      BAIL_INFO(CL_INVALID_DEVICE, context,
+                "Device is not associated with the context");
     }
     if (lengths[i] == 0 || binaries[i] == 0) {
       if (binary_status) {
         binary_status[i] = CL_INVALID_VALUE;
       }
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                       lengths[i] == 0 ? "A binary length is zero"
-                                       : "A binary pointer is NULL");
+      BAIL_INFO(CL_INVALID_VALUE, context,
+                lengths[i] == 0 ? "A binary length is zero"
+                                : "A binary pointer is NULL");
     }
   }
 
   program = acl_alloc_cl_program();
   if (program == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a program object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a program object");
   }
 
   l_init_program(program, context);
@@ -509,7 +509,7 @@ clCreateProgramWithBinaryAndProgramDeviceIntelFPGA(
           if (binary_status) {
             binary_status[idev] = CL_INVALID_BINARY;
           }
-          UNLOCK_BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
+          BAIL_INFO(CL_INVALID_BINARY, context, "Invalid binary");
         }
       } else {
         // Copy memory definition from initial device def to program in
@@ -526,8 +526,8 @@ clCreateProgramWithBinaryAndProgramDeviceIntelFPGA(
       if (binary_status) {
         binary_status[idev] = CL_INVALID_VALUE;
       }
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate memory to store program binaries");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate memory to store program binaries");
     }
 
     // Wait to set status until after failures may have occurred for this
@@ -583,16 +583,16 @@ clCreateProgramWithBinaryAndProgramDeviceIntelFPGA(
         acl_program_device(NULL, &reprogram_op);
 
         if (reprogram_op.execution_status != CL_SUCCESS) {
-          UNLOCK_BAIL_INFO(CL_DEVICE_NOT_AVAILABLE, context,
-                           "Reprogram of device failed");
+          BAIL_INFO(CL_DEVICE_NOT_AVAILABLE, context,
+                    "Reprogram of device failed");
         }
 
       } else {
-        UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Invalid binary");
+        BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context, "Invalid binary");
       }
     } else {
-      UNLOCK_BAIL_INFO(CL_BUILD_PROGRAM_FAILURE, context,
-                       "Program is not built correctly");
+      BAIL_INFO(CL_BUILD_PROGRAM_FAILURE, context,
+                "Program is not built correctly");
     }
   }
 
@@ -600,24 +600,29 @@ clCreateProgramWithBinaryAndProgramDeviceIntelFPGA(
     *errcode_ret = CL_SUCCESS;
   }
 
-  UNLOCK_RETURN(program);
+  return program;
 }
 
 ACL_EXPORT
 CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
     cl_context context, cl_uint num_devices, const cl_device_id *device_list,
     const char *kernel_names, cl_int *errcode_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   if (num_devices == 0 || device_list == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid device list");
   }
 
   if (kernel_names == NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "kernel_names is NULL");
+    BAIL_INFO(CL_INVALID_VALUE, context, "kernel_names is NULL");
+  }
+
+  if (num_devices >= ACL_MAX_DEVICE) {
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "num_dives specified is great thatn ACL_MAX_DEVICES");
   }
 
   // list of semicolon delimited string of kernel names
@@ -630,12 +635,12 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
 
   for (cl_uint i = 0; i < num_devices; i++) {
     if (!acl_device_is_valid(device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
+      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid device");
     }
 
     if (!acl_context_uses_device(context, device_list[i])) {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                       "Device is not associated with the context");
+      BAIL_INFO(CL_INVALID_DEVICE, context,
+                "Device is not associated with the context");
     }
 
     // make sure current device contains all the builtin kernels
@@ -651,17 +656,17 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
         break;
     }
     if (find_count != 0) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                       "kernel_names contains a kernel name that is not "
-                       "supported by all of the devices in device_list");
+      BAIL_INFO(CL_INVALID_VALUE, context,
+                "kernel_names contains a kernel name that is not "
+                "supported by all of the devices in device_list");
     }
   }
 
   // Go ahead and allocate it.
   cl_program program = acl_alloc_cl_program();
   if (program == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a program object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a program object");
   }
 
   l_init_program(program, context);
@@ -676,8 +681,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
         l_create_dev_prog(program, device_list[idev], 0, NULL);
     if (program->dev_prog[idev]) {
       if (context->programs_devices || context->uses_dynamic_sysdef) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "No builtin kernels available\n");
+        BAIL_INFO(CL_INVALID_VALUE, context, "No builtin kernels available\n");
       } else {
 
         // i put this here since dla flow makes call to clGetProgramInfo which
@@ -695,8 +699,8 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
     } else {
       // Release all the memory we've allocated.
       l_free_program(program);
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate memory to store program binaries");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate memory to store program binaries");
     }
   }
 
@@ -710,7 +714,7 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
 
   acl_track_object(ACL_OBJ_PROGRAM, program);
 
-  UNLOCK_RETURN(program);
+  return program;
 }
 
 ACL_EXPORT
@@ -727,9 +731,9 @@ CL_API_ENTRY cl_int CL_API_CALL clCompileProgramIntelFPGA(
     const char *options, cl_uint num_input_headers,
     const cl_program *input_headers, const char **header_include_names,
     acl_program_build_notify_fn_t pfn_notify, void *user_data) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_program_is_valid(program))
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
 
   // Suppress compiler warnings.
   num_devices = num_devices;
@@ -741,8 +745,8 @@ CL_API_ENTRY cl_int CL_API_CALL clCompileProgramIntelFPGA(
   pfn_notify = pfn_notify;
   user_data = user_data;
 
-  UNLOCK_ERR_RET(CL_COMPILER_NOT_AVAILABLE, program->context,
-                 "Device compiler is not available");
+  ERR_RET(CL_COMPILER_NOT_AVAILABLE, program->context,
+          "Device compiler is not available");
 }
 
 ACL_EXPORT
@@ -762,9 +766,9 @@ CL_API_ENTRY cl_program CL_API_CALL clLinkProgramIntelFPGA(
     const char *options, cl_uint num_input_programs,
     const cl_program *input_programs, acl_program_build_notify_fn_t pfn_notify,
     void *user_data, cl_int *errcode_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   // For the sake of MSVC compiler warnings.
   num_devices = num_devices;
   device_list = device_list;
@@ -774,8 +778,7 @@ CL_API_ENTRY cl_program CL_API_CALL clLinkProgramIntelFPGA(
   pfn_notify = pfn_notify;
   user_data = user_data;
 
-  UNLOCK_BAIL_INFO(CL_LINKER_NOT_AVAILABLE, context,
-                   "Device linker is not available");
+  BAIL_INFO(CL_LINKER_NOT_AVAILABLE, context, "Device linker is not available");
 }
 
 ACL_EXPORT
@@ -795,14 +798,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
     void *param_value, size_t *param_value_size_ret) {
   cl_context context;
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
   context = program->context;
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   RESULT_INIT;
 
@@ -838,8 +841,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
       // They actually want the values
 
       if (param_value_size < (program->num_devices * sizeof(size_t))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Parameter return buffer is too small");
+        ERR_RET(CL_INVALID_VALUE, context,
+                "Parameter return buffer is too small");
       }
       for (unsigned i = 0; i < program->num_devices; i++) {
         // program->dev_prog[] could be NULL if a compile failed.
@@ -848,7 +851,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
             dev_prog ? dev_prog->device_binary.get_binary_len() : 0;
       }
     }
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
 
   case CL_PROGRAM_BINARIES: {
@@ -863,8 +866,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
       // They actually want the values
       unsigned char **dest = (unsigned char **)param_value;
       if (param_value_size < (program->num_devices * sizeof(char *))) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Parameter return buffer is too small");
+        ERR_RET(CL_INVALID_VALUE, context,
+                "Parameter return buffer is too small");
       }
       for (unsigned i = 0; i < program->num_devices; ++i) {
         auto *dev_prog = program->dev_prog[i];
@@ -886,7 +889,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
         }
       }
     }
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
 
   case CL_PROGRAM_NUM_KERNELS: {
@@ -908,10 +911,9 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
       }
     }
     if (!exists_built_dev_prog)
-      UNLOCK_ERR_RET(
-          CL_INVALID_PROGRAM_EXECUTABLE, context,
-          "A successfully built program executable was not found for any "
-          "device in the list of devices associated with program");
+      ERR_RET(CL_INVALID_PROGRAM_EXECUTABLE, context,
+              "A successfully built program executable was not found for any "
+              "device in the list of devices associated with program");
 
     RESULT_SIZE_T(kernel_cnt);
     break;
@@ -952,10 +954,10 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
     }
 
     if (!exists_built_dev_prog)
-      UNLOCK_ERR_RET(CL_INVALID_PROGRAM_EXECUTABLE, context,
-                     "A successfully built program executable was not "
-                     "found for any device in the list of devices "
-                     "associated with program");
+      ERR_RET(CL_INVALID_PROGRAM_EXECUTABLE, context,
+              "A successfully built program executable was not "
+              "found for any device in the list of devices "
+              "associated with program");
 
     // Based on the OpenCL 1.2 CTS api test, total_ret_len must include the
     // space for the null terminator.
@@ -966,8 +968,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
 
     if (param_value) {
       if (total_ret_len > param_value_size) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "Parameter return buffer is too small");
+        ERR_RET(CL_INVALID_VALUE, context,
+                "Parameter return buffer is too small");
       }
 
       std::stringstream ss;
@@ -985,17 +987,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
                   total_ret_len);
     }
   }
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
 
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid program info query");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid program info query");
   }
   // zero size result is valid!
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1003,7 +1005,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1024,14 +1026,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramBuildInfoIntelFPGA(
   cl_context context;
   acl_device_program_info_t *dev_prog;
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
   context = program->context;
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   RESULT_INIT;
 
@@ -1041,8 +1043,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramBuildInfoIntelFPGA(
     }
   }
   if (dev_idx >= program->num_devices) {
-    UNLOCK_ERR_RET(CL_INVALID_DEVICE, context,
-                   "The specified device is not associated with the program");
+    ERR_RET(CL_INVALID_DEVICE, context,
+            "The specified device is not associated with the program");
   }
   dev_prog = program->dev_prog[dev_idx];
 
@@ -1068,18 +1070,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramBuildInfoIntelFPGA(
   } break;
 
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid program build info query");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid program build info query");
   }
 
   if (result.size == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   } // should already have signalled
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1087,7 +1088,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProgramBuildInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1106,32 +1107,32 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgramIntelFPGA(
     void *user_data) {
   cl_context context;
   cl_int status = CL_SUCCESS;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
   context = program->context;
   acl_print_debug_msg("Building program...\n");
 
   if (program->num_kernels > 0) {
-    UNLOCK_ERR_RET(CL_INVALID_OPERATION, context,
-                   "At least one kernel is still attached to the program");
+    ERR_RET(CL_INVALID_OPERATION, context,
+            "At least one kernel is still attached to the program");
   }
   if (device_list && num_devices == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid device list: num_devices is zero but device_list "
-                   "is specified");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid device list: num_devices is zero but device_list "
+            "is specified");
   }
   if (0 == device_list && num_devices > 0) {
-    UNLOCK_ERR_RET(
+    ERR_RET(
         CL_INVALID_VALUE, context,
         "Invalid device list: num_devices is non-zero but device_list is NULL");
   }
 
   if (pfn_notify == 0 && user_data != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "user_data is set but pfn_notify is not");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "user_data is set but pfn_notify is not");
   }
 
   if (device_list) {
@@ -1148,8 +1149,8 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgramIntelFPGA(
         saw_it = (program->device[iprogdev] == device_list[idev]);
       }
       if (!saw_it) {
-        UNLOCK_ERR_RET(CL_INVALID_DEVICE, context,
-                       "A specified device is not associated with the program");
+        ERR_RET(CL_INVALID_DEVICE, context,
+                "A specified device is not associated with the program");
       }
     }
     // Ok, each device is associated with the program.
@@ -1186,7 +1187,6 @@ CL_API_ENTRY cl_int CL_API_CALL clBuildProgramIntelFPGA(
   if (status == CL_SUCCESS)
     l_try_to_eagerly_program_device(program);
 
-  acl_unlock();
   // Call the notification callback.
   if (pfn_notify)
     pfn_notify(program, user_data);

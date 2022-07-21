@@ -41,12 +41,12 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsIntelFPGA(
     cl_device_id *devices, cl_uint *num_devices) {
   cl_int status = CL_SUCCESS;
   cl_uint num_matched = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_platform_is_valid(platform)) {
-    UNLOCK_RETURN(CL_INVALID_PLATFORM);
+    return CL_INVALID_PLATFORM;
   }
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(num_entries, devices, num_devices, 0);
+  VALIDATE_ARRAY_OUT_ARGS(num_entries, devices, num_devices, 0);
 
   switch (device_type) {
   case CL_DEVICE_TYPE_CPU:
@@ -70,7 +70,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsIntelFPGA(
   } break;
 
   default:
-    UNLOCK_RETURN(CL_INVALID_DEVICE_TYPE);
+    return CL_INVALID_DEVICE_TYPE;
     break;
   }
 
@@ -81,7 +81,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceIDsIntelFPGA(
     *num_devices = num_matched;
   }
 
-  UNLOCK_RETURN(status);
+  return status;
 }
 
 ACL_EXPORT
@@ -101,14 +101,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
   char name_buf[MAX_NAME_SIZE];
   acl_result_t result;
   cl_context context = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
 #ifndef REMOVE_VALID_CHECKS
   if (!acl_device_is_valid_ptr(device)) {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, 0);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          0);
 #endif
 
   RESULT_INIT;
@@ -130,7 +130,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     case CL_DEVICE_VENDOR:
       context = clCreateContext(0, 1, &device, NULL, NULL, &status);
       if (status != CL_SUCCESS) {
-        UNLOCK_RETURN(status);
+        return status;
       }
       break;
     }
@@ -159,7 +159,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
         if (param_name == CL_DEVICE_AVAILABLE) { // special case
           RESULT_BOOL(0);                        // it must not be available
         } else {
-          UNLOCK_RETURN(status);
+          return status;
         }
       } else if (param_name == CL_DEVICE_AVAILABLE) {
         RESULT_BOOL(
@@ -568,14 +568,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
 
   if (result.size == 0) {
     // We didn't implement the enum. Error out semi-gracefully.
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   if (param_value) {
     // Actually try to return the string.
     if (param_value_size < result.size) {
       // Buffer is too small to hold the return value.
-      UNLOCK_RETURN(CL_INVALID_VALUE);
+      return CL_INVALID_VALUE;
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -583,7 +583,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -613,7 +613,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateSubDevicesIntelFPGA(
   // Since we don't support creating sub devices, we should follow the first
   // case if in_device is not valid, and the second case if it is.
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   // Suppress compiler warnings.
   partition_properties = partition_properties;
   num_entries = num_entries;
@@ -621,10 +621,10 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateSubDevicesIntelFPGA(
   num_devices = num_devices;
 
   if (!acl_device_is_valid(in_device)) {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
 
-  UNLOCK_RETURN(CL_INVALID_VALUE);
+  return CL_INVALID_VALUE;
 }
 
 ACL_EXPORT
@@ -638,7 +638,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateSubDevices(
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainDeviceIntelFPGA(cl_device_id device) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Spec says:
   // "increments the device reference count if device is a valid sub-device
@@ -664,9 +664,9 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainDeviceIntelFPGA(cl_device_id device) {
   // Since we don't (currently) support sub-devices, valid devices must be
   // root-level:
   if (acl_device_is_valid(device)) {
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   } else {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
 }
 ACL_EXPORT
@@ -676,7 +676,7 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainDevice(cl_device_id device) {
 
 ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL
 clReleaseDeviceIntelFPGA(cl_device_id device) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Spec says:
   // "decrements the device reference count if device is a valid sub-device
@@ -695,9 +695,9 @@ clReleaseDeviceIntelFPGA(cl_device_id device) {
   // Since we don't (currently) support sub-devices, valid devices must be
   // root-level:
   if (acl_device_is_valid(device)) {
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   } else {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
 }
 
@@ -712,22 +712,22 @@ clReconfigurePLLIntelFPGA(cl_device_id device, const char *pll_settings_str) {
   // comments specified for struct pll_setting_t in include/acl_pll.
   const acl_hal_t *hal;
   cl_int configure_status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_device_is_valid(device)) {
-    UNLOCK_RETURN(CL_INVALID_DEVICE);
+    return CL_INVALID_DEVICE;
   }
   if (!pll_settings_str) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   hal = acl_get_hal();
   configure_status =
       hal->pll_reconfigure(device->def.physical_device_id, pll_settings_str);
   if (configure_status == 0)
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   else
-    UNLOCK_RETURN(CL_INVALID_OPERATION);
+    return CL_INVALID_OPERATION;
 }
 
 ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clSetDeviceExceptionCallback(
@@ -745,16 +745,16 @@ clSetDeviceExceptionCallbackIntelFPGA(
     acl_exception_notify_fn_t pfn_exception_notify, void *user_data) {
   unsigned i;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!pfn_exception_notify)
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   if (!listen_mask)
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   if (!devices && num_devices > 0)
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   if (devices && num_devices == 0)
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
 
   for (i = 0; i < num_devices; ++i) {
     devices[i]->exception_notify_fn = pfn_exception_notify;
@@ -762,7 +762,7 @@ clSetDeviceExceptionCallbackIntelFPGA(
     devices[i]->listen_mask = listen_mask;
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 //////////////////////////////

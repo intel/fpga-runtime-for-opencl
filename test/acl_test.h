@@ -55,9 +55,8 @@ void CL_CALLBACK acl_test_notify_print(const char *errinfo,
 
 #define ACL_LOCKED(...)                                                        \
   do {                                                                         \
-    acl_lock();                                                                \
+    std::scoped_lock lock{acl_mutex_wrapper};                                  \
     { __VA_ARGS__; }                                                           \
-    acl_unlock();                                                              \
   } while (0)
 
 /* CAUTION.  These are only used in self-tests.

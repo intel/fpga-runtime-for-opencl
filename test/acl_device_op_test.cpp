@@ -133,7 +133,7 @@ static struct _cl_event myevents[EVENT_NUM] = {{0}};
 
 TEST_GROUP(device_op) {
   virtual void setup() {
-    acl_lock();
+    acl_mutex_wrapper.lock();
     acl_test_setup_generic_system();
     acl_init_device_op_queue(&m_doq);
     clear_queue_callbacks(&m_doq);
@@ -152,7 +152,7 @@ TEST_GROUP(device_op) {
   virtual void teardown() {
     unload();
     acl_test_teardown_generic_system();
-    acl_unlock();
+    acl_mutex_wrapper.unlock();
     acl_test_run_standard_teardown_checks();
   }
 

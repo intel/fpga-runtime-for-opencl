@@ -118,7 +118,7 @@ void CL_CALLBACK acl_free_allocation_after_event_completion(
   event_command_exec_status =
       event_command_exec_status; // Avoiding Windows warning.
   event = event;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (callback_ptrs[0]) {
     acl_mem_aligned_free(event->context, (acl_aligned_ptr_t *)callback_ptrs[0]);
     acl_free(callback_ptrs[0]);
@@ -126,7 +126,6 @@ void CL_CALLBACK acl_free_allocation_after_event_completion(
   if (callback_ptrs[1])
     clReleaseEvent(((cl_event)callback_ptrs[1]));
   acl_free(callback_data);
-  acl_unlock();
 }
 
 ACL_DEFINE_CL_OBJECT_ALLOC_FUNCTIONS(cl_mem);
@@ -136,17 +135,17 @@ ACL_DEFINE_CL_OBJECT_ALLOC_FUNCTIONS(cl_mem);
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainMemObjectIntelFPGA(cl_mem mem) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_mem_is_valid(mem)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   acl_retain(mem);
 
   acl_print_debug_msg("Retain  mem[%p] now %u\n", mem, acl_ref_count(mem));
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -156,13 +155,13 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainMemObject(cl_mem mem) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObjectIntelFPGA(cl_mem mem) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // In the double-free case, we'll error out here, for two reasons:
   // 1) the reference count will be 0.
   // 1) mem->region == 0
   if (!acl_mem_is_valid(mem)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   acl_release(mem);
@@ -249,7 +248,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObjectIntelFPGA(cl_mem mem) {
     clReleaseContext(context);
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -325,19 +324,19 @@ CL_API_ENTRY cl_int clSetMemObjectDestructorCallbackIntelFPGA(
     void(CL_CALLBACK *pfn_notify)(cl_mem memobj, void *user_data),
     void *user_data) {
   acl_mem_destructor_user_callback *cb;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_mem_is_valid(memobj)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   if (pfn_notify == NULL) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   cb = (acl_mem_destructor_user_callback *)acl_malloc(
       sizeof(acl_mem_destructor_user_callback));
   if (!cb)
-    UNLOCK_RETURN(CL_OUT_OF_HOST_MEMORY);
+    return CL_OUT_OF_HOST_MEMORY;
 
   // Push to the front of the list.
   cb->notify_user_data = user_data;
@@ -345,7 +344,7 @@ CL_API_ENTRY cl_int clSetMemObjectDestructorCallbackIntelFPGA(
   cb->next = memobj->destructor_callback_list;
   memobj->destructor_callback_list = cb;
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -421,7 +420,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
   unsigned int idevice;
   cl_uint bank_id = 0;
   cl_uint tmp_mem_id = 0;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
 #ifdef MEM_DEBUG_MSG
   printf("CreateBuffer\n");
@@ -431,8 +430,8 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
     switch (*properties) {
     case CL_MEM_CHANNEL_INTEL: {
       if (flags & CL_CHANNEL_7_INTELFPGA) {
-        UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context,
-                         "Both channel flag and channel property are set");
+        BAIL_INFO(CL_INVALID_DEVICE, context,
+                  "Both channel flag and channel property are set");
       }
       bank_id = (cl_uint) * (properties + 1);
     } break;
@@ -440,7 +439,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
       tmp_mem_id = (cl_uint) * (properties + 1);
     } break;
     default: {
-      UNLOCK_BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
+      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
     }
     }
     properties += 2;
@@ -448,11 +447,10 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
 
 #ifndef REMOVE_VALID_CHECKS
   if (!acl_context_is_valid(context))
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
 
   if (bank_id > 7) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Invalid channel property value");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid channel property value");
   }
 
   // Check flags
@@ -463,8 +461,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
                   CL_MEM_COPY_HOST_PTR | CL_MEM_HOST_WRITE_ONLY |
                   CL_MEM_HOST_READ_ONLY | CL_MEM_HOST_NO_ACCESS |
                   CL_CHANNEL_7_INTELFPGA | CL_MEM_HETEROGENEOUS_INTELFPGA)) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                       "Invalid or unsupported flags");
+      BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
     }
 
     {
@@ -478,8 +475,8 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
         num_rw_specs++;
       // Default to CL_MEM_READ_WRITE.
       if (num_rw_specs > 1) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "More than one read/write flag is specified");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "More than one read/write flag is specified");
       }
       if (num_rw_specs == 0)
         flags |= CL_MEM_READ_WRITE;
@@ -493,7 +490,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
       if (flags & CL_MEM_HOST_NO_ACCESS)
         num_rw_specs++;
       if (num_rw_specs > 1) {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_VALUE, context,
             "More than one host read/write/no_access flags are specified");
       }
@@ -501,65 +498,60 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
 
     // Check exclusion between use-host-ptr and others
     if ((flags & CL_MEM_USE_HOST_PTR) && (flags & CL_MEM_ALLOC_HOST_PTR)) {
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_VALUE, context,
-          "Flags CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are both "
-          "specified but are mutually exclusive");
+      BAIL_INFO(CL_INVALID_VALUE, context,
+                "Flags CL_MEM_USE_HOST_PTR and CL_MEM_ALLOC_HOST_PTR are both "
+                "specified but are mutually exclusive");
     }
     if ((flags & CL_MEM_USE_HOST_PTR) && (flags & CL_MEM_COPY_HOST_PTR)) {
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_VALUE, context,
-          "Flags CL_MEM_USE_HOST_PTR and CL_MEM_COPY_HOST_PTR are both "
-          "specified but are mutually exclusive");
+      BAIL_INFO(CL_INVALID_VALUE, context,
+                "Flags CL_MEM_USE_HOST_PTR and CL_MEM_COPY_HOST_PTR are both "
+                "specified but are mutually exclusive");
     }
   }
 
   // Check host_ptr
   if (host_ptr == 0 && (flags & CL_MEM_USE_HOST_PTR)) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_HOST_PTR, context,
-        "Flag CL_MEM_USE_HOST_PTR is specified, but no host pointer is "
-        "provided");
+    BAIL_INFO(CL_INVALID_HOST_PTR, context,
+              "Flag CL_MEM_USE_HOST_PTR is specified, but no host pointer is "
+              "provided");
   }
   if (host_ptr == 0 && (flags & CL_MEM_COPY_HOST_PTR)) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_HOST_PTR, context,
-        "Flag CL_MEM_COPY_HOST_PTR is specified, but no host pointer is "
-        "provided");
+    BAIL_INFO(CL_INVALID_HOST_PTR, context,
+              "Flag CL_MEM_COPY_HOST_PTR is specified, but no host pointer is "
+              "provided");
   }
   if (host_ptr != 0 &&
       !(flags & (CL_MEM_USE_HOST_PTR | CL_MEM_COPY_HOST_PTR))) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_HOST_PTR, context,
-        "A host pointer is provided without also specifying one of "
-        "CL_MEM_USE_HOST_PTR or CL_MEM_COPY_HOST_PTR");
+    BAIL_INFO(CL_INVALID_HOST_PTR, context,
+              "A host pointer is provided without also specifying one of "
+              "CL_MEM_USE_HOST_PTR or CL_MEM_COPY_HOST_PTR");
   }
 
   // Check size
   if (size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Memory buffer cannot be of size zero");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Memory buffer cannot be of size zero");
   }
   // If using host memory, then just accept any size.
   if (!(flags & CL_MEM_USE_HOST_PTR) && (size > context->max_mem_alloc_size)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Requested memory object size exceeds device limits");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
+              "Requested memory object size exceeds device limits");
   }
 
 #endif
 
   auto *new_block = acl_new<acl_block_allocation_t>();
   if (!new_block) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a cl_mem object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a cl_mem object");
   }
 
   // Now actually allocate the mem object.
   mem = acl_alloc_cl_mem();
   if (!mem) {
     acl_delete(new_block);
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a cl_mem object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a cl_mem object");
   }
   mem->mem_id = tmp_mem_id;
 
@@ -633,11 +625,10 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
              context_has_device_with_physical_mem) {
     acl_delete(mem->block_allocation);
     acl_free_cl_mem(mem);
-    UNLOCK_BAIL_INFO(
-        CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
-        "Detected devices with only SVM and on-board memory in the same "
-        "context. Altera does not currently support this combination and "
-        "cannot allocate requested memory object.");
+    BAIL_INFO(CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
+              "Detected devices with only SVM and on-board memory in the same "
+              "context. Altera does not currently support this combination and "
+              "cannot allocate requested memory object.");
   } else {
     mem->is_svm = CL_FALSE;
   }
@@ -659,7 +650,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
         ptr.size = size;
         mem->host_mem = ptr;
       } else {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_HOST_PTR, context,
             "On a system that only supports SVM and does not support "
             "fine-grained system SVM, "
@@ -743,8 +734,8 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
 
     if (mem->host_mem.raw == 0) {
       acl_free_cl_mem(mem);
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate a buffer in host memory");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate a buffer in host memory");
     }
     mem->block_allocation->range.begin = mem->host_mem.aligned_ptr;
     mem->block_allocation->range.next =
@@ -784,9 +775,8 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
       if (mem->host_mem.raw == 0) {
         acl_delete(mem->block_allocation);
         acl_free_cl_mem(mem);
-        UNLOCK_BAIL_INFO(
-            CL_OUT_OF_HOST_MEMORY, context,
-            "Could not allocate backing store for a device buffer");
+        BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                  "Could not allocate backing store for a device buffer");
       }
     }
 
@@ -829,10 +819,9 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
                         : CL_OUT_OF_RESOURCES;
       acl_delete(mem->block_allocation);
       acl_free_cl_mem(mem);
-      UNLOCK_BAIL_INFO(
-          code, context,
-          "Could not allocate a buffer of the specified size due to "
-          "fragmentation or exhaustion");
+      BAIL_INFO(code, context,
+                "Could not allocate a buffer of the specified size due to "
+                "fragmentation or exhaustion");
     }
   }
 
@@ -937,8 +926,8 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
         acl_delete(mem->block_allocation);
         acl_free_cl_mem(mem);
         // Need an error status valid to return from this function
-        UNLOCK_BAIL_INFO(CL_OUT_OF_RESOURCES, context,
-                         "Could not copy data into the allocated buffer");
+        BAIL_INFO(CL_OUT_OF_RESOURCES, context,
+                  "Could not copy data into the allocated buffer");
       }
     }
   }
@@ -953,7 +942,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
   printf("CreateBuffer Finished:  %zx\n", (size_t)result);
 #endif
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 // Create a buffer.
@@ -1003,18 +992,18 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
   cl_mem mem;
   int num_rw_specs = 0;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
 #ifdef MEM_DEBUG_MSG
   printf("CreateSubBuffer");
 #endif
 
   if (!acl_mem_is_valid(buffer)) {
-    UNLOCK_BAIL(CL_INVALID_MEM_OBJECT);
+    BAIL(CL_INVALID_MEM_OBJECT);
   }
   if (buffer->mem_object_type != CL_MEM_OBJECT_BUFFER ||
       buffer->fields.buffer_objs.is_subbuffer) {
-    UNLOCK_BAIL(CL_INVALID_MEM_OBJECT);
+    BAIL(CL_INVALID_MEM_OBJECT);
   }
   context = buffer->context;
 
@@ -1025,7 +1014,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
       ~(CL_MEM_READ_WRITE | CL_MEM_READ_ONLY | CL_MEM_WRITE_ONLY |
         CL_MEM_HOST_WRITE_ONLY | CL_MEM_HOST_READ_ONLY | CL_MEM_HOST_NO_ACCESS |
         CL_CHANNEL_7_INTELFPGA | CL_MEM_HETEROGENEOUS_INTELFPGA)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
   }
 
   // Check for exactly one read/write spec
@@ -1036,8 +1025,8 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
   if (flags & CL_MEM_WRITE_ONLY)
     num_rw_specs++;
   if (num_rw_specs > 1) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "More than one read/write flag is specified");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "More than one read/write flag is specified");
   }
 
   // Check for exactly one host read/write/no_access spec
@@ -1049,9 +1038,8 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
   if (flags & CL_MEM_HOST_NO_ACCESS)
     num_rw_specs++;
   if (num_rw_specs > 1) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_VALUE, context,
-        "More than one host read/write/no_access flags are specified");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "More than one host read/write/no_access flags are specified");
   }
 
   // If the parent buffer is write only then the sub-buffer cannot read.
@@ -1066,30 +1054,27 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
        (flags & CL_MEM_HOST_WRITE_ONLY)) ||
       ((buffer->flags & CL_MEM_HOST_NO_ACCESS) &&
        ((flags & CL_MEM_HOST_READ_ONLY) || (flags & CL_MEM_HOST_WRITE_ONLY)))) {
-    UNLOCK_BAIL_INFO(
-        CL_INVALID_VALUE, context,
-        "Read/write flags are incompatible with the parent buffer");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "Read/write flags are incompatible with the parent buffer");
   }
 
   if (buffer_create_type != CL_BUFFER_CREATE_TYPE_REGION) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Invalid buffer_create_type value");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid buffer_create_type value");
   }
 
   if (buffer_create_info == NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Empty buffer_create_info");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Empty buffer_create_info");
   }
 
   if (((cl_buffer_region *)buffer_create_info)->origin +
           ((cl_buffer_region *)buffer_create_info)->size >
       buffer->size) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Origin plus size is out of bounds of parent buffer");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "Origin plus size is out of bounds of parent buffer");
   }
 
   if (((cl_buffer_region *)buffer_create_info)->size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_BUFFER_SIZE, context,
-                     "Sub-buffer size is zero");
+    BAIL_INFO(CL_INVALID_BUFFER_SIZE, context, "Sub-buffer size is zero");
   }
 
   for (idevice = 0; idevice < context->num_devices; ++idevice) {
@@ -1100,7 +1085,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
         context->device[idevice], CL_DEVICE_MEM_BASE_ADDR_ALIGN, sizeof(int),
         &device_mem_base_addr_align, NULL);
     if (status_code != CL_SUCCESS) {
-      UNLOCK_BAIL(CL_OUT_OF_HOST_MEMORY);
+      BAIL(CL_OUT_OF_HOST_MEMORY);
     }
 
     if (!((((cl_buffer_region *)buffer_create_info)->origin * 8) &
@@ -1111,22 +1096,21 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
   }
 
   if (!aligns_with_any_device) {
-    UNLOCK_BAIL_INFO(
-        CL_MISALIGNED_SUB_BUFFER_OFFSET, context,
-        "Sub-buffer offset does not align with any device in context");
+    BAIL_INFO(CL_MISALIGNED_SUB_BUFFER_OFFSET, context,
+              "Sub-buffer offset does not align with any device in context");
   }
 
   acl_block_allocation_t *new_block = acl_new<acl_block_allocation_t>();
   if (!new_block) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a cl_mem object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a cl_mem object");
   }
   // Now actually allocate the mem object.
   mem = acl_alloc_cl_mem();
   if (!mem) {
     acl_delete(new_block);
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a cl_mem object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a cl_mem object");
   }
 
   mem->block_allocation = new_block;
@@ -1176,7 +1160,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
       buffer->host_mem = acl_mem_aligned_malloc(buffer->size);
       if (!buffer->host_mem.raw) {
         acl_free_cl_mem(mem);
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_OUT_OF_HOST_MEMORY, context,
             "Could not allocate backing store for a device buffer with sub "
             "buffers");
@@ -1275,9 +1259,8 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
         cl_uint sub_bank_id = ((cl_uint)sub_flags & CL_CHANNEL_7_INTELFPGA) /
                               CL_CHANNEL_1_INTELFPGA;
         if (sub_bank_id != buffer->bank_id) {
-          UNLOCK_BAIL_INFO(
-              CL_INVALID_VALUE, context,
-              "Sub-buffer bank id does not match parent buffer bank id");
+          BAIL_INFO(CL_INVALID_VALUE, context,
+                    "Sub-buffer bank id does not match parent buffer bank id");
         }
       }
     }
@@ -1305,10 +1288,9 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
                         ? CL_OUT_OF_HOST_MEMORY
                         : CL_OUT_OF_RESOURCES;
       acl_free_cl_mem(mem);
-      UNLOCK_BAIL_INFO(
-          code, context,
-          "Could not allocate a buffer of the specified size due to "
-          "fragmentation or exhaustion");
+      BAIL_INFO(code, context,
+                "Could not allocate a buffer of the specified size due to "
+                "fragmentation or exhaustion");
     }
   }
 
@@ -1330,9 +1312,8 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
       cl_uint sub_bank_id = ((cl_uint)sub_flags & CL_CHANNEL_7_INTELFPGA) /
                             CL_CHANNEL_1_INTELFPGA;
       if (sub_bank_id != buffer->bank_id) {
-        UNLOCK_BAIL_INFO(
-            CL_INVALID_VALUE, context,
-            "Sub-buffer bank id does not match parent buffer bank id");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Sub-buffer bank id does not match parent buffer bank id");
       }
     }
   }
@@ -1352,7 +1333,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreateSubBufferIntelFPGA(
   printf(" %zx\n", (size_t)result);
 #endif
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -1369,12 +1350,12 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfoIntelFPGA(
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
   cl_context context;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   RESULT_INIT;
 
   if (!acl_mem_is_valid(mem)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   context = mem->context;
@@ -1454,14 +1435,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfoIntelFPGA(
   }
 
   if (result.size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid or unsupported memory object query");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid or unsupported memory object query");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1469,7 +1450,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemObjectInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1497,10 +1478,10 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
   unsigned iformat;
   cl_bool found_image_format;
   unsigned int idevice;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
 
   // Check the maximum image sizes for all available devices in the context
@@ -1530,20 +1511,20 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
   }
 
   if (image_format == NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR, context,
-                     "image_format is NULL");
+    BAIL_INFO(CL_INVALID_IMAGE_FORMAT_DESCRIPTOR, context,
+              "image_format is NULL");
   }
 
   element_size =
       acl_get_image_element_size(context, image_format, &local_errcode_ret);
   if (local_errcode_ret != CL_SUCCESS) {
-    UNLOCK_BAIL(local_errcode_ret);
+    BAIL(local_errcode_ret);
   }
 
   local_errcode_ret = clGetSupportedImageFormats(
       context, flags, image_desc->image_type, 0, NULL, &num_image_formats);
   if (local_errcode_ret != CL_SUCCESS) {
-    UNLOCK_BAIL(local_errcode_ret);
+    BAIL(local_errcode_ret);
   }
   supported_image_formats = (cl_image_format *)acl_malloc(
       sizeof(cl_image_format) * num_image_formats);
@@ -1565,11 +1546,11 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
   acl_free(supported_image_formats);
 
   if (local_errcode_ret != CL_SUCCESS) {
-    UNLOCK_BAIL(local_errcode_ret);
+    BAIL(local_errcode_ret);
   }
   if (!found_image_format) {
-    UNLOCK_BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
-                     "Unsupported image format");
+    BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
+              "Unsupported image format");
   }
 
   // Allocate the memory for the image. This size (and sometimes the method)
@@ -1580,17 +1561,17 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
         element_size * image_desc->image_width +
         get_offset_for_image_param(context, image_desc->image_type, "data");
     if (image_desc->image_width <= 0) {
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image width cannot be zero for a 1D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width cannot be zero for a 1D object");
     }
     if (image_size > context->max_mem_alloc_size) {
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image size exceeds maximum alloc size");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image size exceeds maximum alloc size");
     }
     return_buffer =
         clCreateBuffer(context, flags, image_size, host_ptr, errcode_ret);
     if (return_buffer == NULL)
-      UNLOCK_RETURN(NULL);
+      return NULL;
     return_buffer->fields.image_objs.image_format =
         (cl_image_format *)acl_malloc(sizeof(cl_image_format));
     return_buffer->fields.image_objs.image_desc =
@@ -1598,8 +1579,8 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
     break;
   case CL_MEM_OBJECT_IMAGE1D_BUFFER:
     // Need to actually allocate/assign the buffer data here
-    UNLOCK_BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
-                     "Do not support images created from buffers");
+    BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
+              "Do not support images created from buffers");
     // Need to actually allocate/assign the buffer data here
     break;
   case CL_MEM_OBJECT_IMAGE1D_ARRAY:
@@ -1607,17 +1588,17 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
         element_size * image_desc->image_width * image_desc->image_array_size +
         get_offset_for_image_param(context, image_desc->image_type, "data");
     if (image_desc->image_width <= 0) {
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image width cannot be zero for a 1D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width cannot be zero for a 1D object");
     }
     if (image_size > context->max_mem_alloc_size) {
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image size exceeds maximum alloc size");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image size exceeds maximum alloc size");
     }
     return_buffer =
         clCreateBuffer(context, flags, image_size, host_ptr, errcode_ret);
     if (return_buffer == NULL)
-      UNLOCK_RETURN(NULL);
+      return NULL;
     return_buffer->fields.image_objs.image_format =
         (cl_image_format *)acl_malloc(sizeof(cl_image_format));
     return_buffer->fields.image_objs.image_desc =
@@ -1627,45 +1608,45 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
     // If we change this, need to actually allocate/assign the buffer data here
     if (image_desc->mem_object != NULL &&
         image_desc->mem_object->mem_object_type == CL_MEM_OBJECT_BUFFER) {
-      UNLOCK_BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
-                       "Do not support images created from buffers");
+      BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
+                "Do not support images created from buffers");
       // Copy information from the other image object
     } else if (image_desc->mem_object != NULL &&
                image_desc->mem_object->mem_object_type ==
                    CL_MEM_OBJECT_BUFFER) {
-      UNLOCK_BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
-                       "Do not support images created from other images");
+      BAIL_INFO(CL_IMAGE_FORMAT_NOT_SUPPORTED, context,
+                "Do not support images created from other images");
       // Allocate a new image object
     } else {
       image_size =
           element_size * image_desc->image_width * image_desc->image_height +
           get_offset_for_image_param(context, image_desc->image_type, "data");
       if (image_desc->image_width <= 0) {
-        UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                         "image width cannot be zero for a 2D object");
+        BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                  "image width cannot be zero for a 2D object");
       }
       if (image_desc->image_width > max_2d_image_width) {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_IMAGE_SIZE, context,
             "image width exceeds maximum width for all devices in context");
       }
       if (image_desc->image_height <= 0) {
-        UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                         "image height cannot be zero for a 2D object");
+        BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                  "image height cannot be zero for a 2D object");
       }
       if (image_desc->image_height > max_2d_image_height) {
-        UNLOCK_BAIL_INFO(
+        BAIL_INFO(
             CL_INVALID_IMAGE_SIZE, context,
             "1 image height exceeds maximum height for all devices in context");
       }
       if (image_size > context->max_mem_alloc_size) {
-        UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                         "image size exceeds maximum alloc size");
+        BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                  "image size exceeds maximum alloc size");
       }
       return_buffer =
           clCreateBuffer(context, flags, image_size, host_ptr, errcode_ret);
       if (return_buffer == NULL)
-        UNLOCK_RETURN(NULL);
+        return NULL;
       return_buffer->fields.image_objs.image_format =
           (cl_image_format *)acl_malloc(sizeof(cl_image_format));
       return_buffer->fields.image_objs.image_desc =
@@ -1678,22 +1659,21 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
             image_desc->image_array_size +
         get_offset_for_image_param(context, image_desc->image_type, "data");
     if (image_desc->image_width <= 0)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image width cannot be zero for a 2D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width cannot be zero for a 2D object");
     if (image_desc->image_width > max_2d_image_width)
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_IMAGE_SIZE, context,
-          "image width exceeds maximum width for all devices in context");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width exceeds maximum width for all devices in context");
     if (image_desc->image_height <= 0)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image height cannot be zero for a 2D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image height cannot be zero for a 2D object");
     if (image_desc->image_height > max_2d_image_height)
-      UNLOCK_BAIL_INFO(
+      BAIL_INFO(
           CL_INVALID_IMAGE_SIZE, context,
           "2 image height exceeds maximum height for all devices in context");
     if (image_size > context->max_mem_alloc_size)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image size exceeds maximum alloc size");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image size exceeds maximum alloc size");
     return_buffer =
         clCreateBuffer(context, flags, image_size, host_ptr, errcode_ret);
     if (return_buffer == NULL)
@@ -1709,41 +1689,38 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
             image_desc->image_depth +
         get_offset_for_image_param(context, image_desc->image_type, "data");
     if (image_desc->image_width <= 0)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image width cannot be zero for a 3D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width cannot be zero for a 3D object");
     if (image_desc->image_width > max_3d_image_width)
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_IMAGE_SIZE, context,
-          "image width exceeds maximum width for all devices in context");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image width exceeds maximum width for all devices in context");
     if (image_desc->image_height <= 0)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image height cannot be zero for a 3D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image height cannot be zero for a 3D object");
     if (image_desc->image_height > max_3d_image_height)
-      UNLOCK_BAIL_INFO(
+      BAIL_INFO(
           CL_INVALID_IMAGE_SIZE, context,
           "image height exceeds maximum height for all devices in context");
     if (image_desc->image_depth <= 0)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image depth cannot be zero for a 3D object");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image depth cannot be zero for a 3D object");
     if (image_desc->image_depth > max_3d_image_depth)
-      UNLOCK_BAIL_INFO(
-          CL_INVALID_IMAGE_SIZE, context,
-          "image depth exceeds maximum depth for all devices in context");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image depth exceeds maximum depth for all devices in context");
     if (image_size > context->max_mem_alloc_size)
-      UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
-                       "image size exceeds maximum alloc size");
+      BAIL_INFO(CL_INVALID_IMAGE_SIZE, context,
+                "image size exceeds maximum alloc size");
     return_buffer =
         clCreateBuffer(context, flags, image_size, host_ptr, errcode_ret);
     if (return_buffer == NULL)
-      UNLOCK_RETURN(NULL);
+      return NULL;
     return_buffer->fields.image_objs.image_format =
         (cl_image_format *)acl_malloc(sizeof(cl_image_format));
     return_buffer->fields.image_objs.image_desc =
         (cl_image_desc *)acl_malloc(sizeof(cl_image_desc));
     break;
   default:
-    UNLOCK_BAIL_INFO(CL_INVALID_IMAGE_DESCRIPTOR, context,
-                     "invalid image type");
+    BAIL_INFO(CL_INVALID_IMAGE_DESCRIPTOR, context, "invalid image type");
     break;
   }
 
@@ -1761,8 +1738,8 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
   if (!return_buffer->host_mem.aligned_ptr) {
     return_buffer->host_mem = acl_mem_aligned_malloc(image_size);
     if (return_buffer->host_mem.raw == 0) {
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate backing store for a device image");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate backing store for a device image");
     }
   }
 
@@ -1773,7 +1750,7 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
         &(acl_platform.host_user_mem))) {
     copy_image_metadata(return_buffer);
   }
-  UNLOCK_RETURN(return_buffer);
+  return return_buffer;
 }
 
 ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImage(
@@ -1894,18 +1871,18 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSupportedImageFormatsIntelFPGA(
       {CL_BGRA, CL_UNORM_INT8},
   };
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   }
   if (num_entries == 0 && image_formats) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "num_entries is zero but image formats array is specified");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "num_entries is zero but image formats array is specified");
   }
   if (num_entries > 0 && image_formats == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "num_entries is non-zero but image_formats array is NULL");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "num_entries is non-zero but image_formats array is NULL");
   }
   switch (image_type) {
   case CL_MEM_OBJECT_IMAGE2D:
@@ -1916,13 +1893,12 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSupportedImageFormatsIntelFPGA(
   case CL_MEM_OBJECT_IMAGE1D_BUFFER:
     break;
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid or unsupported image type");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid or unsupported image type");
   }
   if (flags &
       ~(CL_MEM_READ_WRITE | CL_MEM_READ_ONLY | CL_MEM_WRITE_ONLY |
         CL_MEM_USE_HOST_PTR | CL_MEM_ALLOC_HOST_PTR | CL_MEM_COPY_HOST_PTR)) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid flags");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid flags");
   }
 
   if (num_image_formats) {
@@ -1938,7 +1914,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetSupportedImageFormatsIntelFPGA(
           supported_image_formats[i].image_channel_data_type;
     }
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1957,19 +1933,18 @@ CL_API_ENTRY cl_int CL_API_CALL clGetImageInfoIntelFPGA(
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
   cl_context context;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   RESULT_INIT;
 
   if (!acl_mem_is_valid(image)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   context = image->context;
 
   if (!is_image(image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, context, "Memory object is not an image");
   }
 
   switch (param_name) {
@@ -2000,14 +1975,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetImageInfoIntelFPGA(
   }
 
   if (result.size == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid or unsupported memory object query");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid or unsupported memory object query");
   }
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -2015,7 +1990,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetImageInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -2040,22 +2015,22 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
   size_t tmp_row_pitch, tmp_slice_pitch;
   cl_int errcode_ret;
   size_t src_element_size;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
 
   if (image != NULL) {
     src_element_size = acl_get_image_element_size(
         image->context, image->fields.image_objs.image_format, &errcode_ret);
     if (errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(errcode_ret);
+      return errcode_ret;
     }
   } else {
     src_element_size = 0;
@@ -2076,8 +2051,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
   if (row_pitch != 0) {
     if (row_pitch <
         image->fields.image_objs.image_desc->image_width * src_element_size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid row pitch provided");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Invalid row pitch provided");
     }
     tmp_row_pitch = row_pitch;
   } else {
@@ -2096,20 +2071,20 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
   // Allow the user to override the default slice pitch
   if (slice_pitch != 0) {
     if (slice_pitch < tmp_slice_pitch) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid row pitch provided");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Invalid row pitch provided");
     }
     tmp_slice_pitch = slice_pitch;
   }
 
   if (!is_image(image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Memory object is not an image");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2119,7 +2094,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         tmp_row_pitch, tmp_slice_pitch, tmp_cb, num_events_in_wait_list,
         event_wait_list, event, CL_COMMAND_READ_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2146,20 +2121,20 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
   size_t tmp_row_pitch, tmp_slice_pitch;
   cl_int errcode_ret;
   size_t dst_element_size;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (image != NULL) {
     dst_element_size = acl_get_image_element_size(
         image->context, image->fields.image_objs.image_format, &errcode_ret);
     if (errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(errcode_ret);
+      return errcode_ret;
     }
   } else {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   tmp_src_offset[0] = (size_t)((char *)ptr - (const char *)ACL_MEM_ALIGN);
@@ -2177,8 +2152,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
   if (input_row_pitch != 0) {
     if (input_row_pitch <
         image->fields.image_objs.image_desc->image_width * dst_element_size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid row pitch provided");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Invalid row pitch provided");
     }
     tmp_row_pitch = input_row_pitch;
   } else {
@@ -2197,20 +2172,20 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
   // Allow the user to override the default slice pitch
   if (input_slice_pitch != 0) {
     if (input_slice_pitch < tmp_slice_pitch) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid row pitch provided");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Invalid row pitch provided");
     }
     tmp_slice_pitch = input_slice_pitch;
   }
 
   if (!is_image(image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Memory object is not an image");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2220,7 +2195,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
         tmp_row_pitch, tmp_slice_pitch, image, tmp_dst_offset, 0, 0, tmp_cb,
         num_events_in_wait_list, event_wait_list, event,
         CL_COMMAND_WRITE_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2250,25 +2225,25 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
   char converted_fill_color[16]; // Maximum number of bytes needed to keep a
                                  // pixel.
   cl_event tmp_event;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (image != NULL) {
     dst_element_size = acl_get_image_element_size(
         image->context, image->fields.image_objs.image_format, &errcode_ret);
     if (errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(errcode_ret);
+      return errcode_ret;
     }
   } else {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (!is_image(image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Memory object is not an image");
   }
 
   // Replicating the color in the region allocated in host mem.
@@ -2276,8 +2251,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
   color_format.image_channel_order = CL_RGBA;
 
   if (fill_color == NULL)
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "fill_color cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "fill_color cannot be NULL");
 
   size_t host_mem_size = region[0] * region[1] * region[2] * dst_element_size;
 
@@ -2326,24 +2301,24 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
     errcode_ret = -1;
   }
   if (errcode_ret != CL_SUCCESS)
-    UNLOCK_ERR_RET(CL_IMAGE_FORMAT_NOT_SUPPORTED, command_queue->context,
-                   "Failed to convert fill_color to the appropriate image "
-                   "channel format and order");
+    ERR_RET(CL_IMAGE_FORMAT_NOT_SUPPORTED, command_queue->context,
+            "Failed to convert fill_color to the appropriate image "
+            "channel format and order");
 
   // This array is passed to clSetEventCallback for releasing the
   // allocated memory and releasing the event, if *event is null.
   void **callback_data = (void **)acl_malloc(sizeof(void *) * 2);
   if (!callback_data) {
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   acl_aligned_ptr_t *aligned_ptr =
       (acl_aligned_ptr_t *)acl_malloc(sizeof(acl_aligned_ptr_t));
   if (!aligned_ptr) {
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   *aligned_ptr = acl_mem_aligned_malloc(host_mem_size);
@@ -2351,8 +2326,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
   if (!ptr) {
     acl_free(aligned_ptr);
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   for (cl_uint i = 0; i < region[0] * region[1] * region[2]; i++) {
@@ -2391,8 +2366,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
       acl_free(aligned_ptr);
       acl_free(callback_data);
     }
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2407,7 +2382,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
                            aligned_ptr); // Cleaning up before failing.
       acl_free(aligned_ptr);
       acl_free(callback_data);
-      UNLOCK_RETURN(ret);
+      return ret;
     }
 
     callback_data[0] = (void *)(aligned_ptr);
@@ -2422,7 +2397,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
     clSetEventCallback(tmp_event, CL_COMPLETE,
                        acl_free_allocation_after_event_completion,
                        (void *)callback_data);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2447,27 +2422,27 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageIntelFPGA(
   size_t tmp_cb[3];
   size_t element_size;
   cl_int errcode_ret;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (src_image == NULL || !is_image(src_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source memory object is not an image");
   }
   if (dst_image == NULL || !is_image(dst_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source memory object is not an image");
   }
 
   if ((src_image->fields.image_objs.image_format->image_channel_order !=
        dst_image->fields.image_objs.image_format->image_channel_order) ||
       (src_image->fields.image_objs.image_format->image_channel_data_type !=
        dst_image->fields.image_objs.image_format->image_channel_data_type)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source memory object is not an image");
   }
 
   // Doesn't matter if we look at src or dst, already verified that they are the
@@ -2476,8 +2451,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageIntelFPGA(
       command_queue->context, src_image->fields.image_objs.image_format,
       &errcode_ret);
   if (errcode_ret != CL_SUCCESS) {
-    UNLOCK_ERR_RET(errcode_ret, command_queue->context,
-                   "Source memory object is not an image");
+    ERR_RET(errcode_ret, command_queue->context,
+            "Source memory object is not an image");
   }
 
   tmp_src_offset[0] = src_origin[0];
@@ -2496,17 +2471,16 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageIntelFPGA(
        dst_image->fields.image_objs.image_format->image_channel_order) ||
       (src_image->fields.image_objs.image_format->image_channel_data_type !=
        dst_image->fields.image_objs.image_format->image_channel_data_type)) {
-    UNLOCK_ERR_RET(
-        CL_IMAGE_FORMAT_MISMATCH, command_queue->context,
-        "Mismatch in image format between source & destination image");
+    ERR_RET(CL_IMAGE_FORMAT_MISMATCH, command_queue->context,
+            "Mismatch in image format between source & destination image");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, src_image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, dst_image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2514,7 +2488,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageIntelFPGA(
         command_queue, 0, src_image, tmp_src_offset, 0, 0, dst_image,
         tmp_dst_offset, 0, 0, tmp_cb, num_events_in_wait_list, event_wait_list,
         event, CL_COMMAND_COPY_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2541,18 +2515,18 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBufferIntelFPGA(
   size_t tmp_row_pitch, tmp_slice_pitch;
   cl_int errcode_ret;
   size_t src_element_size;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(src_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source image is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source image is invalid");
   }
   if (!acl_mem_is_valid(dst_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Destination buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Destination buffer is invalid");
   }
 
   if (src_image != NULL) {
@@ -2560,7 +2534,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBufferIntelFPGA(
         src_image->context, src_image->fields.image_objs.image_format,
         &errcode_ret);
     if (errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(errcode_ret);
+      return errcode_ret;
     }
   } else {
     src_element_size = 0;
@@ -2590,17 +2564,17 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBufferIntelFPGA(
   }
 
   if (!is_image(src_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Memory object is not an image");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, src_image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, dst_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2609,7 +2583,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBufferIntelFPGA(
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         tmp_row_pitch, tmp_slice_pitch, tmp_cb, num_events_in_wait_list,
         event_wait_list, event, CL_COMMAND_READ_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2636,29 +2610,29 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImageIntelFPGA(
   size_t tmp_row_pitch, tmp_slice_pitch;
   cl_int errcode_ret;
   size_t dst_element_size;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (dst_image != NULL) {
     dst_element_size = acl_get_image_element_size(
         dst_image->context, dst_image->fields.image_objs.image_format,
         &errcode_ret);
     if (errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(errcode_ret);
+      return errcode_ret;
     }
   } else {
     dst_element_size = 0;
   }
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(src_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source buffer is invalid");
   }
   if (!acl_mem_is_valid(dst_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Destination buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Destination buffer is invalid");
   }
 
   tmp_src_offset[0] = src_offset;
@@ -2685,17 +2659,17 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImageIntelFPGA(
   }
 
   if (!is_image(dst_image)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Memory object is not an image");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Memory object is not an image");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, src_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, dst_image)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -2704,7 +2678,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImageIntelFPGA(
         tmp_slice_pitch, dst_image, tmp_dst_offset, 0, 0, tmp_cb,
         num_events_in_wait_list, event_wait_list, event,
         CL_COMMAND_WRITE_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -2733,35 +2707,35 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
   size_t element_size;
   size_t tmp_row_pitch;
   size_t tmp_slice_pitch;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (image != NULL) {
     element_size = acl_get_image_element_size(
         image->context, image->fields.image_objs.image_format, errcode_ret);
     if (*errcode_ret != CL_SUCCESS) {
-      UNLOCK_RETURN(NULL);
+      return NULL;
     }
   } else {
     element_size = 0;
   }
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_BAIL(CL_INVALID_COMMAND_QUEUE);
+    BAIL(CL_INVALID_COMMAND_QUEUE);
   }
   context = command_queue->context;
   if (!acl_mem_is_valid(image)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_MEM_OBJECT, context, "Invalid memory object");
+    BAIL_INFO(CL_INVALID_MEM_OBJECT, context, "Invalid memory object");
   }
 
   if (command_queue->context != image->context) {
-    UNLOCK_BAIL_INFO(
+    BAIL_INFO(
         CL_INVALID_CONTEXT, context,
         "Command queue and memory object are not associated with the same "
         "context");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, image)) {
-    UNLOCK_BAIL_INFO(CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
-                     "Deferred Allocation Failed");
+    BAIL_INFO(CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
+              "Deferred Allocation Failed");
   }
 
   // Check if we can physically map the data into place.
@@ -2769,18 +2743,18 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
   // have backing store for it.
   if (!image->block_allocation->region->is_host_accessible &&
       !image->host_mem.aligned_ptr) {
-    UNLOCK_BAIL_INFO(CL_MAP_FAILURE, context,
-                     "Could not map the image into host memory");
+    BAIL_INFO(CL_MAP_FAILURE, context,
+              "Could not map the image into host memory");
   }
 
   if (!is_image(image)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_MEM_OBJECT, command_queue->context,
-                     "Memory object is not an image");
+    BAIL_INFO(CL_INVALID_MEM_OBJECT, command_queue->context,
+              "Memory object is not an image");
   }
 
   if (image_row_pitch == NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid row pitch provided");
+    BAIL_INFO(CL_INVALID_VALUE, command_queue->context,
+              "Invalid row pitch provided");
   } else {
     tmp_row_pitch =
         image->fields.image_objs.image_desc->image_width * element_size;
@@ -2791,8 +2765,8 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
        image->mem_object_type == CL_MEM_OBJECT_IMAGE2D_ARRAY ||
        image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY) &&
       image_slice_pitch == NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, command_queue->context,
-                     "Invalid slice pitch provided");
+    BAIL_INFO(CL_INVALID_VALUE, command_queue->context,
+              "Invalid slice pitch provided");
   } else {
     if (image->mem_object_type == CL_MEM_OBJECT_IMAGE2D ||
         image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
@@ -2858,7 +2832,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
     acl_print_debug_msg(" map: ref count is %u\n", acl_ref_count(image));
 
     if (status != CL_SUCCESS)
-      UNLOCK_BAIL(status); // already signalled callback
+      BAIL(status); // already signalled callback
 
     // The enqueue of the mem transfer will retain the buffer.
   } else {
@@ -2868,7 +2842,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
         acl_create_event(command_queue, num_events_in_wait_list,
                          event_wait_list, CL_COMMAND_MAP_BUFFER, &local_event);
     if (status != CL_SUCCESS)
-      UNLOCK_BAIL(status); // already signalled callback
+      BAIL(status); // already signalled callback
     // Mark it as the trivial map buffer case.
     local_event->cmd.trivial = 1;
     local_event->cmd.info.trivial_mem_mapping.mem = image;
@@ -2915,7 +2889,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
   }
   acl_dump_mem_internal(image);
 
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -2953,38 +2927,38 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
   cl_event local_event = 0; // used for blocking
   cl_context context;
   cl_int status;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_BAIL(CL_INVALID_COMMAND_QUEUE);
+    BAIL(CL_INVALID_COMMAND_QUEUE);
   }
   context = command_queue->context;
   if (!acl_mem_is_valid(buffer)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_MEM_OBJECT, context, "Invalid memory object");
+    BAIL_INFO(CL_INVALID_MEM_OBJECT, context, "Invalid memory object");
   }
 
   if (command_queue->context != buffer->context) {
-    UNLOCK_BAIL_INFO(
+    BAIL_INFO(
         CL_INVALID_CONTEXT, context,
         "Command queue and memory object are not associated with the same "
         "context");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_BAIL_INFO(CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
-                     "Deferred Allocation Failed");
+    BAIL_INFO(CL_MEM_OBJECT_ALLOCATION_FAILURE, context,
+              "Deferred Allocation Failed");
   }
 
   // Check flags
   if (map_flags &
       ~(CL_MAP_READ | CL_MAP_WRITE | CL_MAP_WRITE_INVALIDATE_REGION)) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
   }
   if (((map_flags & CL_MAP_READ) &
        (map_flags & CL_MAP_WRITE_INVALIDATE_REGION)) ||
       ((map_flags & CL_MAP_WRITE) &
        (map_flags & CL_MAP_WRITE_INVALIDATE_REGION))) {
-    UNLOCK_BAIL_INFO(
+    BAIL_INFO(
         CL_INVALID_VALUE, context,
         "CL_MAP_READ or CL_MAP_WRITE and CL_MAP_WRITE_INVALIDATE_REGION are "
         "specified but are mutually exclusive");
@@ -2996,13 +2970,13 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
   cl_mem_flags flags = buffer->flags;
   if (!buffer->block_allocation->region->is_host_accessible &&
       !buffer->host_mem.aligned_ptr && !(flags & CL_MEM_USE_HOST_PTR)) {
-    UNLOCK_BAIL_INFO(CL_MAP_FAILURE, context,
-                     "Could not map the buffer into host memory");
+    BAIL_INFO(CL_MAP_FAILURE, context,
+              "Could not map the buffer into host memory");
   }
 
   if (offset + cb > buffer->size) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Requested offset and byte count exceeds the buffer size");
+    BAIL_INFO(CL_INVALID_VALUE, context,
+              "Requested offset and byte count exceeds the buffer size");
   }
 
   if (flags & CL_MEM_USE_HOST_PTR) {
@@ -3031,7 +3005,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
     acl_print_debug_msg(" map: ref count is %u\n", acl_ref_count(buffer));
 
     if (status != CL_SUCCESS)
-      UNLOCK_BAIL(status); // already signalled callback
+      BAIL(status); // already signalled callback
 
   } else if (!buffer->block_allocation->region->is_host_accessible) {
     size_t tmp_src_offset[3];
@@ -3071,7 +3045,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
     acl_print_debug_msg(" map: ref count is %u\n", acl_ref_count(buffer));
 
     if (status != CL_SUCCESS)
-      UNLOCK_BAIL(status); // already signalled callback
+      BAIL(status); // already signalled callback
 
     // The enqueue of the mem transfer will retain the buffer.
   } else {
@@ -3080,7 +3054,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
     status = acl_create_event(command_queue, num_events, events,
                               CL_COMMAND_MAP_BUFFER, &local_event);
     if (status != CL_SUCCESS)
-      UNLOCK_BAIL(status); // already signalled callback
+      BAIL(status); // already signalled callback
     // Mark it as the trivial map buffer case.
     local_event->cmd.trivial = 1;
     local_event->cmd.info.trivial_mem_mapping.mem = buffer;
@@ -3131,7 +3105,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
     }
   }
   acl_dump_mem_internal(buffer);
-  UNLOCK_RETURN(result);
+  return result;
 }
 
 ACL_EXPORT
@@ -3152,28 +3126,27 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
   cl_context context;
   cl_int status;
   char *valid_base_ptr;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   context = command_queue->context;
   if (!acl_mem_is_valid(mem)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, context, "Memory object is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, context, "Memory object is invalid");
   }
 
   if (command_queue->context != mem->context) {
-    UNLOCK_ERR_RET(
-        CL_INVALID_CONTEXT, context,
-        "Command queue and memory object are not associated with the "
-        "same context");
+    ERR_RET(CL_INVALID_CONTEXT, context,
+            "Command queue and memory object are not associated with the "
+            "same context");
   }
   cl_mem_flags flags = mem->flags;
   if ((!mem->block_allocation->region->is_host_accessible &&
        !mem->host_mem.aligned_ptr && !(flags & CL_MEM_USE_HOST_PTR)) ||
       mem->allocation_deferred) {
-    UNLOCK_ERR_RET(CL_MAP_FAILURE, context,
-                   "Could not have mapped the buffer into host memory");
+    ERR_RET(CL_MAP_FAILURE, context,
+            "Could not have mapped the buffer into host memory");
   }
 
   // Necessary sanity check on the pointer.
@@ -3187,12 +3160,12 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
                                   : mem->block_allocation->range.begin);
   }
   if ((valid_base_ptr - (char *)mapped_ptr) > 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid mapped_ptr argument: it lies outside the buffer");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid mapped_ptr argument: it lies outside the buffer");
   }
   if (((char *)mapped_ptr - (valid_base_ptr + mem->size)) >= 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "Invalid mapped_ptr argument: it lies outside the buffer");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid mapped_ptr argument: it lies outside the buffer");
   }
 
   // This is the mirror image of mapping the buffer in the first place.
@@ -3214,7 +3187,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
       size_t image_element_size = acl_get_image_element_size(
           mem->context, mem->fields.image_objs.image_format, &status);
       if (status != CL_SUCCESS) {
-        UNLOCK_RETURN(status);
+        return status;
       }
 
       tmp_cb[0] =
@@ -3249,7 +3222,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
         // execution time.
         0);
     if (status != CL_SUCCESS)
-      UNLOCK_RETURN(status); // already signalled callback
+      return status; // already signalled callback
     acl_print_debug_msg("mem[%p] enqueue unmap. refcount %u\n", mem,
                         acl_ref_count(mem));
 
@@ -3271,7 +3244,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
       size_t image_element_size = acl_get_image_element_size(
           mem->context, mem->fields.image_objs.image_format, &status);
       if (status != CL_SUCCESS) {
-        UNLOCK_RETURN(status);
+        return status;
       }
 
       tmp_cb[0] =
@@ -3306,14 +3279,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
         // execution time.
         0);
     if (status != CL_SUCCESS)
-      UNLOCK_RETURN(status); // already signalled callback
+      return status; // already signalled callback
     acl_print_debug_msg("mem[%p] enqueue unmap. refcount %u\n", mem,
                         acl_ref_count(mem));
   } else {
     status = acl_create_event(command_queue, num_events, events,
                               CL_COMMAND_UNMAP_MEM_OBJECT, &local_event);
     if (status != CL_SUCCESS)
-      UNLOCK_RETURN(status); // already signalled callback
+      return status; // already signalled callback
     local_event->cmd.trivial = 1;
     local_event->cmd.info.trivial_mem_mapping.mem = mem;
     // Should retain the memory object so that its metadata will stick around
@@ -3334,7 +3307,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueUnmapMemObjectIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -3354,7 +3327,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   tmp_src_offset[0] = offset;
   tmp_src_offset[1] = 0;
@@ -3367,15 +3340,15 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferIntelFPGA(
   tmp_cb[2] = 1;
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -3384,7 +3357,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferIntelFPGA(
         command_queue->context->unwrapped_host_mem,
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         0, 0, tmp_cb, num_events, events, event, CL_COMMAND_READ_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3410,7 +3383,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferRectIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (buffer_row_pitch == 0) {
     buffer_row_pitch = region[0];
@@ -3436,19 +3409,18 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferRectIntelFPGA(
   tmp_cb[2] = region[2];
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context, "Buffer is invalid");
   }
   if (ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   {
     cl_int ret = l_enqueue_mem_transfer(
@@ -3457,7 +3429,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadBufferRectIntelFPGA(
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         host_row_pitch, host_slice_pitch, tmp_cb, num_events_in_wait_list,
         event_wait_list, event, CL_COMMAND_READ_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3483,7 +3455,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   tmp_src_offset[0] = (size_t)((char *)ptr - (const char *)ACL_MEM_ALIGN);
   tmp_src_offset[1] = 0;
@@ -3496,11 +3468,11 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferIntelFPGA(
   tmp_cb[2] = 1;
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -3509,7 +3481,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferIntelFPGA(
         command_queue->context->unwrapped_host_mem, tmp_src_offset, 0, 0,
         buffer, tmp_dst_offset, 0, 0, tmp_cb, num_events, events, event,
         CL_COMMAND_WRITE_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3534,7 +3506,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferRectIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (buffer_row_pitch == 0) {
     buffer_row_pitch = region[0];
@@ -3560,19 +3532,18 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferRectIntelFPGA(
   tmp_cb[2] = region[2];
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context, "Buffer is invalid");
   }
   if (ptr == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Pointer argument cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Pointer argument cannot be NULL");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   {
     cl_int ret = l_enqueue_mem_transfer(
@@ -3582,7 +3553,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteBufferRectIntelFPGA(
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         buffer_row_pitch, buffer_slice_pitch, tmp_cb, num_events_in_wait_list,
         event_wait_list, event, CL_COMMAND_WRITE_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3612,53 +3583,50 @@ CL_API_ENTRY cl_int clEnqueueFillBufferIntelFPGA(
   char *ptr;
 
   cl_event tmp_event;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (!acl_mem_is_valid(buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context, "Buffer is invalid");
   }
 
   // Pattern size can only be {1,2,4,8,...,1024 sizeof(double16)}.
   if (pattern_size == 0 || pattern_size > 1024 ||
       (pattern_size & (pattern_size - 1))) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Invalid pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context, "Invalid pattern size");
   }
 
   if (offset % pattern_size != 0 || size % pattern_size != 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Offset and size must be a multiple of pattern size");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Offset and size must be a multiple of pattern size");
   }
 
   if (pattern == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "pattern cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context, "pattern cannot be NULL");
   }
 
   if (!acl_bind_buffer_to_device(command_queue->device, buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   // This array is passed to clSetEventCallback for releasing the
   // allocated memory and releasing the event, if *event is null.
   void **callback_data = (void **)acl_malloc(sizeof(void *) * 2);
   if (!callback_data) {
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   acl_aligned_ptr_t *aligned_ptr =
       (acl_aligned_ptr_t *)acl_malloc(sizeof(acl_aligned_ptr_t));
   if (!aligned_ptr) {
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   // Replicating the pattern, size/pattern_size times.
@@ -3667,8 +3635,8 @@ CL_API_ENTRY cl_int clEnqueueFillBufferIntelFPGA(
   if (!ptr) {
     acl_free(aligned_ptr);
     acl_free(callback_data);
-    UNLOCK_ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
-                   "Out of host memory");
+    ERR_RET(CL_OUT_OF_HOST_MEMORY, command_queue->context,
+            "Out of host memory");
   }
 
   for (cl_uint i = 0; i < size / pattern_size; i++) {
@@ -3697,7 +3665,7 @@ CL_API_ENTRY cl_int clEnqueueFillBufferIntelFPGA(
       acl_mem_aligned_free(command_queue->context, aligned_ptr);
       acl_free(aligned_ptr);
       acl_free(callback_data);
-      UNLOCK_RETURN(ret);
+      return ret;
     }
     callback_data[0] = (void *)(aligned_ptr);
     if (event) {
@@ -3711,7 +3679,7 @@ CL_API_ENTRY cl_int clEnqueueFillBufferIntelFPGA(
     clSetEventCallback(tmp_event, CL_COMPLETE,
                        acl_free_allocation_after_event_completion,
                        (void *)callback_data);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3736,7 +3704,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   tmp_src_offset[0] = src_offset;
   tmp_src_offset[1] = 0;
@@ -3749,23 +3717,23 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferIntelFPGA(
   tmp_cb[2] = 1;
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(src_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source buffer is invalid");
   }
   if (!acl_mem_is_valid(dst_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Destination buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Destination buffer is invalid");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, src_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, dst_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   {
@@ -3773,7 +3741,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferIntelFPGA(
         command_queue, 0, src_buffer, tmp_src_offset, 0, 0, dst_buffer,
         tmp_dst_offset, 0, 0, tmp_cb, num_events, events, event,
         CL_COMMAND_COPY_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3797,7 +3765,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferRectIntelFPGA(
   size_t tmp_src_offset[3];
   size_t tmp_dst_offset[3];
   size_t tmp_cb[3];
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (src_row_pitch == 0) {
     src_row_pitch = region[0];
@@ -3823,44 +3791,41 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferRectIntelFPGA(
   tmp_cb[2] = region[2];
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
   if (!acl_mem_is_valid(src_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Source buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Source buffer is invalid");
   }
   if (!acl_mem_is_valid(dst_buffer)) {
-    UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
-                   "Destination buffer is invalid");
+    ERR_RET(CL_INVALID_MEM_OBJECT, command_queue->context,
+            "Destination buffer is invalid");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, src_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
   if (!acl_bind_buffer_to_device(command_queue->device, dst_buffer)) {
-    UNLOCK_ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
-                   "Deferred Allocation Failed");
+    ERR_RET(CL_MEM_OBJECT_ALLOCATION_FAILURE, command_queue->context,
+            "Deferred Allocation Failed");
   }
 
   if (src_buffer == dst_buffer) {
     if (src_row_pitch != dst_row_pitch) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_VALUE, command_queue->context,
-          "Source buffer and destination buffer are the same, but row "
-          "pitches do not match");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Source buffer and destination buffer are the same, but row "
+              "pitches do not match");
     }
     if (src_slice_pitch != dst_slice_pitch) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_VALUE, command_queue->context,
-          "Source buffer and destination buffer are the same, but slice "
-          "pitches do not match");
+      ERR_RET(CL_INVALID_VALUE, command_queue->context,
+              "Source buffer and destination buffer are the same, but slice "
+              "pitches do not match");
     }
     if (check_copy_overlap(tmp_src_offset, tmp_dst_offset, tmp_cb,
                            src_row_pitch, src_slice_pitch)) {
-      UNLOCK_ERR_RET(
-          CL_MEM_COPY_OVERLAP, command_queue->context,
-          "Source buffer and destination buffer are the same and regions "
-          "overlaps");
+      ERR_RET(CL_MEM_COPY_OVERLAP, command_queue->context,
+              "Source buffer and destination buffer are the same and regions "
+              "overlaps");
     }
   }
   {
@@ -3870,7 +3835,7 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferRectIntelFPGA(
         tmp_dst_offset, // see creation of the unwrapped_host_mem
         dst_row_pitch, dst_slice_pitch, tmp_cb, num_events_in_wait_list,
         event_wait_list, event, CL_COMMAND_COPY_BUFFER, 0);
-    UNLOCK_RETURN(ret);
+    return ret;
   }
 }
 
@@ -3893,10 +3858,10 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
     cl_uint pipe_max_packets, const cl_pipe_properties *properties,
     cl_int *errcode_ret) {
   cl_mem mem;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context)) {
-    UNLOCK_BAIL(CL_INVALID_CONTEXT);
+    BAIL(CL_INVALID_CONTEXT);
   }
 
   // Check flags
@@ -3904,8 +3869,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
     // Check for invalid enum bits
     if (flags & ~(CL_MEM_READ_WRITE | CL_MEM_READ_ONLY | CL_MEM_WRITE_ONLY |
                   CL_MEM_HOST_READ_ONLY | CL_MEM_HOST_WRITE_ONLY)) {
-      UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                       "Invalid or unsupported flags");
+      BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
     }
 
     {
@@ -3925,12 +3889,12 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
 
       // Check for exactly one read/write spec
       if (num_rw_specs > 1) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "More than one read/write flag is specified");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "More than one read/write flag is specified");
       }
       if (num_hostrw_specs > 1) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "More than one host read/write flag is specified");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "More than one host read/write flag is specified");
       }
 
       // Default to CL_MEM_READ_WRITE.
@@ -3941,29 +3905,28 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
       if (((flags & CL_MEM_HOST_READ_ONLY) && (flags & CL_MEM_READ_ONLY)) ||
           ((flags & CL_MEM_HOST_WRITE_ONLY) && (flags & CL_MEM_WRITE_ONLY)) ||
           (num_hostrw_specs && (flags & CL_MEM_READ_WRITE))) {
-        UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                         "Conflicting read/write flags specified");
+        BAIL_INFO(CL_INVALID_VALUE, context,
+                  "Conflicting read/write flags specified");
       }
     }
   }
 
   if (pipe_packet_size == 0) {
-    UNLOCK_BAIL_INFO(CL_INVALID_PIPE_SIZE, context, "Pipe packet size is zero");
+    BAIL_INFO(CL_INVALID_PIPE_SIZE, context, "Pipe packet size is zero");
   }
   if (pipe_packet_size > acl_platform.pipe_max_packet_size) {
-    UNLOCK_BAIL_INFO(CL_INVALID_PIPE_SIZE, context,
-                     "Pipe packet size exceeds maximum allowed");
+    BAIL_INFO(CL_INVALID_PIPE_SIZE, context,
+              "Pipe packet size exceeds maximum allowed");
   }
 
   if (properties != NULL) {
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, context,
-                     "Properties must be NULL for pipes");
+    BAIL_INFO(CL_INVALID_VALUE, context, "Properties must be NULL for pipes");
   }
 
   mem = acl_alloc_cl_mem();
   if (!mem) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                     "Could not allocate a cl_mem object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+              "Could not allocate a cl_mem object");
   }
 
   acl_reset_ref_count(mem);
@@ -3994,8 +3957,8 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
     host_pipe_info = acl_new<host_pipe_t>();
     if (!host_pipe_info) {
       acl_free_cl_mem(mem);
-      UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
-                       "Could not allocate memory for internal data structure");
+      BAIL_INFO(CL_OUT_OF_HOST_MEMORY, context,
+                "Could not allocate memory for internal data structure");
     }
     host_pipe_info->m_physical_device_id = 0;
     host_pipe_info->m_channel_handle = -1;
@@ -4022,7 +3985,7 @@ CL_API_ENTRY cl_mem CL_API_CALL clCreatePipeIntelFPGA(
 
   acl_track_object(ACL_OBJ_MEM_OBJECT, mem);
 
-  UNLOCK_RETURN(mem);
+  return mem;
 }
 
 ACL_EXPORT
@@ -4038,17 +4001,17 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clGetPipeInfoIntelFPGA(
     cl_mem pipe, cl_pipe_info param_name, size_t param_value_size,
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   RESULT_INIT;
 
   if (!acl_mem_is_valid(pipe)) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   // Wrong object type
   if (pipe->mem_object_type != CL_MEM_OBJECT_PIPE) {
-    UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+    return CL_INVALID_MEM_OBJECT;
   }
 
   switch (param_name) {
@@ -4064,14 +4027,14 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clGetPipeInfoIntelFPGA(
 
   if (result.size == 0) {
     // We didn't implement the enum. Error out semi-gracefully.
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   }
 
   if (param_value) {
     // Actually try to return the string.
     if (param_value_size < result.size) {
       // Buffer is too small to hold the return value.
-      UNLOCK_RETURN(CL_INVALID_VALUE);
+      return CL_INVALID_VALUE;
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -4079,7 +4042,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clGetPipeInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL
@@ -4101,35 +4064,34 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
   unsigned int mem_id;
   int *needs_release_on_fail;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   if (num_mem_objects == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Number of memory objects is zero");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Number of memory objects is zero");
   }
   if (mem_objects == 0) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Array of memory objects is NULL");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context,
+            "Array of memory objects is NULL");
   }
 
   for (i = 0; i < num_mem_objects; ++i) {
     if (!acl_mem_is_valid(mem_objects[i])) {
-      UNLOCK_RETURN(CL_INVALID_MEM_OBJECT);
+      return CL_INVALID_MEM_OBJECT;
     }
 
     if (command_queue->context != mem_objects[i]->context) {
-      UNLOCK_RETURN(CL_INVALID_CONTEXT);
+      return CL_INVALID_CONTEXT;
     }
   }
 
   if (flags != 0 && (flags & ~(CL_MIGRATE_MEM_OBJECT_HOST |
                                CL_MIGRATE_MEM_OBJECT_CONTENT_UNDEFINED))) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, command_queue->context,
-                   "Invalid flags provided");
+    ERR_RET(CL_INVALID_VALUE, command_queue->context, "Invalid flags provided");
   }
 
   physical_id = command_queue->device->def.physical_device_id;
@@ -4138,8 +4100,8 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
   int tmp_mem_id =
       acl_get_default_device_global_memory(command_queue->device->def);
   if (tmp_mem_id < 0) {
-    UNLOCK_ERR_RET(CL_OUT_OF_RESOURCES, command_queue->context,
-                   "Can not find default global memory system");
+    ERR_RET(CL_OUT_OF_RESOURCES, command_queue->context,
+            "Can not find default global memory system");
   }
   mem_id = (unsigned int)tmp_mem_id;
 
@@ -4180,7 +4142,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
       mem_objects[i]->reserved_allocations_count[physical_id][mem_id]--;
     }
     free(needs_release_on_fail);
-    UNLOCK_RETURN(status);
+    return status;
   }
 
   // All space is reserved, create an event/command to actually move the data at
@@ -4191,7 +4153,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
 
   if (status != CL_SUCCESS) {
     free(needs_release_on_fail);
-    UNLOCK_RETURN(status); // already signalled callback
+    return status; // already signalled callback
   }
 
   local_event->cmd.info.memory_migration.num_mem_objects = num_mem_objects;
@@ -4203,7 +4165,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
             num_mem_objects * sizeof(acl_mem_migrate_wrapper_t));
 
     if (!new_src_mem_list) {
-      UNLOCK_RETURN(CL_OUT_OF_RESOURCES);
+      return CL_OUT_OF_RESOURCES;
     }
 
     local_event->cmd.info.memory_migration.src_mem_list = new_src_mem_list;
@@ -4213,7 +4175,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
             num_mem_objects * sizeof(acl_mem_migrate_wrapper_t));
 
     if (!local_event->cmd.info.memory_migration.src_mem_list) {
-      UNLOCK_RETURN(CL_OUT_OF_RESOURCES);
+      return CL_OUT_OF_RESOURCES;
     }
   }
 
@@ -4238,7 +4200,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
 
   free(needs_release_on_fail);
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjects(
@@ -4574,7 +4536,6 @@ static void remove_mem_block_linked_list(acl_block_allocation_t *block) {
 }
 
 void acl_mem_destructor_callback(cl_mem memobj) {
-  int lock_count;
   acl_mem_destructor_user_callback *cb_head, *temp;
   acl_assert_locked();
   // Call the notification function registered via
@@ -4592,10 +4553,10 @@ void acl_mem_destructor_callback(cl_mem memobj) {
     cb_head = cb_head->next;
     memobj->destructor_callback_list = cb_head;
     acl_free(temp);
-
-    lock_count = acl_suspend_lock();
-    mem_destructor_notify_fn(memobj, notify_user_data);
-    acl_resume_lock(lock_count);
+    {
+      acl_suspend_lock_guard lock{acl_mutex_wrapper};
+      mem_destructor_notify_fn(memobj, notify_user_data);
+    }
   }
 }
 

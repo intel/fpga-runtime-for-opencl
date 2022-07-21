@@ -162,10 +162,10 @@ bool acltest_hal_emulate_device_mem = false;
 static void *acltest_hal_device_mem = 0;
 static size_t acltest_hal_device_mem_size = 0;
 
-TEST_GROUP(acl_hal){void setup(){acl_lock();
+TEST_GROUP(acl_hal){void setup(){acl_mutex_wrapper.lock();
 }
 void teardown() {
-  acl_unlock();
+  acl_mutex_wrapper.unlock();
   acl_assert_unlocked();
 }
 }

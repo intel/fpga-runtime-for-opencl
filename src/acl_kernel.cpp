@@ -125,12 +125,12 @@ ACL_DEFINE_CL_OBJECT_ALLOC_FUNCTIONS(cl_kernel);
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clRetainKernelIntelFPGA(cl_kernel kernel) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
   acl_retain(kernel);
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -140,10 +140,10 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainKernel(cl_kernel kernel) {
 
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseKernelIntelFPGA(cl_kernel kernel) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   acl_print_debug_msg("Release kernel %p\n", kernel);
@@ -179,7 +179,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseKernelIntelFPGA(cl_kernel kernel) {
   } else {
     acl_release(kernel);
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -193,14 +193,14 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernelIntelFPGA(
   cl_int status;
   cl_kernel kernel = 0;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   // Can't call the callback, because we have no valid context.
   if (!acl_program_is_valid(program))
-    UNLOCK_BAIL(CL_INVALID_PROGRAM);
+    BAIL(CL_INVALID_PROGRAM);
 
   if (!kernel_name)
-    UNLOCK_BAIL_INFO(CL_INVALID_VALUE, program->context, "kernel_name is NULL");
+    BAIL_INFO(CL_INVALID_VALUE, program->context, "kernel_name is NULL");
 
   // What device program is associated with this kernel?
   // Right now we only support one device per kernel.
@@ -209,12 +209,12 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernelIntelFPGA(
                                              &status, program->context, 0);
 
   if (status != CL_SUCCESS)
-    UNLOCK_BAIL(status); // already signaled callback
+    BAIL(status); // already signaled callback
 
   kernel = acl_program_alloc_kernel(program);
   if (kernel == 0) {
-    UNLOCK_BAIL_INFO(CL_OUT_OF_HOST_MEMORY, program->context,
-                     "Could not allocate a program object");
+    BAIL_INFO(CL_OUT_OF_HOST_MEMORY, program->context,
+              "Could not allocate a program object");
   }
 
   l_init_kernel(kernel, program, accel_def, dev_bin, errcode_ret);
@@ -223,7 +223,7 @@ CL_API_ENTRY cl_kernel CL_API_CALL clCreateKernelIntelFPGA(
     *errcode_ret = CL_SUCCESS;
   }
 
-  UNLOCK_RETURN(kernel);
+  return kernel;
 }
 
 ACL_EXPORT
@@ -237,10 +237,10 @@ ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgramIntelFPGA(
     cl_program program, cl_uint num_kernels, cl_kernel *kernels,
     cl_uint *num_kernels_ret) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_program_is_valid(program)) {
-    UNLOCK_RETURN(CL_INVALID_PROGRAM);
+    return CL_INVALID_PROGRAM;
   }
 
   auto context = program->context;
@@ -251,23 +251,21 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgramIntelFPGA(
       l_load_consistently_built_kernels_in_program(program, accel_ret);
 
   if (status != CL_SUCCESS) {
-    UNLOCK_RETURN(status); // already signaled
+    return status; // already signaled
   }
   if (accel_ret.size() == 0) {
-    UNLOCK_ERR_RET(
-        CL_INVALID_PROGRAM_EXECUTABLE, context,
-        "No kernels were built across all devices with the same interface");
+    ERR_RET(CL_INVALID_PROGRAM_EXECUTABLE, context,
+            "No kernels were built across all devices with the same interface");
   }
 
   // Check return buffer spec
   if (num_kernels == 0 && kernels) {
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "num_kernels is zero but kernels array is specified");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "num_kernels is zero but kernels array is specified");
   }
   if (num_kernels > 0 && kernels == 0) {
-    UNLOCK_ERR_RET(
-        CL_INVALID_VALUE, context,
-        "num_kernels is non-zero but kernels array is not specified");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "num_kernels is non-zero but kernels array is not specified");
   }
 
   if (kernels) {
@@ -275,7 +273,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgramIntelFPGA(
 
     // Result buffer isn't big enough.
     if (num_kernels < accel_ret.size()) {
-      UNLOCK_RETURN(CL_INVALID_VALUE);
+      return CL_INVALID_VALUE;
     }
 
     // The definitions are in accel_ret. Create the kernels.
@@ -300,7 +298,7 @@ CL_API_ENTRY cl_int CL_API_CALL clCreateKernelsInProgramIntelFPGA(
   if (num_kernels_ret)
     *num_kernels_ret = static_cast<cl_uint>(accel_ret.size());
 
-  UNLOCK_RETURN(status);
+  return status;
 }
 
 ACL_EXPORT
@@ -320,17 +318,16 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
   cl_context context;
   cl_bool is_pipe = CL_FALSE;
   cl_bool is_sampler = CL_FALSE;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   context = kernel->program->context;
 
   if (arg_index >= kernel->accel_def->iface.args.size()) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context,
-                   "Argument index is too large");
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Argument index is too large");
   }
 
   arg_info = &(kernel->accel_def->iface.args[arg_index]);
@@ -341,14 +338,14 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     // representing buffers.
     if (arg_value && (*(cl_mem *)arg_value) &&
         !acl_mem_is_valid(*(cl_mem *)arg_value))
-      UNLOCK_ERR_RET(CL_INVALID_MEM_OBJECT, context,
-                     "Non-memory object passed in as memory object argument");
+      ERR_RET(CL_INVALID_MEM_OBJECT, context,
+              "Non-memory object passed in as memory object argument");
 
   } else if (arg_info->category == ACL_ARG_SAMPLER) {
     if (arg_value && (arg_size != sizeof(cl_sampler) ||
                       !acl_sampler_is_valid(*(cl_sampler *)arg_value))) {
-      UNLOCK_ERR_RET(CL_INVALID_SAMPLER, context,
-                     "Non-sampler object passed in as sampler object argument");
+      ERR_RET(CL_INVALID_SAMPLER, context,
+              "Non-sampler object passed in as sampler object argument");
     }
     is_sampler = CL_TRUE;
   } else if (arg_size != arg_info->size && arg_value &&
@@ -361,13 +358,12 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
   switch (arg_info->addr_space) {
   case ACL_ARG_ADDR_LOCAL: /* Size is number of local bytes to allocate */
     if (arg_size == 0) {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_SIZE, context,
-                     "Pointer-to-local argument specified zero size");
+      ERR_RET(CL_INVALID_ARG_SIZE, context,
+              "Pointer-to-local argument specified zero size");
     }
     if (arg_value != 0) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_ARG_VALUE, context,
-          "Pointer-to-local argument specified with a non-null value");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "Pointer-to-local argument specified with a non-null value");
     }
 
     /* We instantiated a specific mem capacity to handle this pointer.
@@ -376,10 +372,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     {
       unsigned lmem_size_instantiated = arg_info->lmem_size_bytes;
       if (arg_size > lmem_size_instantiated) {
-        UNLOCK_ERR_RET(
-            CL_INVALID_ARG_SIZE, context,
-            "Pointer-to-local argument requested size is larger than "
-            "maximum specified at compile time");
+        ERR_RET(CL_INVALID_ARG_SIZE, context,
+                "Pointer-to-local argument requested size is larger than "
+                "maximum specified at compile time");
       }
     }
     break;
@@ -387,19 +382,17 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
   case ACL_ARG_ADDR_GLOBAL:
   case ACL_ARG_ADDR_CONSTANT:
     if (arg_size != sizeof(cl_mem)) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_ARG_SIZE, context,
-          "Pointer-to-global or Pointer-to-constant argument size is "
-          "not the size of cl_mem");
+      ERR_RET(CL_INVALID_ARG_SIZE, context,
+              "Pointer-to-global or Pointer-to-constant argument size is "
+              "not the size of cl_mem");
     }
     // Can pass NULL or pointer to NULL in arg_value, or it must be a valid
     // memory object.
     if (arg_value && (*(cl_mem *)arg_value) &&
         !acl_mem_is_valid(*(cl_mem *)arg_value)) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_ARG_VALUE, context,
-          "Pointer-to-global or Pointer-to-constant argument value is "
-          "not a valid memory object");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "Pointer-to-global or Pointer-to-constant argument value is "
+              "not a valid memory object");
     }
 
     if (arg_value && (*(cl_mem *)arg_value) &&
@@ -410,8 +403,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     // If this buffer is an SVM buffer, assume that the user wants the memory to
     // be in sync. Treat this the same as an SVM kernel arg and return.
     if (arg_value && (*(cl_mem *)arg_value) && (*(cl_mem *)arg_value)->is_svm) {
-      UNLOCK_RETURN(clSetKernelArgSVMPointerIntelFPGA(
-          kernel, arg_index, (*(cl_mem *)arg_value)->host_mem.aligned_ptr));
+      return clSetKernelArgSVMPointerIntelFPGA(
+          kernel, arg_index, (*(cl_mem *)arg_value)->host_mem.aligned_ptr);
     }
     break;
 
@@ -419,22 +412,21 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     if (is_sampler && arg_value != 0 &&
         acl_sampler_is_valid_ptr(*((cl_sampler *)arg_value))) {
       if (arg_size != sizeof(cl_sampler)) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_SIZE, context,
-                       "Sampler argument size is not the size of cl_sampler");
+        ERR_RET(CL_INVALID_ARG_SIZE, context,
+                "Sampler argument size is not the size of cl_sampler");
       }
       if (arg_info->size != sizeof(int)) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_SIZE, context,
-                       "Argument size is the wrong size");
+        ERR_RET(CL_INVALID_ARG_SIZE, context,
+                "Argument size is the wrong size");
       }
     } else if (arg_size == sizeof(cl_mem) &&
                acl_pipe_is_valid_pointer(*((cl_mem *)arg_value), kernel)) {
       is_pipe = CL_TRUE;
     } else if (arg_size != arg_info->size) {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_SIZE, context,
-                     "Argument size is the wrong size");
+      ERR_RET(CL_INVALID_ARG_SIZE, context, "Argument size is the wrong size");
     }
     if (arg_value == 0) {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context, "Argument value is NULL");
+      ERR_RET(CL_INVALID_ARG_VALUE, context, "Argument value is NULL");
     }
     break;
   }
@@ -452,9 +444,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     /* If this is a host pipe, create a host channel and bind them together */
     if (arg_info->host_accessible && pipe_ptr->host_pipe_info != NULL) {
       if (pipe_ptr->host_pipe_info->m_binded_kernel != NULL) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                       "This pipe has already been bound to a kernel. Cannot "
-                       "rebind to a new kernel");
+        ERR_RET(CL_INVALID_ARG_VALUE, context,
+                "This pipe has already been bound to a kernel. Cannot "
+                "rebind to a new kernel");
       }
 
       // Check to see if the kernel argument's width matches up with our cl_pipe
@@ -475,23 +467,23 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
                          hostpipe_info.is_host_to_dev) {
                 // Direction match
               } else {
-                UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                               "Host accessible pipe direction is not the same "
-                               "of cl_pipe");
+                ERR_RET(CL_INVALID_ARG_VALUE, context,
+                        "Host accessible pipe direction is not the same "
+                        "of cl_pipe");
               }
               // Check width
               if (pipe_ptr->fields.pipe_objs.pipe_packet_size !=
                   hostpipe_info.data_width) {
-                UNLOCK_ERR_RET(CL_INVALID_ARG_SIZE, context,
-                               "Host accessible pipe size is not the same size "
-                               "of cl_pipe");
+                ERR_RET(CL_INVALID_ARG_SIZE, context,
+                        "Host accessible pipe size is not the same size "
+                        "of cl_pipe");
               }
               // Check max buffer size
               if (pipe_ptr->fields.pipe_objs.pipe_max_packets >
                   hostpipe_info.max_buffer_depth) {
-                UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                               "Host accessible pipe max packets size is "
-                               "smaller than cl_pipe requested size");
+                ERR_RET(CL_INVALID_ARG_VALUE, context,
+                        "Host accessible pipe max packets size is "
+                        "smaller than cl_pipe requested size");
               }
               found = true;
             }
@@ -513,23 +505,23 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
                        hostpipe_info.is_host_to_dev) {
               // Direction match
             } else {
-              UNLOCK_ERR_RET(
+              ERR_RET(
                   CL_INVALID_ARG_VALUE, context,
                   "Host accessible pipe direction is not the same of cl_pipe");
             }
             // Check width
             if (pipe_ptr->fields.pipe_objs.pipe_packet_size !=
                 hostpipe_info.data_width) {
-              UNLOCK_ERR_RET(
+              ERR_RET(
                   CL_INVALID_ARG_SIZE, context,
                   "Host accessible pipe size is not the same size of cl_pipe");
             }
             // Check max buffer size
             if (pipe_ptr->fields.pipe_objs.pipe_max_packets >
                 hostpipe_info.max_buffer_depth) {
-              UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                             "Host accessible pipe max packets size is smaller "
-                             "than cl_pipe requested size");
+              ERR_RET(CL_INVALID_ARG_VALUE, context,
+                      "Host accessible pipe max packets size is smaller "
+                      "than cl_pipe requested size");
             }
             found = true;
           }
@@ -547,7 +539,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
       // figure out which device at enqueue time
       pipe_ptr->host_pipe_info->binded = false;
     }
-    UNLOCK_RETURN(CL_SUCCESS);
+    return CL_SUCCESS;
   }
 
   // Now try saving the value.
@@ -564,9 +556,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     // creation time, or at system initialization...
 #ifndef REMOVE_VALID_CHECKS
     if ((start_idx + iface_arg_size) > kernel->arg_value_size) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_KERNEL, context,
-          "Argument overflows the space allocated for kernel arguments");
+      ERR_RET(CL_INVALID_KERNEL, context,
+              "Argument overflows the space allocated for kernel arguments");
     }
 #endif
 
@@ -594,9 +585,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
                   .autodiscovery_def.num_global_mem_systems > 1 &&
           !l_check_mem_type_support_on_kernel_arg(
               kernel, arg_index, ACL_GLOBAL_MEM_DEVICE_PRIVATE)) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                       "cl_mem object was set on kernel argument that doesn't "
-                       "have attribute to access device private memory");
+        ERR_RET(CL_INVALID_ARG_VALUE, context,
+                "cl_mem object was set on kernel argument that doesn't "
+                "have attribute to access device private memory");
       }
     }
 
@@ -724,7 +715,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     kernel->arg_defined[arg_index] = 1;
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -739,22 +730,21 @@ ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointerIntelFPGA(
     cl_kernel kernel, cl_uint arg_index, const void *arg_value) {
   cl_context context;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
 #ifndef REMOVE_VALID_CHECKS
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   context = kernel->program->context;
 
   if (arg_index >= kernel->accel_def->iface.args.size()) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context,
-                   "Argument index is too large");
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Argument index is too large");
   }
 
   if (arg_value == NULL) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context, "SVM argument is NULL");
+    ERR_RET(CL_INVALID_ARG_VALUE, context, "SVM argument is NULL");
   }
 
   unsigned expected_alignment =
@@ -763,13 +753,12 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointerIntelFPGA(
       expected_alignment ? expected_alignment : ACL_MEM_ALIGN; // For tests
   if ((uintptr_t)arg_value % expected_alignment != 0) {
     if (expected_alignment == ACL_MEM_ALIGN) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_ARG_VALUE, context,
-          "SVM argument is not aligned correctly for type.  Ensure the "
-          "kernel argument is targeting the correct buffer location.");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "SVM argument is not aligned correctly for type.  Ensure the "
+              "kernel argument is targeting the correct buffer location.");
     } else {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                     "SVM argument is not aligned correctly for type.");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "SVM argument is not aligned correctly for type.");
     }
   }
 #endif
@@ -786,9 +775,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointerIntelFPGA(
     // creation time, or at system initialization...
 #ifndef REMOVE_VALID_CHECKS
     if ((start_idx + iface_arg_size) > kernel->arg_value_size) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_KERNEL, context,
-          "Argument overflows the space allocated for kernel arguments");
+      ERR_RET(CL_INVALID_KERNEL, context,
+              "Argument overflows the space allocated for kernel arguments");
     }
     // If the board has both SVM and DGM, make sure kernel argument is SVM
     cl_bool context_has_device_with_physical_mem = CL_FALSE;
@@ -812,9 +800,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointerIntelFPGA(
             1 &&
         !l_check_mem_type_support_on_kernel_arg(
             kernel, arg_index, ACL_GLOBAL_MEM_SHARED_VIRTUAL)) {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                     "SVM pointer was set on kernel argument that doesn't have "
-                     "attribute to access SVM");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "SVM pointer was set on kernel argument that doesn't have "
+              "attribute to access SVM");
     }
 #endif
 
@@ -831,7 +819,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointerIntelFPGA(
     kernel->arg_defined[arg_index] = 1;
   }
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -843,17 +831,16 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointer(
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
     cl_kernel kernel, cl_uint arg_index, const void *arg_value) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   cl_context context = kernel->program->context;
 
   if (arg_index >= kernel->accel_def->iface.args.size()) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context,
-                   "Argument index is too large");
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Argument index is too large");
   }
 
   // Determine where to write the value.
@@ -866,9 +853,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
   // creation time, or at system initialization...
 #ifndef REMOVE_VALID_CHECKS
   if ((start_idx + iface_arg_size) > kernel->arg_value_size) {
-    UNLOCK_ERR_RET(
-        CL_INVALID_KERNEL, context,
-        "Argument overflows the space allocated for kernel arguments");
+    ERR_RET(CL_INVALID_KERNEL, context,
+            "Argument overflows the space allocated for kernel arguments");
   }
 
   unsigned expected_alignment =
@@ -877,20 +863,20 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
       expected_alignment ? expected_alignment : ACL_MEM_ALIGN; // For tests
   if ((uintptr_t)arg_value % expected_alignment != 0) {
     if (expected_alignment == ACL_MEM_ALIGN) {
-      UNLOCK_ERR_RET(
+      ERR_RET(
           CL_INVALID_ARG_VALUE, context,
           "Pointer argument is not aligned correctly for type.  If you are "
           "using unified shared memory compile the kernel with the -usm flag.");
     } else {
-      UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                     "Pointer argument is not aligned correctly for type.");
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "Pointer argument is not aligned correctly for type.");
     }
   }
 
   if (!acl_usm_ptr_belongs_to_context(context, arg_value)) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                   "Pointer argument is not allocated using USM or not "
-                   "allocated in correct context.");
+    ERR_RET(CL_INVALID_ARG_VALUE, context,
+            "Pointer argument is not allocated using USM or not "
+            "allocated in correct context.");
   }
 
   // Ensure the USM allocation (arg_value) is compatible with what the kernel
@@ -914,9 +900,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
   acl_usm_allocation_t *usm_alloc =
       acl_get_usm_alloc_from_ptr(context, arg_value);
   if (usm_alloc == nullptr) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                   "Pointer argument is not allocated using USM or not "
-                   "allocated in correct context.");
+    ERR_RET(CL_INVALID_ARG_VALUE, context,
+            "Pointer argument is not allocated using USM or not "
+            "allocated in correct context.");
   }
 
   // Try to find the memory interface that corresponds to this allocation.
@@ -962,29 +948,29 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
             ACL_GLOBAL_MEM_DEVICE_ALLOCATION)) {
         if (kernel_arg_mem->allocation_type & ACL_GLOBAL_MEM_HOST_ALLOCATION) {
           // Host not compatible with device memory.
-          UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                         "Argument expects host allocation but pointer is to "
-                         "USM device memory");
+          ERR_RET(CL_INVALID_ARG_VALUE, context,
+                  "Argument expects host allocation but pointer is to "
+                  "USM device memory");
         } else if (kernel_arg_mem->allocation_type &
                    ACL_GLOBAL_MEM_SHARED_ALLOCATION) {
           // Shared not compatible with device memory.
-          UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                         "Argument expects shared allocation but pointer is to "
-                         "USM device memory");
+          ERR_RET(CL_INVALID_ARG_VALUE, context,
+                  "Argument expects shared allocation but pointer is to "
+                  "USM device memory");
         }
       } else if (allocation_mem != kernel_arg_mem) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                       "Possibly incompatible interface used for device memory "
-                       "allocation.");
+        ERR_RET(CL_INVALID_ARG_VALUE, context,
+                "Possibly incompatible interface used for device memory "
+                "allocation.");
       }
     } else if (usm_alloc->type == CL_MEM_TYPE_SHARED_INTEL) {
       if (!(kernel_arg_mem->allocation_type &
             ACL_GLOBAL_MEM_SHARED_ALLOCATION)) {
         if (kernel_arg_mem->allocation_type &
             ACL_GLOBAL_MEM_DEVICE_ALLOCATION) {
-          UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                         "Argument expects device allocation but pointer is to "
-                         "USM shared memory");
+          ERR_RET(CL_INVALID_ARG_VALUE, context,
+                  "Argument expects device allocation but pointer is to "
+                  "USM shared memory");
         } else if (kernel_arg_mem->allocation_type &
                    ACL_GLOBAL_MEM_HOST_ALLOCATION) {
           bool compatible = false;
@@ -1000,23 +986,23 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
             }
           }
           if (!compatible) {
-            UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                           "Argument expects host allocation but pointer is to "
-                           "USM shared memory");
+            ERR_RET(CL_INVALID_ARG_VALUE, context,
+                    "Argument expects host allocation but pointer is to "
+                    "USM shared memory");
           }
         }
       } else if (allocation_mem != kernel_arg_mem) {
-        UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                       "Possibly incompatible interface used for shared memory "
-                       "allocation.");
+        ERR_RET(CL_INVALID_ARG_VALUE, context,
+                "Possibly incompatible interface used for shared memory "
+                "allocation.");
       }
     } else if (usm_alloc->type == CL_MEM_TYPE_HOST_INTEL) {
       if (!(kernel_arg_mem->allocation_type & ACL_GLOBAL_MEM_HOST_ALLOCATION)) {
         if (kernel_arg_mem->allocation_type &
             ACL_GLOBAL_MEM_DEVICE_ALLOCATION) {
-          UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                         "Argument expects device allocation but pointer is to "
-                         "USM host memory");
+          ERR_RET(CL_INVALID_ARG_VALUE, context,
+                  "Argument expects device allocation but pointer is to "
+                  "USM host memory");
         } else if (kernel_arg_mem->allocation_type &
                    ACL_GLOBAL_MEM_SHARED_ALLOCATION) {
           bool compatible = false;
@@ -1032,13 +1018,13 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
             }
           }
           if (!compatible) {
-            UNLOCK_ERR_RET(CL_INVALID_ARG_VALUE, context,
-                           "Argument expects shared allocation but pointer is "
-                           "to USM host memory");
+            ERR_RET(CL_INVALID_ARG_VALUE, context,
+                    "Argument expects shared allocation but pointer is "
+                    "to USM host memory");
           }
         }
       } else if (allocation_mem != kernel_arg_mem) {
-        UNLOCK_ERR_RET(
+        ERR_RET(
             CL_INVALID_ARG_VALUE, context,
             "Possibly incompatible interface used for host memory allocation.");
       }
@@ -1073,7 +1059,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
   }
   kernel->ptr_arg_vector[arg_index] = usm_alloc->range.begin;
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1083,77 +1069,72 @@ clSetKernelExecInfoIntelFPGA(cl_kernel kernel, cl_kernel_exec_info param_name,
   cl_context context;
   cl_int status = CL_SUCCESS;
   size_t iparam;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
   context = kernel->program->context;
 
   if (param_value == NULL)
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "param_value cannot be NULL");
+    ERR_RET(CL_INVALID_VALUE, context, "param_value cannot be NULL");
 
   switch (param_name) {
   case CL_KERNEL_EXEC_INFO_SVM_PTRS: {
     iparam = 0;
     // param_value_size must be a coefficient of sizeof(void*)
     if (param_value_size % sizeof(void *) != 0)
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
 
     // The pointers must be valid svm pointers or svm pointers + offset into the
     // SVM region.
     for (iparam = 0; iparam < param_value_size / (sizeof(void *)); iparam++) {
       if (!acl_ptr_is_contained_in_context_svm(
               context, ((void **)param_value)[iparam])) {
-        UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                       "param_value contains a pointer that is not contained "
-                       "in the SVM region");
+        ERR_RET(CL_INVALID_VALUE, context,
+                "param_value contains a pointer that is not contained "
+                "in the SVM region");
       }
     }
     break;
   }
   case CL_KERNEL_EXEC_INFO_SVM_FINE_GRAIN_SYSTEM:
     if (param_value_size != sizeof(cl_bool))
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
     // We currently don't support any fine-grain system SVM:
     if (*(cl_bool *)param_value == CL_TRUE)
-      UNLOCK_ERR_RET(CL_INVALID_OPERATION, context,
-                     "No devices in context associated with "
-                     "kernel support fine-grain system SVM allocations");
+      ERR_RET(CL_INVALID_OPERATION, context,
+              "No devices in context associated with "
+              "kernel support fine-grain system SVM allocations");
     break;
   case CL_KERNEL_EXEC_INFO_INDIRECT_HOST_ACCESS_INTEL:
     if (param_value_size != sizeof(cl_bool))
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
 
     if (*((cl_bool *)param_value) != CL_TRUE &&
         *((cl_bool *)param_value) != CL_FALSE) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value is not valid cl_bool value");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "param_value is not valid cl_bool value");
     }
     break;
   case CL_KERNEL_EXEC_INFO_INDIRECT_DEVICE_ACCESS_INTEL:
     if (param_value_size != sizeof(cl_bool))
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
 
     if (*((cl_bool *)param_value) != CL_TRUE &&
         *((cl_bool *)param_value) != CL_FALSE) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value is not valid cl_bool value");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "param_value is not valid cl_bool value");
     }
     break;
   case CL_KERNEL_EXEC_INFO_INDIRECT_SHARED_ACCESS_INTEL:
     if (param_value_size != sizeof(cl_bool))
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
 
     if (*((cl_bool *)param_value) != CL_TRUE &&
         *((cl_bool *)param_value) != CL_FALSE) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value is not valid cl_bool value");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "param_value is not valid cl_bool value");
     }
     break;
   case CL_KERNEL_EXEC_INFO_USM_PTRS_INTEL:
@@ -1161,26 +1142,24 @@ clSetKernelExecInfoIntelFPGA(cl_kernel kernel, cl_kernel_exec_info param_name,
     kernel->ptr_hashtable.clear();
     // param_value_size must be a coefficient of sizeof(void*)
     if (param_value_size % sizeof(void *) != 0)
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "param_value_size is not valid");
+      ERR_RET(CL_INVALID_VALUE, context, "param_value_size is not valid");
 
     // The pointers must be valid device pointer
     for (iparam = 0; iparam < param_value_size / (sizeof(void *)); iparam++) {
       acl_usm_allocation_t *usm_alloc =
           acl_get_usm_alloc_from_ptr(context, ((void **)param_value)[iparam]);
       if (!usm_alloc) {
-        UNLOCK_ERR_RET(
-            CL_INVALID_VALUE, context,
-            "param_value contains a pointer that is not part of context");
+        ERR_RET(CL_INVALID_VALUE, context,
+                "param_value contains a pointer that is not part of context");
       }
       kernel->ptr_hashtable.insert(usm_alloc->range.begin);
     }
     break;
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid param_name");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid param_name");
   }
 
-  UNLOCK_RETURN(status);
+  return status;
 }
 
 ACL_EXPORT
@@ -1202,19 +1181,19 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelArgInfoIntelFPGA(
   cl_context context;
   cl_program program;
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   program = kernel->program;
   context = program->context;
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   if (arg_indx >= kernel->accel_def->iface.args.size())
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context, "Invalid kernel arg index.");
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Invalid kernel arg index.");
   // addr_space and type_qualifier is always available via autodiscovery, the
   // other three parameters are optionally loaded in the autodiscovery string,
   // therefore any one of the three parameter being empty infers information not
@@ -1222,15 +1201,15 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelArgInfoIntelFPGA(
   if ((kernel->accel_def->iface.args[arg_indx].name.empty()) &&
       !(param_name == CL_KERNEL_ARG_ADDRESS_QUALIFIER ||
         param_name == CL_KERNEL_ARG_TYPE_QUALIFIER))
-    UNLOCK_ERR_RET(CL_KERNEL_ARG_INFO_NOT_AVAILABLE, context,
-                   "Kernel arg info not available.");
+    ERR_RET(CL_KERNEL_ARG_INFO_NOT_AVAILABLE, context,
+            "Kernel arg info not available.");
 
   // filtering the arguments that are added by the compiler to handle printfs.
   // In such cases, the arguments won't have any type, hence the type_name is
   // empty.
   if (!kernel->accel_def->iface.args[arg_indx].name.empty() &&
       kernel->accel_def->iface.args[arg_indx].type_name.empty())
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context, "Invalid kernel arg index.");
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Invalid kernel arg index.");
 
   RESULT_INIT;
 
@@ -1270,17 +1249,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelArgInfoIntelFPGA(
     break;
 
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel arg info query");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel arg info query");
   }
 
   if (result.size == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   } // should have already signaled
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1288,7 +1267,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelArgInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1306,15 +1285,15 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfoIntelFPGA(
     void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
   cl_context context;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   context = kernel->program->context;
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   RESULT_INIT;
 
@@ -1339,17 +1318,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfoIntelFPGA(
     break;
 
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel info query");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel info query");
   }
 
   if (result.size == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   } // should have already signaled
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1357,7 +1336,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1376,10 +1355,10 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelWorkGroupInfoIntelFPGA(
     size_t param_value_size, void *param_value, size_t *param_value_size_ret) {
   acl_result_t result;
   cl_context context;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return CL_INVALID_KERNEL;
   }
 
   context = kernel->program->context;
@@ -1396,22 +1375,21 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelWorkGroupInfoIntelFPGA(
       }
     }
     if (!matched) {
-      UNLOCK_ERR_RET(CL_INVALID_DEVICE, context,
-                     "Kernel program is not built for the specified device");
+      ERR_RET(CL_INVALID_DEVICE, context,
+              "Kernel program is not built for the specified device");
     }
   } else {
     // Must only be one device for this kernel.
     if (kernel->program->num_devices != 1) {
-      UNLOCK_ERR_RET(
-          CL_INVALID_DEVICE, context,
-          "Device is not specified, but kernel is not built for a unique "
-          "device");
+      ERR_RET(CL_INVALID_DEVICE, context,
+              "Device is not specified, but kernel is not built for a unique "
+              "device");
     }
     device = kernel->program->device[0];
   }
 
-  UNLOCK_VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value,
-                                 param_value_size_ret, context);
+  VALIDATE_ARRAY_OUT_ARGS(param_value_size, param_value, param_value_size_ret,
+                          context);
 
   RESULT_INIT;
 
@@ -1425,7 +1403,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelWorkGroupInfoIntelFPGA(
                      acl_platform.max_work_item_sizes);
       break;
     } else {
-      UNLOCK_RETURN(CL_INVALID_VALUE);
+      return CL_INVALID_VALUE;
     }
   case CL_KERNEL_WORK_GROUP_SIZE:
     RESULT_SIZE_T(kernel->accel_def->max_work_group_size);
@@ -1445,17 +1423,17 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelWorkGroupInfoIntelFPGA(
     RESULT_ULONG(0);
     break;
   default:
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel info query");
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid kernel info query");
   }
 
   if (result.size == 0) {
-    UNLOCK_RETURN(CL_INVALID_VALUE);
+    return CL_INVALID_VALUE;
   } // already signalled.
 
   if (param_value) {
     if (param_value_size < result.size) {
-      UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                     "Parameter return buffer is too small");
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Parameter return buffer is too small");
     }
     RESULT_COPY(param_value, param_value_size);
   }
@@ -1463,7 +1441,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetKernelWorkGroupInfoIntelFPGA(
   if (param_value_size_ret) {
     *param_value_size_ret = result.size;
   }
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 ACL_EXPORT
@@ -1481,10 +1459,10 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueNativeKernelIntelFPGA(
     size_t cb_args, cl_uint num_mem_objects, const cl_mem *mem_list,
     const void **args_mem_loc, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_command_queue_is_valid(command_queue)) {
-    UNLOCK_RETURN(CL_INVALID_COMMAND_QUEUE);
+    return CL_INVALID_COMMAND_QUEUE;
   }
 
   // Avoid warnings
@@ -1500,8 +1478,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueNativeKernelIntelFPGA(
   event = event;
 
   // We don't support native kernels.
-  UNLOCK_ERR_RET(CL_INVALID_OPERATION, command_queue->context,
-                 "Native kernels are not supported.");
+  ERR_RET(CL_INVALID_OPERATION, command_queue->context,
+          "Native kernels are not supported.");
 }
 
 ACL_EXPORT
@@ -1523,7 +1501,7 @@ clEnqueueTaskIntelFPGA(cl_command_queue command_queue, cl_kernel kernel,
   size_t task_global_work_size = 1;
   size_t task_local_work_size = 1;
   cl_int ret;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   ret = l_enqueue_kernel_with_type(
       command_queue, kernel,
@@ -1531,7 +1509,7 @@ clEnqueueTaskIntelFPGA(cl_command_queue command_queue, cl_kernel kernel,
       0, // global work offset
       &task_global_work_size, &task_local_work_size, num_events_in_wait_list,
       event_wait_list, event, CL_COMMAND_TASK);
-  UNLOCK_RETURN(ret);
+  return ret;
 }
 
 ACL_EXPORT
@@ -1551,14 +1529,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernelIntelFPGA(
     const size_t *local_work_size, cl_uint num_events_in_wait_list,
     const cl_event *event_wait_list, cl_event *event) {
   cl_int ret;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   ret = l_enqueue_kernel_with_type(
       command_queue, kernel, work_dim, global_work_offset, global_work_size,
       local_work_size, num_events_in_wait_list, event_wait_list, event,
       CL_COMMAND_NDRANGE_KERNEL);
 
-  UNLOCK_RETURN(ret);
+  return ret;
 }
 
 ACL_EXPORT
@@ -1577,13 +1555,13 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueNDRangeKernel(
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clResetKernelsIntelFPGA(
     cl_context context, cl_uint num_devices, const cl_device_id *device_list) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   if (!acl_context_is_valid(context))
-    UNLOCK_RETURN(CL_INVALID_CONTEXT);
+    return CL_INVALID_CONTEXT;
   if (num_devices == 0 && device_list != NULL)
-    UNLOCK_ERR_RET(CL_INVALID_VALUE, context,
-                   "num_devices is 0 while device list is not NULL");
+    ERR_RET(CL_INVALID_VALUE, context,
+            "num_devices is 0 while device list is not NULL");
   if (device_list) {
     // The supplied devices must be associated with the context.
     cl_uint idev, ictxdev;
@@ -1596,8 +1574,8 @@ CL_API_ENTRY cl_int CL_API_CALL clResetKernelsIntelFPGA(
         saw_it = (context->device[ictxdev] == device_list[idev]);
       }
       if (!saw_it) {
-        UNLOCK_ERR_RET(CL_INVALID_DEVICE, context,
-                       "A specified device is not associated with the context");
+        ERR_RET(CL_INVALID_DEVICE, context,
+                "A specified device is not associated with the context");
       }
     }
     // Ok, each device is associated with the context.
@@ -1618,7 +1596,7 @@ CL_API_ENTRY cl_int CL_API_CALL clResetKernelsIntelFPGA(
   }
   acl_idle_update(context); // nudge the scheduler to take care of the rest.
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return CL_SUCCESS;
 }
 
 //////////////////////////////
@@ -3195,12 +3173,12 @@ void acl_receive_kernel_update(int activation_id, cl_int status) {
   // signal handler, which can't lock mutexes, so we don't lock in that case.
   // All functions called from this one therefore have to use
   // acl_assert_locked_or_sig() instead of just acl_assert_locked().
+  std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
-    acl_lock();
+    lock.lock();
   }
 
   if (activation_id >= 0 && activation_id < doq->max_ops) {
-
     // This address is stable, given a fixed activation_id.
     // So we don't run into race conditions.
     acl_device_op_t *op = doq->op + activation_id;
@@ -3218,10 +3196,6 @@ void acl_receive_kernel_update(int activation_id, cl_int status) {
 
     // Signal all waiters.
     acl_signal_device_update();
-  }
-
-  if (!acl_is_inside_sig()) {
-    acl_unlock();
   }
 }
 

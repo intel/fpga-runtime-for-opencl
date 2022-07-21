@@ -132,7 +132,7 @@ int acl_print_debug_msg(const char *msg, ...) {
 extern CL_API_ENTRY void CL_API_CALL
 clSetBoardLibraryIntelFPGA(char *library_name) {
   acl_mmd_library_names_t *next_library = NULL;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
 
   acl_print_debug_msg("Adding library '%s' to list of libraries to open\n",
                       library_name);
@@ -152,7 +152,7 @@ clSetBoardLibraryIntelFPGA(char *library_name) {
     insertion_point->next = next_library;
   }
 
-  UNLOCK_RETURN_VOID;
+  return;
 }
 
 #ifdef __GNUC__

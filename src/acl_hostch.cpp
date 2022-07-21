@@ -243,9 +243,10 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
   size_t buffer_size;
   cl_int status = 0;
 
-  acl_lock();
-  acl_idle_update(pipe->context);
-  acl_unlock();
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+    acl_idle_update(pipe->context);
+  }
 
   acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
 
@@ -343,9 +344,10 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   cl_int status = 0;
   cl_int ret;
 
-  acl_lock();
-  acl_idle_update(pipe->context);
-  acl_unlock();
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+    acl_idle_update(pipe->context);
+  }
 
   acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
 
@@ -458,9 +460,10 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   void *buffer = 0;
   int status = 0;
 
-  acl_lock();
-  acl_idle_update(pipe->context);
-  acl_unlock();
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+    acl_idle_update(pipe->context);
+  }
 
   acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
 
@@ -587,9 +590,10 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
   int status = 0;
   int first = 1;
 
-  acl_lock();
-  acl_idle_update(pipe->context);
-  acl_unlock();
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+    acl_idle_update(pipe->context);
+  }
 
   acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
 
