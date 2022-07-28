@@ -1143,19 +1143,20 @@ MT_TEST(from_source, offline_mode_build_failure) {
   CHECK_EQUAL(0, size_ret);
 
   // Try to get the binaries.
-  unsigned char bins[1] = {'h'};
+  unsigned char bin[1] = {'h'};
+  unsigned char *bins[1] = {bin};
   size_ret = 99;
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(m_program, CL_PROGRAM_BINARIES, 0, 0,
                                            &size_ret));
-  CHECK_EQUAL(sizeof(char *), size_ret);
+  CHECK_EQUAL(sizeof(bins), size_ret);
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(m_program, CL_PROGRAM_BINARIES,
-                                           sizeof(char *), bins, 0));
+                                           sizeof(bins), bins, 0));
   // Should not have overwritten!
-  CHECK_EQUAL('h', bins[0]);
-  bins[0] = 'i';
+  CHECK_EQUAL('h', bins[0][0]);
+  bins[0][0] = 'i';
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(m_program, CL_PROGRAM_BINARIES,
-                                           sizeof(char *), bins, 0));
-  CHECK_EQUAL('i', bins[0]);
+                                           sizeof(bins), bins, 0));
+  CHECK_EQUAL('i', bins[0][0]);
 }
 
 MT_TEST(from_source, compile_program) {
