@@ -895,9 +895,11 @@ static cl_int l_init_context_with_devices(cl_context context,
     } else {
       num_absent++;
     }
-    if (num_present && num_absent)
+    if (num_present && num_absent) {
+      acl_free(context->command_queue);
       ERR_RET(CL_INVALID_DEVICE, context,
               "Can't create a context with both offline and online devices");
+    }
 
     usable = usable || acl_platform.offline_device ==
                            devices[i]->def.autodiscovery_def.name;
