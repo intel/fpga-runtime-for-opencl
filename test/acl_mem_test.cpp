@@ -3394,6 +3394,8 @@ MT_TEST(acl_mem, map_svm_pointer) {
                                              sizeof(uses_svm_pointer),
                                              &uses_svm_pointer, NULL));
   CHECK_EQUAL(CL_TRUE, uses_svm_pointer);
+
+  acl_free(host_pointer);
   clReleaseMemObject(svm_mem);
 }
 
@@ -3502,6 +3504,7 @@ MT_TEST(acl_mem, map_unmap_image) {
   CHECK_EQUAL(acl_ref_count(image), refcnt);
 
   clReleaseMemObject(image);
+  acl_free(input_ptr);
 
   ACL_LOCKED(acl_print_debug_msg("end map_unmap_image\n"));
 }
