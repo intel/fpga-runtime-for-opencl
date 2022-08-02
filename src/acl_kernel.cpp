@@ -345,11 +345,14 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
                      "Non-memory object passed in as memory object argument");
 
   } else if (arg_info->category == ACL_ARG_SAMPLER) {
-    if (arg_value && !acl_sampler_is_valid(*(cl_sampler *)arg_value))
+    if (arg_value && (arg_size != sizeof(cl_sampler) ||
+                      !acl_sampler_is_valid(*(cl_sampler *)arg_value))) {
       UNLOCK_ERR_RET(CL_INVALID_SAMPLER, context,
                      "Non-sampler object passed in as sampler object argument");
+    }
     is_sampler = CL_TRUE;
   } else if (arg_size != arg_info->size && arg_value &&
+             arg_size == sizeof(cl_sampler) &&
              acl_sampler_is_valid(*(cl_sampler *)arg_value)) {
     is_sampler = CL_TRUE;
   }
