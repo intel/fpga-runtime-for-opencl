@@ -2727,6 +2727,32 @@ int acl_num_non_null_mem_args(cl_kernel kernel) {
   return result;
 }
 
+// Copies argument value of `len` bytes from source buffer `src` to
+// destination buffer `dst` and returns the number of bytes copied;
+// unless `streaming_arg_info_available` is true to indicate a
+// streaming kernel argument, in which case this function appends
+// the argument interface name provided in `streaming_arg_info` and
+// the argument value to `streaming_args` and returns zero.
+static size_t l_copy_argument_to_buffer_or_streaming(
+    void *dst, const void *src, size_t len,
+    std::vector<aocl_mmd_streaming_kernel_arg_info_t> &streaming_args,
+    bool streaming_arg_info_available,
+    const acl_streaming_kernel_arg_info &streaming_arg_info) {
+  if (streaming_arg_info_available) {
+#ifdef MEM_DEBUG_MSG
+    printf(" streaming");
+#endif
+    streaming_args.emplace_back(aocl_mmd_streaming_kernel_arg_info_t{
+        streaming_arg_info.interface_name,
+        std::vector<char>(static_cast<const char *>(src),
+                          static_cast<const char *>(src) + len)});
+    return 0;
+  }
+
+  safe_memcpy(dst, src, len, len, len);
+  return len;
+}
+
 // Copy kernel arguments to another buffer.
 //
 // Adjust for:
@@ -2785,20 +2811,7 @@ static cl_int l_copy_and_adjust_arguments_for_device(
     const acl_kernel_arg_info_t *arg_info =
         &(kernel->accel_def->iface.args[iarg]);
 
-    // Exclude kernel argument value from device-side buffer by default.
-    cl_uint buf_incr = 0;
-
-    if (arg_info->streaming_arg_info_available) {
-#ifdef MEM_DEBUG_MSG
-      printf("streaming");
-#endif
-      // Copy argument value to a separate buffer since it may be modified with
-      // clSetKernelArg() after kernel is enqueued but before it is launched.
-      const char *const arg_value = &kernel->arg_value[host_idx];
-      streaming_args.emplace_back(aocl_mmd_streaming_kernel_arg_info_t{
-          arg_info->streaming_arg_info.interface_name,
-          std::vector<char>(arg_value, arg_value + arg_info->size)});
-    } else if (arg_info->addr_space == ACL_ARG_ADDR_LOCAL) {
+    if (arg_info->addr_space == ACL_ARG_ADDR_LOCAL) {
 #ifdef MEM_DEBUG_MSG
       printf("local");
 #endif
@@ -2808,15 +2821,16 @@ static cl_int l_copy_and_adjust_arguments_for_device(
 
       // This arg is a pointer to __local.
       cl_ulong local_size = 0;
-      safe_memcpy(buf + device_idx, &(next_local[this_aspace]),
-                  dev_local_ptr_size, dev_local_ptr_size, dev_local_ptr_size);
+      device_idx += l_copy_argument_to_buffer_or_streaming(
+          buf + device_idx, &(next_local[this_aspace]), dev_local_ptr_size,
+          streaming_args, arg_info->streaming_arg_info_available,
+          arg_info->streaming_arg_info);
       // Now reserve space for this object.
       // Yes, this is a bump allocator. :-)
       safe_memcpy(&local_size, &(kernel->arg_value[host_idx]), arg_info->size,
                   sizeof(cl_ulong), arg_info->size);
       // (Need cast to size_t on 32-bit platforms)
       next_local[this_aspace] += l_round_up_for_alignment((size_t)local_size);
-      buf_incr = dev_local_ptr_size;
     } else if (arg_info->category == ACL_ARG_MEM_OBJ &&
                !kernel->arg_is_svm[iarg] && !kernel->arg_is_ptr[iarg]) {
       // Must use memcpy here just in case the argument pointer is not aligned.
@@ -2848,17 +2862,21 @@ static cl_int l_copy_and_adjust_arguments_for_device(
         memory in the kernel."
         */
         const cl_ulong null_ptr = 0;
-        safe_memcpy(buf + device_idx, &null_ptr, dev_global_ptr_size,
-                    dev_global_ptr_size, dev_global_ptr_size);
+        device_idx += l_copy_argument_to_buffer_or_streaming(
+            buf + device_idx, &null_ptr, dev_global_ptr_size, streaming_args,
+            arg_info->streaming_arg_info_available,
+            arg_info->streaming_arg_info);
         // Shared physical memory:
       } else if (mem_obj->host_mem.device_addr != 0L) {
 #ifdef MEM_DEBUG_MSG
         printf("shared physical mem");
 #endif
         // Write the address into the invocation image:
-        safe_memcpy(buf + device_idx, &(mem_obj->host_mem.device_addr),
-                    dev_global_ptr_size, dev_global_ptr_size,
-                    dev_global_ptr_size);
+        device_idx += l_copy_argument_to_buffer_or_streaming(
+            buf + device_idx, &(mem_obj->host_mem.device_addr),
+            dev_global_ptr_size, streaming_args,
+            arg_info->streaming_arg_info_available,
+            arg_info->streaming_arg_info);
         // Regular buffer:
       } else {
 #ifdef MEM_DEBUG_MSG
@@ -2920,8 +2938,10 @@ static cl_int l_copy_and_adjust_arguments_for_device(
         const void *mem_addr =
             mem_obj->reserved_allocations[needed_physical_id][needed_mem_id]
                 ->range.begin;
-        safe_memcpy(buf + device_idx, &mem_addr, dev_global_ptr_size,
-                    dev_global_ptr_size, dev_global_ptr_size);
+        device_idx += l_copy_argument_to_buffer_or_streaming(
+            buf + device_idx, &mem_addr, dev_global_ptr_size, streaming_args,
+            arg_info->streaming_arg_info_available,
+            arg_info->streaming_arg_info);
 
         if (memory_migration->num_mem_objects == 0) {
           // First time allocation, 128 was chosen because previously, number of
@@ -2965,7 +2985,6 @@ static cl_int l_copy_and_adjust_arguments_for_device(
             needed_mem_id;
         ++memory_migration->num_mem_objects;
       }
-      buf_incr = dev_global_ptr_size;
     } else {
 #ifdef MEM_DEBUG_MSG
       printf("const");
@@ -2973,11 +2992,11 @@ static cl_int l_copy_and_adjust_arguments_for_device(
 
       // Host and device sizes are the same.
       // E.g. for cl_uint, SVM ptr etc.
-      safe_memcpy(buf + device_idx, kernel->arg_value + host_idx,
-                  arg_info->size, arg_info->size, arg_info->size);
-      buf_incr = arg_info->size;
+      device_idx += l_copy_argument_to_buffer_or_streaming(
+          buf + device_idx, kernel->arg_value + host_idx, arg_info->size,
+          streaming_args, arg_info->streaming_arg_info_available,
+          arg_info->streaming_arg_info);
     }
-    device_idx += buf_incr;
     host_idx += arg_info->size;
 #ifdef MEM_DEBUG_MSG
     printf("\n");
