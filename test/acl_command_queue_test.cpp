@@ -170,8 +170,15 @@ MT_TEST(acl_command_queue, create) {
       3 + sizeof(unsupported_props) / sizeof(cl_command_queue_properties);
   CHECK_EQUAL(callback_num, m_callback_count);
 
+  // check if acl_command_queue_is_valid is working properly
   ACL_LOCKED(CHECK(!acl_command_queue_is_valid(0)));
-  ACL_LOCKED(CHECK(!acl_command_queue_is_valid((cl_command_queue)&status)));
+  {
+    cl_command_queue fake_cq = acl_alloc_cl_command_queue();
+    assert(fake_cq);
+    fake_cq->magic = 0xDEADBEEFDEADBEEF;
+    ACL_LOCKED(CHECK(!acl_command_queue_is_valid(fake_cq)));
+    acl_free_cl_command_queue(fake_cq);
+  }
 
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clRetainCommandQueue(0));
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clReleaseCommandQueue(0));
@@ -356,8 +363,15 @@ MT_TEST(acl_command_queue, create_with_properties) {
       sizeof(invalid_props) / sizeof(cl_command_queue_properties);
   CHECK_EQUAL(callback_num, m_callback_count);
 
+  // check if acl_command_queue_is_valid is working properly
   ACL_LOCKED(CHECK(!acl_command_queue_is_valid(0)));
-  ACL_LOCKED(CHECK(!acl_command_queue_is_valid((cl_command_queue)&status)));
+  {
+    cl_command_queue fake_cq = acl_alloc_cl_command_queue();
+    assert(fake_cq);
+    fake_cq->magic = 0xDEADBEEFDEADBEEF;
+    ACL_LOCKED(CHECK(!acl_command_queue_is_valid(fake_cq)));
+    acl_free_cl_command_queue(fake_cq);
+  }
 
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clRetainCommandQueue(0));
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, clReleaseCommandQueue(0));
