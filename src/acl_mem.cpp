@@ -97,6 +97,7 @@ static int acl_allocate_block(acl_block_allocation_t *block_allocation,
 static int copy_image_metadata(cl_mem mem);
 static void remove_mem_block_linked_list(acl_block_allocation_t *block);
 static cl_bool is_image(cl_mem mem);
+static void l_free_image_members(cl_mem mem);
 
 cl_int acl_convert_image_format(const void *input_element, void *output_element,
                                 cl_image_format format_from,
@@ -198,6 +199,9 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObjectIntelFPGA(cl_mem mem) {
       --mem->fields.buffer_objs.parent->fields.buffer_objs.num_subbuffers;
       clReleaseMemObject(mem->fields.buffer_objs.parent);
     } else {
+      if (is_image(mem)) {
+        l_free_image_members(mem);
+      }
       // The only case wehre mem->region->is_user_provided && mem->host_mem.raw
       // != NULL is when user creates a buffer with CL_MEM_USE_HOST_PTR set and
       // the pointer is allocated with clSVMAlloc.
@@ -6245,6 +6249,23 @@ static cl_bool is_image(cl_mem mem) {
                    mem->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
                    mem->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
                    mem->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER);
+}
+
+static void l_free_image_members(cl_mem mem) {
+  if (mem->fields.image_objs.image_format != NULL) {
+    acl_free(mem->fields.image_objs.image_format);
+  }
+  if (mem->fields.image_objs.image_desc != NULL) {
+    if (mem->fields.image_objs.image_desc->buffer != NULL) {
+      clReleaseMemObject(mem->fields.image_objs.image_desc->buffer);
+      mem->fields.image_objs.image_desc->buffer = NULL;
+    }
+    if (mem->fields.image_objs.image_desc->mem_object != NULL) {
+      clReleaseMemObject(mem->fields.image_objs.image_desc->mem_object);
+      mem->fields.image_objs.image_desc->mem_object = NULL;
+    }
+    acl_free(mem->fields.image_objs.image_desc);
+  }
 }
 
 void acl_copy_device_buffers_to_host_before_programming(
