@@ -620,6 +620,13 @@ static void l_release_command_resources(acl_command_info_t &cmd) {
 
   case CL_COMMAND_TASK:
   case CL_COMMAND_NDRANGE_KERNEL:
+    if (cmd.info.ndrange_kernel.memory_migration.num_mem_objects != 0 &&
+        cmd.info.ndrange_kernel.memory_migration.src_mem_list) {
+      // src_mem should be user-provided buffers, users are responsible for
+      // releasing them Just free the src memory list here
+      acl_free(cmd.info.ndrange_kernel.memory_migration.src_mem_list);
+      cmd.info.ndrange_kernel.memory_migration.src_mem_list = nullptr;
+    }
     // Cleanup is handled via the completion callback.
     break;
 
