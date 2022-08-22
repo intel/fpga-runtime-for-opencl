@@ -266,6 +266,8 @@ typedef struct {
 
 /* Must match definition in aoc.pl */
 #define ACL_MPSIM_DEVICE_NAME "SimulatorDevice"
+/* Specifies which device simulator should simulate */
+#define INTELFPGA_SIM_DEVICE_SPEC_DIR "INTELFPGA_SIM_DEVICE_SPEC_DIR"
 
 #define ACL_RAND_HASH_SIZE 40
 
