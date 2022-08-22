@@ -109,6 +109,11 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
   } else {
     // Look for multi-process simulator before old simulator.
     setting = acl_getenv("CL_CONTEXT_MPSIM_DEVICE_INTELFPGA");
+    // Check if simulation board spec directory is set, which implies
+    // CL_CONTEXT_MPSIM_DEVICE_INTELFPGA if that is not set
+    if (!setting && acl_getenv(INTELFPGA_SIM_DEVICE_SPEC_DIR)) {
+      setting = "1"; // Use 1 simulator device by default
+    }
     if (setting) {
       use_offline_only = ACL_CONTEXT_MPSIM;
       result = setting;
