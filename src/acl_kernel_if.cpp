@@ -1678,7 +1678,8 @@ void acl_kernel_if_check_kernel_status(acl_kernel_if *kern) {
 
   if (kern->last_kern_update != 0 &&
       (acl_kernel_if_get_time_us(kern) - kern->last_kern_update >
-       10 * 1000000)) {
+       10 * 1000000) &&
+      kern->io.debug_verbosity > 0) {
     kern->last_kern_update = acl_kernel_if_get_time_us(kern);
     kern->io.printf(
         "No kernel updates in approximately 10 seconds for device %u",
