@@ -1228,11 +1228,15 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   }
 
   if ((kern->io.debug_verbosity) >= 2) {
-    for (uintptr_t p = 0; p < image_size_static; p += sizeof(int)) {
-      unsigned int pword = *(unsigned int *)(image_p + p);
-      ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
-          kern, 2, "::   Writing inv image [%2d] @%8p := %4x\n", (int)(p),
-          (void *)(offset + p), pword);
+    // We only write the static part of the invocation image if the kernel uses
+    // CRA control.
+    if (!kern->streaming_control_signal_names[accel_id]) {
+      for (uintptr_t p = 0; p < image_size_static; p += sizeof(int)) {
+        unsigned int pword = *(unsigned int *)(image_p + p);
+        ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
+            kern, 2, "::   Writing inv image [%2d] @%8p := %4x\n", (int)(p),
+            (void *)(offset + p), pword);
+      }
     }
 
     if (kern->csr_version != CSR_VERSION_ID_18_1) {
@@ -1246,10 +1250,13 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   }
 
   // When csr version is 18.1, the kernel args is part of the image. otherwise,
-  // it is in dynamic memory
-  acl_kernel_cra_write_block(kern, accel_id, offset, (unsigned int *)image_p,
-                             image_size_static);
-  if (kern->csr_version != CSR_VERSION_ID_18_1) {
+  // it is in dynamic memory.  Only write the static part of the invocation
+  // image if this kernel uses CRA control.
+  if (!kern->streaming_control_signal_names[accel_id]) {
+    acl_kernel_cra_write_block(kern, accel_id, offset, (unsigned int *)image_p,
+                               image_size_static);
+  }
+  if (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0) {
     acl_kernel_cra_write_block(
         kern, accel_id, offset + (unsigned int)image_size_static,
         (unsigned int *)image->arg_value, image->arg_value_size);
