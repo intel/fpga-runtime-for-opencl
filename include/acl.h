@@ -498,10 +498,39 @@ typedef class acl_device_program_info_t *acl_device_program_info;
  */
 #define ACL_MEM_CAPABILITY_P2P (1 << 3)
 
+// Enum values here need to match the SPIRV spec for device global in
+// https://github.com/intel/llvm/blob/44c6437684d64aba82d5a3de0e4bbe21d2b1f7ce/sycl/doc/design/spirv-extensions/SPV_INTEL_global_variable_decorations.asciidoc
+// ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT is used for validation
+// in autodiscovery string parsing and should remain the last constant
+// in the enum.
+typedef enum {
+  ACL_DEVICE_GLOBAL_HOST_ACCESS_READ_ONLY,
+  ACL_DEVICE_GLOBAL_HOST_ACCESS_WRITE_ONLY,
+  ACL_DEVICE_GLOBAL_HOST_ACCESS_READ_WRITE,
+  ACL_DEVICE_GLOBAL_HOST_ACCESS_NONE,
+
+  ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT
+} acl_device_global_host_access_t;
+
+// Enum values here also need to match the SPIRV spec for device
+// global in the above link for acl_device_global_host_access_t.
+// ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT is used for validation in
+// autodiscovery string parsing and should remain the last constant
+// in the enum.
+typedef enum {
+  ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM,
+  ACL_DEVICE_GLOBAL_INIT_MODE_RESET,
+
+  ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT
+} acl_device_global_init_mode_t;
+
 // Definition of device global.
 struct acl_device_global_mem_def_t {
-  uint32_t address;
+  uint64_t address;
   uint32_t size;
+  acl_device_global_host_access_t host_access;
+  acl_device_global_init_mode_t init_mode;
+  bool implement_in_csr;
 };
 
 // Part of acl_device_def_t where members are populated from the information

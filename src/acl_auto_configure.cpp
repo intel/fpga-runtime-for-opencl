@@ -137,6 +137,28 @@ static bool read_uint32_counters(const std::string &str,
   return true;
 }
 
+// Reads the next word in str and converts it into an unsigned 64-bit
+// fixed-length integer. Note this read utilizes stoull and fail if
+// unsigned long long is not 64-bit long on the platform.
+// Returns true if a valid integer was read or false if an error occurred.
+// pos is updated to the position immediately following the parsed word
+// even if an error occurs.
+static bool read_uint64_counters(const std::string &str,
+                                 std::string::size_type &pos, uint64_t &val,
+                                 std::vector<int> &counters) noexcept {
+  std::string result;
+  pos = read_word(str, pos, result);
+  decrement_section_counters(counters);
+  try {
+    static_assert(sizeof(uint64_t) == sizeof(unsigned long long));
+    val = static_cast<uint64_t>(std::stoull(result));
+  } catch (const std::exception &e) {
+    UNREFERENCED_PARAMETER(e);
+    return false;
+  }
+  return true;
+}
+
 // Reads the next word in str and converts it into an unsigned.
 // Returns true if a valid integer was read or false if an error occurred.
 // pos is updated to the position immediately following the parsed word
@@ -470,6 +492,9 @@ static bool read_device_global_mem_defs(
                                 total_fields_device_global, counters);
   }
 
+  // Clean up any residual information first
+  device_global_mem_defs.clear();
+
   for (auto i = 0U; result && (i < num_device_global); i++) {
     counters.emplace_back(total_fields_device_global);
 
@@ -481,10 +506,10 @@ static bool read_device_global_mem_defs(
     }
 
     // read device global address
-    uint32_t dev_global_addr = 0; // Default
+    uint64_t dev_global_addr = 0; // Default
     if (result && counters.back() > 0) {
       result =
-          read_uint32_counters(config_str, curr_pos, dev_global_addr, counters);
+          read_uint64_counters(config_str, curr_pos, dev_global_addr, counters);
     }
     // read device global address size
     uint32_t dev_global_size = 0; // Default
@@ -493,8 +518,34 @@ static bool read_device_global_mem_defs(
           read_uint32_counters(config_str, curr_pos, dev_global_size, counters);
     }
 
-    acl_device_global_mem_def_t dev_global_def = {dev_global_addr,
-                                                  dev_global_size};
+    // read device global properties
+    auto host_access =
+        static_cast<unsigned>(ACL_DEVICE_GLOBAL_HOST_ACCESS_READ_WRITE);
+    if (result && counters.back() > 0) {
+      result = read_uint_counters(config_str, curr_pos, host_access, counters);
+      if (host_access >=
+          static_cast<unsigned>(ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT))
+        result = false;
+    }
+    auto init_mode =
+        static_cast<unsigned>(ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM);
+    if (result && counters.back() > 0) {
+      result = read_uint_counters(config_str, curr_pos, init_mode, counters);
+      if (init_mode >=
+          static_cast<unsigned>(ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT))
+        result = false;
+    }
+    bool implement_in_csr = false;
+    if (result && counters.back() > 0) {
+      result =
+          read_bool_counters(config_str, curr_pos, implement_in_csr, counters);
+    }
+
+    acl_device_global_mem_def_t dev_global_def = {
+        dev_global_addr, dev_global_size,
+        static_cast<acl_device_global_host_access_t>(host_access),
+        static_cast<acl_device_global_init_mode_t>(init_mode),
+        implement_in_csr};
     bool ok =
         device_global_mem_defs.insert({device_global_name, dev_global_def})
             .second;
