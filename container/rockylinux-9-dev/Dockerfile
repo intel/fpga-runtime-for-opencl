@@ -18,6 +18,8 @@ COPY scripts/. ./
 RUN \
   sed -i '/^\[crb\]$/,/^\[/s#^enabled=0$#enabled=1#' /etc/yum.repos.d/rocky.repo \
   && grep '^enabled=1$' /etc/yum.repos.d/rocky.repo \
+  && sed -i '/^\[devel\]$/,/^\[/s#^enabled=0$#enabled=1#' /etc/yum.repos.d/rocky-devel.repo \
+  && grep '^enabled=1$' /etc/yum.repos.d/rocky-devel.repo \
   && yum -y upgrade \
   && yum -y install \
   cmake \
@@ -34,6 +36,7 @@ RUN \
   libubsan \
   libxcrypt-compat \
   make \
+  ncurses-compat-libs \
   ninja-build \
   perl \
   python3 \
