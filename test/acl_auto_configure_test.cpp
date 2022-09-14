@@ -36,7 +36,7 @@ TEST(auto_configure, simple) {
 #define VERSIONIDSTRINGIFY(x) #x
 #define VERSIONIDTOSTR(x) VERSIONIDSTRINGIFY(x)
 #define DEVICE_FIELDS " 23"
-#define DEVICE_FIELDS_DEV_GLOBAL " 30"
+#define DEVICE_FIELDS_DEV_GLOBAL " 36"
 #define DEVICE_FIELDS_OLD " 18"
 #define BOARDNAME "de4_gen2x4_swdimm"
 #define BOARDNAME2 "pcie385_a7"
@@ -99,10 +99,11 @@ TEST(auto_configure, simple) {
 
 // Device global autodiscovery entries
 #define NUM_DEV_GLOBAL " 2"
-#define NUM_DEV_GLOBAL_FIELD " 3" // containing dev_globa_name, address, size
-#define DEV_GLOBAL_1                                                           \
-  " kernel15_dev_global 4096 2048" // in format of dev_globa_name, address, size
-#define DEV_GLOBAL_2 " kernel15_dev_global2 2048 1024"
+#define NUM_DEV_GLOBAL_FIELD                                                   \
+  " 6" // contains dev_globa_name, address, size, host_access, init_mode,
+       // implement_in_csr with the above format
+#define DEV_GLOBAL_1 " kernel15_dev_global 4096 2048 3 1 0"
+#define DEV_GLOBAL_2 " kernel15_dev_global2 2048 1024 1 0 1"
 
   int parsed;
   std::string err_str;
@@ -283,8 +284,18 @@ TEST(auto_configure, simple) {
         m_device_def.autodiscovery_def.device_global_mem_defs.end());
   CHECK_EQUAL(4096, kernel15_dev_global->second.address);
   CHECK_EQUAL(2048, kernel15_dev_global->second.size);
+  CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_NONE,
+              kernel15_dev_global->second.host_access);
+  CHECK_EQUAL(ACL_DEVICE_GLOBAL_INIT_MODE_RESET,
+              kernel15_dev_global->second.init_mode);
+  CHECK_EQUAL(false, kernel15_dev_global->second.implement_in_csr);
   CHECK_EQUAL(2048, kernel15_dev_global2->second.address);
   CHECK_EQUAL(1024, kernel15_dev_global2->second.size);
+  CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_WRITE_ONLY,
+              kernel15_dev_global2->second.host_access);
+  CHECK_EQUAL(ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM,
+              kernel15_dev_global2->second.init_mode);
+  CHECK_EQUAL(true, kernel15_dev_global2->second.implement_in_csr);
 
   // Check a second parsing.
   // It should allocate a new string for the name.
@@ -482,11 +493,13 @@ TEST(auto_configure, many_ok_forward_compatibility) {
   // sections and subsections to check forward compatibility
 
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 29 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 49 "
                                     "sample40byterandomhash000000000000000000 "
-                                    "a10gx 0 1 15 DDR 2 1 6 0 2147483648 100 "
-                                    "100 100 100 200 200 200 200 0 0 0 0 2 "
-                                    "1 name1 name2 0 0 47 "
+                                    "a10gx 0 1 17 DDR 2 1 6 0 2147483648 100 "
+                                    "100 100 100 0 - 0 200 200 200 200 0 0 0 "
+                                    "2 9 ms_dev_global1 2048 1024 3 0 0 300 "
+                                    "300 300 ms_dev_global2 4096 1024 1 1 1 "
+                                    "300 300 300 0 0 400 400 47 "
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 0 500 500 500 0 0 "
                                     "0 0 1 1 1 3 1 1 1 3 1 0 0 800 800 800 "
@@ -677,10 +690,10 @@ TEST(auto_configure, many_ok_forward_compatibility) {
 
 TEST(auto_configure, many_limit_check) {
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 15 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 19 "
                                     "sample40byterandomhash000000000000000000 "
-                                    "a10gx 0 1 7 DDR 2 1 2 0 2147483648 0 0 0 "
-                                    "0 75 "
+                                    "a10gx 0 1 9 DDR 2 1 2 0 2147483648 0 - 0 "
+                                    "0 0 0 0 0 75 " // 75 kernels
                                     "31 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 6 0 0 4 1 0 0 0 0 0 0 1 1 1 3 1 1 1 "
                                     "3 1 "
@@ -1193,14 +1206,14 @@ TEST(auto_configure, kernel_arg_info) {
 
 TEST(auto_configure, hostpipe) {
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 46 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 49 "
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx_hostpipe 0 1 15 DDR 2 1 6 0 "
                                     "2147483648 0 100 100 100 100 200 200 200 "
                                     "200 "
                                     "2 9 host_to_dev 1 0 32 32768 300 300 300 "
                                     "300 dev_to_host 0 1 32 32768 300 300 300 "
-                                    "300 400 1 3 name3 400 0 "
+                                    "300 400 1 6 dev_global_3 1024 2048 0 0 0 "
                                     "1 29 foo 0 128 1 0 0 1 0 1 0 0 0 0 0 0 1 "
                                     "1 1 3 1 1 1 3 1 0 0 800 800 800 900 "
                                     "900"
@@ -1230,10 +1243,10 @@ TEST(auto_configure, hostpipe) {
 
 TEST(auto_configure, streaming) {
   const std::string config_str{
-      "23 26 " RANDOM_HASH
+      "23 29 " RANDOM_HASH
       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
-      "0 0 0 1 3 device_global_name 256 128 1 105 _ZTS3CRCILi0EE 0 256 1 0 0 1 "
-      "0 1 0 9 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg0 8 2 1 8 1024 0 3 1 "
+      "0 0 0 1 6 device_global_name 256 128 0 0 0 1 105 _ZTS3CRCILi0EE 0 256 1 "
+      "0 0 1 0 1 0 9 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg0 8 2 1 8 1024 0 3 1 "
       "k0_ZTS3CRCILi0EE_arg1 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg2 7 0 0 8 1 0 "
       "0 0 7 0 0 8 1 0 0 0 7 2 1 8 1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 "
       "7 0 0 8 1 0 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 1 "
