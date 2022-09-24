@@ -418,7 +418,7 @@ static int acl_kernel_if_write_block(acl_kernel_if *kern, unsigned int addr,
   if (r < aligned_size) {
     kern->io.printf("HAL Kern Error: Write failed to addr %x with value %x, "
                     "wrote %d expected %d\n",
-                    addr, val, r, size);
+                    addr, val, r, aligned_size);
     return -1;
   }
   return 0;
