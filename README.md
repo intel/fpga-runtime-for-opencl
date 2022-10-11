@@ -188,8 +188,9 @@ IntelⓇ FPGA RTE for OpenCL™ installed on your system:
 1.  In the IntelⓇ FPGA SDK for OpenCL™ installation directory, source
     the initialization script (see [Running Unit Tests](#running-unit-tests)).
 
-2.  Update the `/etc/OpenCL/vendors/Altera.icd` file with the full path
-    to the `libalteracl.so` library in the runtime installation directory.
+2.  Update the `/etc/OpenCL/vendors/Altera.icd` file with either the filename
+    `libalteracl.so` if `LD_LIBRARY_PATH` contains the full path of the runtime
+    installation directory; otherwise, the full path of `libalteracl.so` itself.
 
 3.  Compile your OpenCL host program with the OpenCL header files included from
     the runtime installation directory.
@@ -215,8 +216,9 @@ or IntelⓇ FPGA RTE for OpenCL™ installed on your system:
 1.  Download, build, and install the
     [OpenCL ICD Loader](https://github.com/KhronosGroup/OpenCL-ICD-Loader).
 
-2.  Create the `/etc/OpenCL/vendors/Altera.icd` file with the full path
-    to the `libalteracl.so` library in the runtime installation directory.
+2.  Create the `/etc/OpenCL/vendors/Altera.icd` file with either the filename
+    `libalteracl.so` if `LD_LIBRARY_PATH` contains the full path of the runtime
+    installation directory; otherwise, the full path of `libalteracl.so` itself.
 
 3.  Compile your OpenCL host program with the OpenCL header files included from
     the runtime installation directory.
@@ -233,3 +235,13 @@ or IntelⓇ FPGA RTE for OpenCL™ installed on your system:
     ```
 
 6.  Run your OpenCL host program.
+
+### Notes
+
+-   When setting the environment variable [`OCL_ICD_FILENAMES`] for debugging,
+    ensure it doesn't resolve to any `libalteracl.so` other than the one
+    specified in the `/etc/OpenCL/vendors/Altera.icd` file. Mismatches may
+    lead to multiple runtime library instances being linked into the program,
+    causing undefined behaviour.
+
+[`OCL_ICD_FILENAMES`]: https://github.com/KhronosGroup/OpenCL-ICD-Loader/blob/c5a6e013ad7c8b379fc94e3c849aa3396900a63c/README.md#table-of-debug-environment-variables
