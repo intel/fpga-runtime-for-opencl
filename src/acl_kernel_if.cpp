@@ -45,7 +45,8 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
 // address map.
 #define CSR_VERSION_ID_18_1 (3)
 #define CSR_VERSION_ID_19_1 (4)
-#define CSR_VERSION_ID CSR_VERSION_ID_19_1
+#define CSR_VERSION_ID_23_1 (5)
+#define CSR_VERSION_ID CSR_VERSION_ID_23_1
 
 // Address map
 // For unit tests to work, these defines must match those in the unit test
@@ -66,6 +67,8 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
 #define KERNEL_ROM_SIZE_BYTES 8
 
 // Byte offsets into the CRA:
+// For CSR version >= 5 byte offsets are pushed back with the proper
+// value except for the CSR later on in the runtime execution
 #define KERNEL_OFFSET_CSR 0
 #define KERNEL_OFFSET_PRINTF_BUFFER_SIZE 0x4
 #define KERNEL_OFFSET_CSR_PROFILE_CTRL 0xC
@@ -75,11 +78,14 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
 #define KERNEL_OFFSET_FINISH_COUNTER 0x28
 #define KERNEL_OFFSET_INVOCATION_IMAGE 0x30
 
+// CSR version >= 5 byte offsets
+#define KERNEL_OFFSET_START_REG 0x8
+
 // Backwards compatibility with CSR_VERSION_ID 3
 #define KERNEL_OFFSET_INVOCATION_IMAGE_181 0x28
 
 // Bit positions
-#define KERNEL_CSR_GO 0
+#define KERNEL_CSR_START 0
 #define KERNEL_CSR_DONE 1
 #define KERNEL_CSR_STALLED 3
 #define KERNEL_CSR_UNSTALL 4
@@ -593,8 +599,9 @@ static int acl_kernel_if_issue_profile_hw_command(acl_kernel_if *kern,
   int status;
   acl_assert_locked_or_sig();
   assert(acl_kernel_if_is_valid(kern));
-  status = acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_CTRL,
-                               &profile_ctrl_val);
+  status = acl_kernel_cra_read(
+      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_CTRL + kern->cra_address_offset,
+      &profile_ctrl_val);
   if (status)
     return status;
   ACL_KERNEL_IF_DEBUG_MSG(
@@ -609,8 +616,9 @@ static int acl_kernel_if_issue_profile_hw_command(acl_kernel_if *kern,
   ACL_KERNEL_IF_DEBUG_MSG(
       kern, "::   Issue profile HW command:: Accelerator %d new csr is %x.\n",
       accel_id, profile_ctrl_val);
-  status = acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_CTRL,
-                                profile_ctrl_val);
+  status = acl_kernel_cra_write(
+      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_CTRL + kern->cra_address_offset,
+      profile_ctrl_val);
   if (status)
     return status;
   return 0;
@@ -1040,6 +1048,11 @@ int acl_kernel_if_post_pll_config_init(acl_kernel_if *kern) {
     ACL_KERNEL_IF_DEBUG_MSG(kern,
                             "Read CSR version from kernel 0: Version = %u\n",
                             kern->csr_version);
+    if (kern->csr_version < 5) {
+      // Register addresses are pushed back since previous versions
+      // doesn't have the start register
+      kern->cra_address_offset = 0;
+    }
   } else {
     kern->csr_version = 0;
   }
@@ -1220,7 +1233,8 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
     }
 
   } else {
-    offset = (unsigned int)KERNEL_OFFSET_INVOCATION_IMAGE;
+    offset = (unsigned int)(KERNEL_OFFSET_INVOCATION_IMAGE +
+                            kern->cra_address_offset);
     image_p = (uintptr_t) & (image->work_dim);
     image_size_static =
         (size_t)((uintptr_t) & (image->arg_value) - (uintptr_t) &
@@ -1279,11 +1293,15 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
     return;
   }
 
-  unsigned int new_csr = 0;
-  acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &new_csr);
-  ACL_KERNEL_SET_BIT(new_csr, KERNEL_CSR_GO);
-  acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, new_csr);
-
+  // backwards compatibility for version prior to 2023.1
+  if (kern->csr_version < CSR_VERSION_ID) {
+    unsigned int new_csr = 0;
+    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR, &new_csr);
+    ACL_KERNEL_SET_BIT(new_csr, KERNEL_CSR_START);
+    acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_CSR, new_csr);
+  } else {
+    acl_kernel_cra_write(kern, accel_id, KERNEL_OFFSET_START_REG, 1);
+  }
   // IRQ handler takes care of the completion event through
   // acl_kernel_if_update_status()
 }
@@ -1362,7 +1380,9 @@ static void acl_kernel_if_update_status_query(acl_kernel_if *kern,
   // kernel arguments
   printf_size = 0;
   if (kern->accel_num_printfs[accel_id] > 0) {
-    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
+    acl_kernel_cra_read(kern, accel_id,
+                        KERNEL_OFFSET_PRINTF_BUFFER_SIZE +
+                            kern->cra_address_offset,
                         &printf_size);
     assert(printf_size <= ACL_PRINTF_BUFFER_TOTAL_SIZE);
     ACL_KERNEL_IF_DEBUG_MSG(kern,
@@ -1427,7 +1447,8 @@ static void acl_kernel_if_update_status_query(acl_kernel_if *kern,
     // Only expect single completion for older csr version
     finish_counter = 1;
   } else {
-    acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_FINISH_COUNTER,
+    acl_kernel_cra_read(kern, accel_id,
+                        KERNEL_OFFSET_FINISH_COUNTER + kern->cra_address_offset,
                         &finish_counter);
     ACL_KERNEL_IF_DEBUG_MSG(kern, ":: Accelerator %d has %d finishes.\n",
                             accel_id, finish_counter);
@@ -1586,8 +1607,9 @@ void acl_kernel_if_debug_dump_printf(acl_kernel_if *kern, unsigned k) {
     next_queue_back = kern->accel_queue_back[k] + 1;
 
   if (kern->accel_num_printfs[k] > 0) {
-    acl_kernel_cra_read(kern, k, KERNEL_OFFSET_PRINTF_BUFFER_SIZE,
-                        &printf_size);
+    acl_kernel_cra_read(
+        kern, k, KERNEL_OFFSET_PRINTF_BUFFER_SIZE + kern->cra_address_offset,
+        &printf_size);
     assert(printf_size <= ACL_PRINTF_BUFFER_TOTAL_SIZE);
     ACL_KERNEL_IF_DEBUG_MSG(
         kern, ":: Accelerator %d printf buffer size is %d.\n", k, printf_size);
@@ -1785,8 +1807,9 @@ static uint64_t acl_kernel_if_get_profile_data_word(acl_kernel_if *kern,
 #ifdef _WIN32
   // Use 32-bit reads on Windows.
   unsigned int low_word, high_word;
-  status = acl_kernel_cra_read(kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_DATA,
-                               &low_word);
+  status = acl_kernel_cra_read(
+      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_DATA + kern->cra_address_offset,
+      &low_word);
   if (status)
     return (uint64_t)status;
   ACL_KERNEL_IF_DEBUG_MSG(kern,
@@ -1794,7 +1817,9 @@ static uint64_t acl_kernel_if_get_profile_data_word(acl_kernel_if *kern,
                           "profile_data low_word is %x.\n",
                           accel_id, low_word);
   status = acl_kernel_cra_read(kern, accel_id,
-                               KERNEL_OFFSET_CSR_PROFILE_DATA + 4, &high_word);
+                               KERNEL_OFFSET_CSR_PROFILE_DATA + 4 +
+                                   kern->cra_address_offset,
+                               &high_word);
   if (status)
     return (uint64_t)status;
   ACL_KERNEL_IF_DEBUG_MSG(kern,
@@ -1805,7 +1830,8 @@ static uint64_t acl_kernel_if_get_profile_data_word(acl_kernel_if *kern,
       ((((uint64_t)high_word) & 0xFFFFFFFF) << 32) | (low_word & 0xFFFFFFFF);
 #else
   status = acl_kernel_cra_read_64b(
-      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_DATA, &read_result);
+      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_DATA + kern->cra_address_offset,
+      &read_result);
   if (status)
     return (uint64_t)status;
   ACL_KERNEL_IF_DEBUG_MSG(kern,
@@ -1905,7 +1931,8 @@ int acl_kernel_if_set_profile_start_cycle(acl_kernel_if *kern, cl_uint accel_id,
   assert(acl_kernel_if_is_valid(kern));
   assert(accel_id < kern->num_accel);
   status = acl_kernel_cra_write_64b(
-      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_START_CYCLE, value);
+      kern, accel_id,
+      KERNEL_OFFSET_CSR_PROFILE_START_CYCLE + kern->cra_address_offset, value);
 
   return status;
 }
@@ -1919,6 +1946,7 @@ int acl_kernel_if_set_profile_stop_cycle(acl_kernel_if *kern, cl_uint accel_id,
   assert(acl_kernel_if_is_valid(kern));
   assert(accel_id < kern->num_accel);
   status = acl_kernel_cra_write_64b(
-      kern, accel_id, KERNEL_OFFSET_CSR_PROFILE_STOP_CYCLE, value);
+      kern, accel_id,
+      KERNEL_OFFSET_CSR_PROFILE_STOP_CYCLE + kern->cra_address_offset, value);
   return status;
 }

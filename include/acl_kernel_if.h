@@ -60,6 +60,9 @@ typedef struct {
 
   // Track debug printf activity
   time_ns last_printf_dump = 0;
+
+  // CRA address offset for backwards compatibility
+  unsigned int cra_address_offset = 8;
 } acl_kernel_if;
 
 // *********************** Public functions **************************
