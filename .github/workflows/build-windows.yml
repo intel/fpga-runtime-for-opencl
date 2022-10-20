@@ -64,7 +64,7 @@ jobs:
         id: msvc
         run: |
           $installationPath = & vswhere -latest -property installationPath
-          echo "::set-output name=path::$installationPath\vc\auxiliary\build\vcvars64.bat"
+          "path=$installationPath\vc\auxiliary\build\vcvars64.bat" >> $env:GITHUB_OUTPUT
 
       - name: cache libelf
         id: cache-libelf
