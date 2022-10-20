@@ -160,6 +160,18 @@ jobs:
         run: |
           cd build
           cmake -P cmake_install.cmake
+
+      - name: upload binary package
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v3
+        with:
+          name: fpga-runtime-for-opencl-${{ github.sha }}-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
+          path: c:\fpga-runtime-for-opencl
+          if-no-files-found: error
+
+      - name: install components
+        run: |
+          cd build
           cmake -DCOMPONENT=CL -P cmake_install.cmake
           cmake -DCOMPONENT=CppUTest -P cmake_install.cmake
           cmake -DCOMPONENT=MMD -P cmake_install.cmake
