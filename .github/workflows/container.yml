@@ -80,7 +80,7 @@ jobs:
         id: tag
         run: |
           ref=$(echo "$ref" | sed 's#^refs/\(\|heads/\|tags/\)##')
-          echo "::set-output name=tag::${ref//[^a-zA-Z0-9_.]/-}"
+          echo "tag=${ref//[^a-zA-Z0-9_.]/-}" >> "$GITHUB_OUTPUT"
         env:
           ref: ${{ github.ref }}
 
