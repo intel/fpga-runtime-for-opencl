@@ -56,9 +56,6 @@ jobs:
       KLOCWORK_PROJECT: ${{ secrets.KLOCWORK_PROJECT }}
 
     steps:
-      - name: change ownership of workspace to current user
-        run: sudo chown -R klocwork:klocwork .
-
       - name: checkout code
         uses: actions/checkout@v2
 
@@ -84,7 +81,3 @@ jobs:
 
       - name: publish issues to Klocwork server
         run: kwadmin --url "$KLOCWORK_URL" load "$KLOCWORK_PROJECT" kwtables
-
-      - name: revert ownership of workspace to root
-        run: sudo chown -R root:root .
-        if: always()

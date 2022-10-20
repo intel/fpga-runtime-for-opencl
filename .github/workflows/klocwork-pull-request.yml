@@ -42,9 +42,6 @@ jobs:
       image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-klocwork-desktop-tools:main
 
     steps:
-      - name: change ownership of workspace to current user
-        run: sudo chown -R klocwork:klocwork .
-
       - name: create local Klocwork project
         run: |
           mkdir -p /home/klocwork/parent
@@ -112,7 +109,3 @@ jobs:
             kwcheck list --id "$NEW_ISSUE_ID" -F detailed --project-dir /home/klocwork/child/.kwlp --settings-dir /home/klocwork/child/.kwps
           fi
           test -z "$NEW_ISSUE_ID"
-
-      - name: revert ownership of workspace to root
-        run: sudo chown -R root:root .
-        if: always()
