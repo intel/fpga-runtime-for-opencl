@@ -108,18 +108,33 @@ jobs:
           cd build
           ctest -V
 
+      - name: create user-writable install prefix
+        run: sudo install -d -m 1777 /fpga-runtime-for-opencl
+
       - name: install runtime
         run: |
           cd build
-          sudo cmake -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=CL -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=CppUTest -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=MMD -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=acl -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=acl_check_sys_cmd -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=acl_hash -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=acl_threadsupport -P cmake_install.cmake
-          sudo cmake -DCOMPONENT=pkg_editor -P cmake_install.cmake
+          cmake -P cmake_install.cmake
+
+      - name: upload binary package
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v3
+        with:
+          name: fpga-runtime-for-opencl-${{ github.sha }}-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
+          path: /fpga-runtime-for-opencl
+          if-no-files-found: error
+
+      - name: install components
+        run: |
+          cd build
+          cmake -DCOMPONENT=CL -P cmake_install.cmake
+          cmake -DCOMPONENT=CppUTest -P cmake_install.cmake
+          cmake -DCOMPONENT=MMD -P cmake_install.cmake
+          cmake -DCOMPONENT=acl -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_check_sys_cmd -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_hash -P cmake_install.cmake
+          cmake -DCOMPONENT=acl_threadsupport -P cmake_install.cmake
+          cmake -DCOMPONENT=pkg_editor -P cmake_install.cmake
 
       - name: ensure manifests of installed components are unchanged
         run: |
