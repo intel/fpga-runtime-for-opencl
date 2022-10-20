@@ -179,7 +179,7 @@ jobs:
           manifests: cmake\manifests\windows
 
       - name: upload manifests if installed components changed
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: failure()
         with:
           name: manifests-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
