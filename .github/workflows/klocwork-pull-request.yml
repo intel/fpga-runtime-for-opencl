@@ -48,7 +48,7 @@ jobs:
           kwcheck create --project-dir /home/klocwork/parent/.kwlp --settings-dir /home/klocwork/parent/.kwps
 
       - name: checkout base ref
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.base_ref }}
 
@@ -73,7 +73,7 @@ jobs:
           cp -r /home/klocwork/parent/.kwlp /home/klocwork/parent/.kwps /home/klocwork/child
 
       - name: checkout head ref
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: create build files of head ref
         run: |

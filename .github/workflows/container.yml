@@ -69,7 +69,7 @@ jobs:
 
     steps:
       - name: checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       # https://docs.docker.com/engine/reference/commandline/tag/#extended-description
       # > A tag name must be valid ASCII and may contain lowercase and
