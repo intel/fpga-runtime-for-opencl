@@ -41,9 +41,6 @@ jobs:
       TMP_DIR: /home/build
 
     steps:
-      - name: change ownership of workspace to current user
-        run: sudo chown -R build:build .
-      
       - name: checkout main branch
         uses: actions/checkout@v2
         with:
@@ -75,7 +72,3 @@ jobs:
       
       - name: coverage status
         run: ./scripts/coverage_diff.py "$TMP_DIR/child_build" "$TMP_DIR/parent_build"
-
-      - name: revert ownership of workspace to root
-        run: sudo chown -R root:root .
-        if: always()
