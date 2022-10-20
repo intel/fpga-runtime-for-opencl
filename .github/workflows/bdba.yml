@@ -47,9 +47,6 @@ jobs:
     environment: bdba
 
     steps:
-      - name: change ownership of workspace to current user
-        run: sudo chown -R build:build .
-
       - name: checkout code
         uses: actions/checkout@v2
 
@@ -90,7 +87,3 @@ jobs:
 
       - name: print upload id
         run: jq --exit-status .results.product_id upload.json
-
-      - name: revert ownership of workspace to root
-        run: sudo chown -R root:root .
-        if: always()
