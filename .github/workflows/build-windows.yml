@@ -68,7 +68,7 @@ jobs:
 
       - name: cache libelf
         id: cache-libelf
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: c:\libelf
           key: libelf-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_libelf.ps1') }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: cache zlib
         id: cache-zlib
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: c:\zlib
           key: zlib-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_zlib.ps1') }}
@@ -102,7 +102,7 @@ jobs:
 
       - name: cache ninja
         id: cache-ninja
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: c:\ninja
           key: ninja-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_ninja.ps1') }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: cache aocl
         id: cache-aocl
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: c:\aocl
           key: aocl-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_aocl.ps1') }}
