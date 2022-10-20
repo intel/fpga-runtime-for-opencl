@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: checkout main branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           ref: ${{ github.base_ref }}
       
@@ -59,7 +59,7 @@ jobs:
         run: cd "$TMP_DIR/parent_build" && ctest -T Test -T Coverage
 
       - name: checkout current branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: create child build files
         run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON
