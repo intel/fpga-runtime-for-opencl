@@ -1,0 +1,122 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+# This workflow combines a pull-request flow that only builds the container,
+# and a push flow that builds and pushes the container to the package registry.
+#
+# The push flow is triggered when the user pushes a commit to their personal,
+# forked repository; in this case the container image is uploaded to their
+# personal registry. The push flow is also triggered when a pull-request is
+# merged into the main branch; in this case the container image is uploaded
+# to the registry belonging to the runtime repository.
+#
+# This workflow design allows users to iterate and test container
+# changes in their forked repository, while ensuring that only merged
+# pull requests overwrite production images used by build workflows.
+
+name: build container images
+
+# https://github.blog/changelog/2021-04-20-github-actions-control-permissions-for-github_token/
+permissions:
+  # Grant read permissions to repository in case it is not a forked public
+  # repository, but a private repository that was created manually.
+  contents: read
+
+  # If trigger-specific permissions were supported, write permissions to the
+  # container registry would only be needed for push events.
+  packages: write
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/klocwork-container.yml'
+      - 'container/ubuntu-20.04-klocwork-build-tools/**'
+      - 'container/ubuntu-20.04-klocwork-desktop-tools/**'
+
+  pull_request:
+    paths:
+      - '.github/workflows/klocwork-container.yml'
+      - 'container/ubuntu-20.04-klocwork-build-tools/**'
+      - 'container/ubuntu-20.04-klocwork-desktop-tools/**'
+
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    # https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
+    environment: klocwork-container
+
+    # This rebuilds all container images whenever any single Dockerfile is
+    # changed. Therefore, when iterating on a container change, consider
+    # temporarily commenting all but the container of interest below.
+    strategy:
+      matrix:
+        container:
+          - ubuntu-20.04-klocwork-build-tools
+          - ubuntu-20.04-klocwork-desktop-tools
+
+    env:
+      image: ghcr.io/${{ github.repository }}/${{ matrix.container }}
+
+      KLOCWORK_BUILD_TOOLS_URL: ${{ secrets.KLOCWORK_BUILD_TOOLS_URL }}
+      KLOCWORK_DESKTOP_TOOLS_URL: ${{ secrets.KLOCWORK_DESKTOP_TOOLS_URL }}
+      KLOCWORK_LICENSE_SERVER: ${{ secrets.KLOCWORK_LICENSE_SERVER }}
+
+    continue-on-error: true
+
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+
+      # https://docs.docker.com/engine/reference/commandline/tag/#extended-description
+      # > A tag name must be valid ASCII and may contain lowercase and
+      # > uppercase letters, digits, underscores, periods and dashes.
+      # > A tag name may not start with a period or a dash and may
+      # > contain a maximum of 128 characters.
+      - name: set container tag from git reference
+        id: tag
+        run: |
+          ref=$(echo "$ref" | sed 's#^refs/\(\|heads/\|tags/\)##')
+          echo "tag=${ref//[^a-zA-Z0-9_.]/-}" >> "$GITHUB_OUTPUT"
+        env:
+          ref: ${{ github.ref }}
+
+      # Override uid of default user in container to align with GitHub-hosted runners
+      # https://github.com/actions/checkout/issues/47
+      - name: build image
+        run: |
+          docker build \
+            --build-arg uid=1001 \
+            --build-arg klocwork_build_tools_url="$KLOCWORK_BUILD_TOOLS_URL" \
+            --build-arg klocwork_desktop_tools_url="$KLOCWORK_DESKTOP_TOOLS_URL" \
+            --build-arg klocwork_license_server="$KLOCWORK_LICENSE_SERVER" \
+            -t "$image:$tag" -f container/${{ matrix.container }}/Dockerfile .
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
+
+      - name: login to registry
+        if: github.event_name == 'push'
+        run: echo "$token" | docker login ghcr.io -u "$user" --password-stdin
+        env:
+          user: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: push image to registry
+        if: github.event_name == 'push'
+        run: docker image push "$image:$tag"
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
+
+      - name: logout from registry
+        if: always() && github.event_name == 'push'
+        run: docker logout ghcr.io
