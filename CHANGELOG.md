@@ -2,6 +2,16 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+### Added
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2022.3...HEAD
+
 ## [2022.3] - 2022-10-28
 
 ### Added
