@@ -34,14 +34,30 @@ on:
       - main
     paths:
       - '.github/workflows/container.yml'
-      - 'container/**'
+      - 'container/rockylinux-8-dev/**'
+      - 'container/rockylinux-9-dev/**'
+      - 'container/debian-11-arm-dev/**'
+      - 'container/opensuse-leap-15-dev/**'
+      - 'container/ubuntu-18.04-dev/**'
+      - 'container/ubuntu-20.04-dev/**'
+      - 'container/ubuntu-20.04-clang/**'
+      - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
 
   pull_request:
     paths:
       - '.github/workflows/container.yml'
-      - 'container/**'
+      - 'container/rockylinux-8-dev/**'
+      - 'container/rockylinux-9-dev/**'
+      - 'container/debian-11-arm-dev/**'
+      - 'container/opensuse-leap-15-dev/**'
+      - 'container/ubuntu-18.04-dev/**'
+      - 'container/ubuntu-20.04-dev/**'
+      - 'container/ubuntu-20.04-clang/**'
+      - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
+
+  workflow_dispatch:
 
 jobs:
   build:
