@@ -6,7 +6,7 @@
 
 -   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8
 -   SUSE Linux Enterprise Server (SLES)\* or openSUSE Leap\* 15
--   Ubuntu\* 18.04 or 20.04 LTS
+-   Ubuntu\* 18.04, 20.04, or 22.04 LTS
 -   GCC 7.4.0 and higher
 -   [CMake](https://cmake.org/) 3.10 and higher
 -   [Ninja](https://ninja-build.org/) 1.8.2 and higher
