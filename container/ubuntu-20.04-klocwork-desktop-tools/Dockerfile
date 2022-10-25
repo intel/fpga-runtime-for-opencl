@@ -3,7 +3,7 @@
 
 # https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
 
-FROM amr-cache-registry.caas.intel.com/cache/library/ubuntu:20.04
+FROM ubuntu:20.04
 
 # Optionally override uid of default user in container, e.g.,
 # docker build --build-arg uid=1001 ...
