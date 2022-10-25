@@ -30,7 +30,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - Load `libz.so.1` alongside `libz.so` on Linux ([#69]).
-- Update zlib to 1.2.13 on Windows ([#169]).
 - USM device allocations when simulating multiple global memories ([#104]).
 - Consistently enable verbose output for all tests ([#121]).
 - Inaccessible links to MMD functions in documentation ([#128]).
@@ -41,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add CMake flag `ACL_TSAN` to build with thread sanitizer ([#63], [#76]).
 - Fix data races detected by thread sanitizer ([#74], [#89]).
 - Fix compiler warnings ([#77], [#83], [#84], [#86], [#87]).
+- Update zlib to 1.2.13 on Windows ([#169]).
 
 [2022.3]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2022.2...v2022.3
 [#34]: https://github.com/intel/fpga-runtime-for-opencl/pull/34
