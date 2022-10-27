@@ -78,6 +78,7 @@ static void l_initialize_devices(const acl_system_def_t *present_board_def,
                                  int offline_mode, unsigned int num_devices,
                                  const cl_device_id *devices);
 static void l_add_device(int idx);
+void *l_eagerly_update_device_op_queue(void *arg);
 
 //////////////////////////////
 // OpenCL API
@@ -412,6 +413,10 @@ void acl_init_platform(void) {
 
   // Device operation queue.
   acl_init_device_op_queue(&acl_platform.device_op_queue);
+  // Send off device_op_queue update thread
+  acl_platform.outstanding_interrupt = 0;
+  acl_thread_create(&acl_platform.device_op_queue_update_thread, 0,
+                    l_eagerly_update_device_op_queue, NULL);
 
   // Initialize sampler allocator.
   for (int i = 0; i < ACL_MAX_SAMPLER; i++) {
@@ -735,6 +740,25 @@ static void l_add_device(int idx) {
 
   device->min_local_mem_size = 16 * 1024; // Min value for OpenCL full profile.
   device->address_bits = 64;              // Yes, our devices are 64-bit.
+}
+
+void *l_eagerly_update_device_op_queue(void *arg) {
+  while (true) {
+    std::scoped_lock lock{acl_mutex_wrapper};
+
+    // Sleep if no interrupt happening
+    acl_wait_for_device_update(NULL);
+
+    if (!acl_platform.initialized) {
+      break;
+    }
+    if (acl_platform.outstanding_interrupt) {
+      acl_print_debug_msg("Serving outstanding kernel interrupt...\n");
+      acl_update_device_op_queue(&(acl_platform.device_op_queue));
+      acl_platform.outstanding_interrupt = 0;
+    }
+  }
+  return NULL;
 }
 
 // These functions check to see if a given object is known to the system.

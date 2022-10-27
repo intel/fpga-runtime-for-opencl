@@ -9,6 +9,7 @@
 #include <acl_context.h>
 #include <acl_hal.h>
 #include <acl_thread.h>
+#include <acl_util.h>
 
 ACL_TLS int acl_global_lock_count = 0;
 ACL_TLS int acl_inside_sig_flag = 0;
@@ -55,7 +56,7 @@ void acl_mutex_wrapper_t::resume_lock(int lock_count) {
 
 void acl_wait_for_device_update(cl_context context) {
   acl_assert_locked();
-  if (acl_get_hal()->get_debug_verbosity &&
+  if (acl_context_is_valid(context) && acl_get_hal()->get_debug_verbosity &&
       acl_get_hal()->get_debug_verbosity() > 0) {
     unsigned timeout = 5; // Seconds
     // Keep waiting until signal is received
@@ -102,6 +103,12 @@ __attribute__((constructor)) static void l_global_lock_init() {
 }
 
 __attribute__((destructor)) static void l_global_lock_uninit() {
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+    acl_get_platform()->initialized = 0;
+    acl_signal_condvar(&l_acl_global_condvar); // wake up waiting thread
+  }
+  acl_thread_join(&acl_get_platform()->device_op_queue_update_thread);
   acl_reset_condvar(&l_acl_global_condvar);
 }
 
