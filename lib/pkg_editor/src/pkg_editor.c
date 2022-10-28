@@ -1107,6 +1107,16 @@ int acl_pkg_close_file(acl_pkg_file *pkg) {
   // allocated buffers used to store file contents may be freed.
   free_buffers(pkg);
 
+  // If the file is not read-only, the string table data buffer
+  // has been dynamically allocated in add_required_parts() when
+  // creating a new file, or make_string_table_extensible() when
+  // appending to an existing file, and may be freed now.
+  if (pkg->writable) {
+    Elf_Data *data = get_name_data_ptr(pkg);
+    assert(data);
+    free(data->d_buf);
+  }
+
   // Should be albe to call elf_end even if elf_update failed
   while (elf_end(pkg->elf)) {
     if (pkg->show_info)
