@@ -231,6 +231,35 @@ void acl_reset(void) {
   acl_platform.initialized = 0;
 }
 
+// This function should only be used in the unit test
+void acl_reset_join_thread(void) {
+  {
+    std::scoped_lock lock{acl_mutex_wrapper};
+
+    l_reset_present_board();
+
+    acl_platform.offline_device = "";
+    acl_platform.num_devices = 0;
+    for (unsigned i = 0; i < ACL_MAX_DEVICE; ++i) {
+      acl_platform.device[i] = _cl_device_id();
+    }
+    acl_platform.initialized = 0;
+    acl_signal_device_update();
+  }
+  // Each unit test test groups are sequentially run and acl_init and acl_reset
+  // is called once at the start (setup) and end (teardown) of the test group.
+  // As acl_init wouldn't be called before acl_reset finished, it is okay to
+  // block here to wait for the device op queue update thread to finish here.
+
+  // Note that the join has to be called without holding the acl global lock, if
+  // reset acquires lock and wait, the device op queue update thread will try to
+  // obtain the lock forever, resulting in deadlock in the unit test.
+  if (acl_platform.device_op_queue_update_thread != 0) {
+    acl_thread_join(&acl_platform.device_op_queue_update_thread);
+    acl_platform.device_op_queue_update_thread = 0;
+  }
+}
+
 ////////////////////////////////////////////////////
 // Static functions
 

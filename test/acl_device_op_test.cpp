@@ -151,8 +151,8 @@ TEST_GROUP(device_op) {
 
   virtual void teardown() {
     unload();
-    acl_test_teardown_generic_system();
     acl_mutex_wrapper.unlock();
+    acl_test_teardown_generic_system();
     acl_test_run_standard_teardown_checks();
   }
 

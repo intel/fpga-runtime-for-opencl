@@ -103,12 +103,14 @@ __attribute__((constructor)) static void l_global_lock_init() {
 }
 
 __attribute__((destructor)) static void l_global_lock_uninit() {
-  {
-    std::scoped_lock lock{acl_mutex_wrapper};
-    acl_get_platform()->initialized = 0;
-    acl_signal_condvar(&l_acl_global_condvar); // wake up waiting thread
+  if (acl_get_platform()->device_op_queue_update_thread) {
+    {
+      std::scoped_lock lock{acl_mutex_wrapper};
+      acl_get_platform()->initialized = 0;
+      acl_signal_condvar(&l_acl_global_condvar); // wake up waiting thread
+    }
+    acl_thread_join(&acl_get_platform()->device_op_queue_update_thread);
   }
-  acl_thread_join(&acl_get_platform()->device_op_queue_update_thread);
   acl_reset_condvar(&l_acl_global_condvar);
 }
 

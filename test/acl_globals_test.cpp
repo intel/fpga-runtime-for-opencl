@@ -716,7 +716,9 @@ TEST(acl_globals_undef, valid_init_simple) {
   CHECK(0 != acl_present_board_def());
   CHECK(0 != acl_present_board_is_valid());
   // Teardown
-  acl_reset();
+  acl_mutex_wrapper.unlock();
+  acl_reset_join_thread();
+  acl_mutex_wrapper.lock();
   CHECK(0 == acl_present_board_def());
   CHECK(0 == acl_present_board_is_valid());
 }
@@ -726,7 +728,9 @@ TEST(acl_globals_undef, valid_init_empty) {
   CHECK(0 != acl_present_board_def());
   CHECK(0 != acl_present_board_is_valid());
   // Teardown
-  acl_reset();
+  acl_mutex_wrapper.unlock();
+  acl_reset_join_thread();
+  acl_mutex_wrapper.lock();
   CHECK(0 == acl_present_board_def());
   CHECK(0 == acl_present_board_is_valid());
 }
@@ -735,6 +739,8 @@ TEST(acl_globals_undef, valid_init_complex) {
   CHECK_EQUAL(1, acl_init(&acltest_complex_system));
   CHECK(0 != acl_present_board_def());
   // Teardown
-  acl_reset();
+  acl_mutex_wrapper.unlock();
+  acl_reset_join_thread();
+  acl_mutex_wrapper.lock();
   CHECK_EQUAL(0, acl_present_board_def());
 }

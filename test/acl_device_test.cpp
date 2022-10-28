@@ -29,7 +29,7 @@ syncThreads();
 void teardown() {
   syncThreads();
   if (threadNum() == 0) {
-    ACL_LOCKED(acl_test_teardown_generic_system());
+    acl_test_teardown_generic_system();
   }
   acl_test_run_standard_teardown_checks();
 }
