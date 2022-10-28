@@ -390,7 +390,7 @@ TEST(offline_device, offline_hal) {
   ACL_LOCKED(now = acl_get_hal()->get_timestamp());
   ACL_LOCKED(acl_print_debug_msg("offline hal time is %08x%08x", (now >> 32),
                                  (now & 0xffffffff)));
-  
+
   syncThreads();
   if (threadNum() == 0) {
     acl_test_teardown_system();
