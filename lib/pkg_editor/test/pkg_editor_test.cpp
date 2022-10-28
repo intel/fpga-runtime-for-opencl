@@ -153,6 +153,7 @@ TEST(sample_file, write_ops_on_readonly) {
                                         sizeof(data)));
   CHECK_EQUAL(0, acl_pkg_update_section_from_file(pkg, ACL_PKG_SECTION_HASH,
                                                   SAMPLE_FILE));
+  close_file(pkg);
   printf("end   writeops\n");
 }
 
@@ -203,6 +204,8 @@ TEST(sample_file, write_ops_on_writable) {
   // check result -- it must contain these two section names
   CHECK(strstr(buf, ACL_PKG_SECTION_HASH));
   CHECK(strstr(buf, ACL_PKG_SECTION_ACL_VERSION));
+
+  close_file(pkg);
   printf("end  writeops_write\n");
 }
 
