@@ -170,12 +170,12 @@ TEST(sample_file, write_ops_on_writable) {
       acl_pkg_add_data_section(pkg, ACL_PKG_SECTION_HASH, &data, sizeof(data)));
   // Check that we get the right data back.
   size_t data_size;
-  size_t data_result = 99;
   CHECK(acl_pkg_section_exists(pkg, ACL_PKG_SECTION_HASH, &data_size));
   CHECK_EQUAL(sizeof(data), data_size);
-  CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, (char *)&data_result,
-                             data_size + 1));
-  CHECK_EQUAL(data, data_result);
+  char data_result[sizeof(data) + 1] = {0};
+  CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, data_result,
+                             sizeof(data_result)));
+  CHECK_EQUAL(0, memcmp(&data, data_result, sizeof(data)));
   char *data_result_ptr = 0;
   CHECK(acl_pkg_read_section_transient(pkg, ACL_PKG_SECTION_HASH,
                                        &data_result_ptr));
@@ -187,10 +187,10 @@ TEST(sample_file, write_ops_on_writable) {
   // Check that we get the right data back.
   CHECK(acl_pkg_section_exists(pkg, ACL_PKG_SECTION_HASH, &data_size));
   CHECK_EQUAL(sizeof(data), data_size);
-  data_result = 99;
-  CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, (char *)&data_result,
-                             data_size + 1));
-  CHECK_EQUAL(data2, data_result);
+  char data2_result[sizeof(data) + 1] = {0};
+  CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, data2_result,
+                             sizeof(data2_result)));
+  CHECK_EQUAL(0, memcmp(&data2, data2_result, sizeof(data2)));
   data_result_ptr = 0;
   CHECK(acl_pkg_read_section_transient(pkg, ACL_PKG_SECTION_HASH,
                                        &data_result_ptr));
@@ -230,9 +230,9 @@ TEST(sample_file, read_readonly) {
   CHECK(pkg);
   CHECK(acl_pkg_section_exists(pkg, ACL_PKG_SECTION_HASH, &data_size));
   CHECK_EQUAL(sizeof(hw), data_size);
-  char data_result[sizeof(hw)];
+  char data_result[sizeof(hw) + 1] = {0};
   CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, data_result,
-                             data_size + 1));
+                             sizeof(data_result)));
   CHECK_EQUAL(0, strcmp(data_result, hw));
   char *data_result_ptr = 0;
   CHECK(acl_pkg_read_section_transient(pkg, ACL_PKG_SECTION_HASH,
