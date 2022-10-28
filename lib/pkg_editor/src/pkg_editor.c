@@ -881,6 +881,17 @@ static int add_required_parts(acl_pkg_file *pkg) {
     return 0;
   }
 
+  // For some reason, when a *second* or subsequent data section
+  // is added, its name is written into the start of the data
+  // area of the *first* data section ever written. This appears
+  // to be an issue in the libelf library.
+  //
+  // This creates an empty data section for the sole purpose of
+  // getting stomped on. It must be at least as big as the
+  // maximum section name length.
+  //
+  // We give this section an empty string name so that regular
+  // tools can't find it: They find an undefined section instead.
   acl_pkg_add_data_section(pkg, "", calloc(MAX_SECTION_NAME_SIZE, 1),
                            MAX_SECTION_NAME_SIZE);
 
