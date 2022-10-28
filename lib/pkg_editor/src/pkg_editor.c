@@ -795,6 +795,8 @@ static int set_shdrstrndx(Elf *elf, size_t shdrstrndx, Elf32_Ehdr *ehdr,
   return 1;
 }
 
+const static char empty_data_section_buf[MAX_SECTION_NAME_SIZE];
+
 // Add required headers and sections to new pkg file
 static int add_required_parts(acl_pkg_file *pkg) {
 
@@ -892,8 +894,8 @@ static int add_required_parts(acl_pkg_file *pkg) {
   //
   // We give this section an empty string name so that regular
   // tools can't find it: They find an undefined section instead.
-  acl_pkg_add_data_section(pkg, "", calloc(MAX_SECTION_NAME_SIZE, 1),
-                           MAX_SECTION_NAME_SIZE);
+  acl_pkg_add_data_section(pkg, "", empty_data_section_buf,
+                           sizeof(empty_data_section_buf));
 
   pkg->dirty = 1;
 
