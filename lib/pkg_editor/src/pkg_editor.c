@@ -47,6 +47,7 @@ typedef struct acl_pkg_file {
   const char *fname;
   int fd;
   Elf *elf;
+  struct acl_pkg_buffer *buf;
   unsigned writable : 1;   /* Can we update this ELF? */
   unsigned dirty : 1;      /* Have changes been made? If yes, then require an
                               elf_update() call */
@@ -444,14 +445,43 @@ int acl_pkg_add_data_section(acl_pkg_file *pkg, const char *sect_name,
   return 1;
 }
 
-// Read full content of file into a buffer.
-// The buffer is allocated by this function but must be freed by the caller.
-// File length is returned in the second argument
-void *acl_pkg_read_file_into_buffer(const char *in_file,
-                                    size_t *file_size_out) {
+// Element of a singly-linked list to track allocated buffers for use
+// in ELF data sections. Use variable-length array member to minimize
+// allocations; next element and buffer are stored in one allocation.
+struct acl_pkg_buffer {
+  struct acl_pkg_buffer *next;
+  char buf[];
+};
+
+// This function keeps track of allocated buffers in a linked list.
+// The buffers must remain allocated as long as the ELF file is open.
+// They are read when flushing data sections to disk with elf_update().
+static char *alloc_buffer(struct acl_pkg_file *pkg, size_t size) {
+  struct acl_pkg_buffer *buf = malloc(sizeof(struct acl_pkg_buffer) + size);
+  if (buf == NULL) {
+    return NULL;
+  }
+  buf->next = pkg->buf;
+  pkg->buf = buf;
+  return buf->buf;
+}
+
+static void free_buffers(struct acl_pkg_file *pkg) {
+  while (pkg->buf != NULL) {
+    struct acl_pkg_buffer *next = pkg->buf->next;
+    free(pkg->buf);
+    pkg->buf = next;
+  }
+}
+
+// Read full content of file `in_file` into a buffer. On success,
+// returns a buffer that is freed by acl_pkg_close_file(), and the
+// file length in bytes in `file_size_out`. On failure, prints an
+// error message to standard error and returns NULL.
+static char *read_file_into_buffer(struct acl_pkg_file *pkg,
+                                   const char *in_file, size_t *file_size_out) {
 
   FILE *f = NULL;
-  void *buf;
   size_t file_size;
 
   // When reading as binary file, no new-line translation is done.
@@ -467,7 +497,7 @@ void *acl_pkg_read_file_into_buffer(const char *in_file,
   rewind(f);
 
   // slurp the whole file into allocated buf
-  buf = malloc(sizeof(char) * file_size);
+  char *buf = alloc_buffer(pkg, file_size);
   if (buf == NULL) {
     fprintf(stderr, "Could not allocated %zu bytes of memory\n", file_size);
     fclose(f);
@@ -479,9 +509,9 @@ void *acl_pkg_read_file_into_buffer(const char *in_file,
   if (*file_size_out != file_size) {
     fprintf(stderr, "Error reading %s. Read only %zu out of %zu bytes\n",
             in_file, *file_size_out, file_size);
-    free(buf);
     return NULL;
   }
+
   return buf;
 }
 
@@ -504,7 +534,7 @@ int acl_pkg_add_data_section_from_file(acl_pkg_file *pkg, const char *sect_name,
     return 0;
   }
 
-  buf = acl_pkg_read_file_into_buffer(in_file, &file_size);
+  buf = read_file_into_buffer(pkg, in_file, &file_size);
   if (buf == NULL) {
     return 0;
   }
@@ -733,7 +763,7 @@ int acl_pkg_update_section_from_file(acl_pkg_file *pkg, const char *sect_name,
     return 0;
   }
 
-  buf = acl_pkg_read_file_into_buffer(in_file, &file_size);
+  buf = read_file_into_buffer(pkg, in_file, &file_size);
   if (buf == NULL) {
     return 0;
   }
@@ -984,6 +1014,7 @@ acl_pkg_file *acl_pkg_open_file(const char *fname, int mode) {
   result->fname = fname;
   result->fd = fd;
   result->elf = NULL;
+  result->buf = NULL;
   result->writable = !(read_only);
   result->dirty = 0;
   result->show_error = show_error;
@@ -1052,6 +1083,7 @@ acl_pkg_file *acl_pkg_open_file_from_memory(char *pkg_image,
   result->fname = NULL;
   result->fd = -1;
   result->elf = e;
+  result->buf = NULL;
   result->writable = 0; // When opening from memory, it's always read-only.
   result->dirty = 0;
   result->show_info = show_info;
@@ -1070,6 +1102,10 @@ int acl_pkg_close_file(acl_pkg_file *pkg) {
   int status = 0;
 
   status = flush_elf_edits(pkg);
+
+  // Now that all data sections have been flushed to disk, any
+  // allocated buffers used to store file contents may be freed.
+  free_buffers(pkg);
 
   // Should be albe to call elf_end even if elf_update failed
   while (elf_end(pkg->elf)) {
