@@ -102,7 +102,7 @@ struct acl_pkg_file *create_file() {
   pkg = acl_pkg_open_file(SAMPLE_FILE, ACL_PKG_CREATE | ACL_PKG_READ_WRITE);
   CHECK(pkg);
 
-  char name[] = "13.0.0";
+  const static char name[] = "13.0.0";
   CHECK(acl_pkg_add_data_section(pkg, ACL_PKG_SECTION_ACL_VERSION, name,
                                  sizeof(name)));
   return pkg;
