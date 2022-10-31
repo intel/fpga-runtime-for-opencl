@@ -42,7 +42,7 @@ Perform these steps to build the runtime:
 2.  Switch to the [latest release](https://github.com/intel/fpga-runtime-for-opencl/releases) version.
 
     ```
-    git checkout v2022.3
+    git checkout v2023.0
     ```
 
 3.  Create and change to the runtime build directory.
