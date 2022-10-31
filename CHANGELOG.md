@@ -2,15 +2,19 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2023.0] - 2022-12-12
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2022.3...HEAD
+### Fixed
+- Print kernel hang status only in debug mode ([#157]).
+- Correct kernel IO debug messages ([#165]).
+
+### Security
+- Resolve multiple memory leaks and stack buffer overflow ([#154]).
+
+[2023.0]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2022.3...v2023.0
+[#154]: https://github.com/intel/fpga-runtime-for-opencl/pull/154
+[#157]: https://github.com/intel/fpga-runtime-for-opencl/pull/157
+[#165]: https://github.com/intel/fpga-runtime-for-opencl/pull/165
 
 ## [2022.3] - 2022-10-28
 
