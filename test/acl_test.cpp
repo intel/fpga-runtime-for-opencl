@@ -188,24 +188,16 @@ SimpleString StringFrom(size_t x) {
 #endif
 
 void acl_test_unsetenv(const char *var) {
-
 #ifdef _WIN32
-  {
-    char buf[1000];
-    sprintf(buf, "%s=", var);
-    _putenv(buf);
-  }
+  _putenv_s(var, "");
 #else
   unsetenv(var);
 #endif
 }
+
 void acl_test_setenv(const char *var, const char *value) {
 #ifdef _WIN32
-  {
-    char buf[1000];
-    sprintf(buf, "%s=%s", var, value);
-    _putenv(buf);
-  }
+  _putenv_s(var, value);
 #else
   setenv(var, value, 1);
 #endif
