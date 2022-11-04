@@ -198,9 +198,6 @@ void acl_test_unsetenv(const char *var) {
 #else
   unsetenv(var);
 #endif
-  if (acl_getenv(var)) {
-    *(char *)0 = 0;
-  }
 }
 void acl_test_setenv(const char *var, const char *value) {
 #ifdef _WIN32
