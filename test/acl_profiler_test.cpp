@@ -50,8 +50,8 @@ MT_TEST_GROUP(acl_profile) {
   enum { MAX_DEVICES = 100, m_num_devices_in_context = 3 };
   void setup() {
     if (threadNum() == 0) {
-      char profile_runtime_env_var[] = "ACL_RUNTIME_PROFILING_ACTIVE=1";
-      char profiler_timer_env_var[] = "ACL_PROFILE_TIMER=1";
+      static char profile_runtime_env_var[] = "ACL_RUNTIME_PROFILING_ACTIVE=1";
+      static char profiler_timer_env_var[] = "ACL_PROFILE_TIMER=1";
 #ifdef _WIN32
       _putenv(profile_runtime_env_var);
       _putenv(profiler_timer_env_var);
