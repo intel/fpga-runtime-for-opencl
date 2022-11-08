@@ -73,6 +73,8 @@ jobs:
         env:
           CC: gcc
           CXX: g++
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: build runtime
         run: |

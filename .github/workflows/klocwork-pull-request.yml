@@ -56,6 +56,9 @@ jobs:
         run: |
           mkdir build
           cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+        env:
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: create build specification of base ref
         run: kwinject --output kwinject.out ninja -C build -v -k0
@@ -79,6 +82,9 @@ jobs:
         run: |
           mkdir build
           cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+        env:
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: create build specification of head ref
         run: kwinject --output kwinject.out ninja -C build -v -k0

@@ -97,6 +97,8 @@ jobs:
         env:
           CC: ${{ matrix.cross }}gcc
           CXX: ${{ matrix.cross }}g++
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: build runtime
         run: |

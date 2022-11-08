@@ -51,6 +51,9 @@ jobs:
 
       - name: create parent build files
         run: cd "$TMP_DIR/parent_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON
+        env:
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: build parent runtime
         run: cd "$TMP_DIR/parent_build" && ninja -v -k0
@@ -63,6 +66,9 @@ jobs:
 
       - name: create child build files
         run: cd "$TMP_DIR/child_build" && cmake -G Ninja "$GITHUB_WORKSPACE" -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON
+        env:
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: build child runtime
         run: cd "$TMP_DIR/child_build" && ninja -v -k0
