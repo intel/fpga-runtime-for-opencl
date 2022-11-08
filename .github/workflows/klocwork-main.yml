@@ -70,6 +70,9 @@ jobs:
         run: |
           mkdir build
           cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Debug
+        env:
+          CFLAGS: -Werror
+          CXXFLAGS: -Werror
 
       - name: create build specification
         run: kwinject --output kwinject.out ninja -C build -v -j1 -k0
