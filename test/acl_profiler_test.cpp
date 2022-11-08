@@ -50,15 +50,8 @@ MT_TEST_GROUP(acl_profile) {
   enum { MAX_DEVICES = 100, m_num_devices_in_context = 3 };
   void setup() {
     if (threadNum() == 0) {
-      static char profile_runtime_env_var[] = "ACL_RUNTIME_PROFILING_ACTIVE=1";
-      static char profiler_timer_env_var[] = "ACL_PROFILE_TIMER=1";
-#ifdef _WIN32
-      _putenv(profile_runtime_env_var);
-      _putenv(profiler_timer_env_var);
-#else // Linux
-      putenv(profile_runtime_env_var);
-      putenv(profiler_timer_env_var);
-#endif
+      acl_test_setenv("ACL_RUNTIME_PROFILING_ACTIVE", "1");
+      acl_test_setenv("ACL_PROFILE_TIMER", "1");
       acl_test_setup_generic_system();
       acl_dot_push(&m_devlog, &acl_platform.device_op_queue);
 
@@ -71,6 +64,8 @@ MT_TEST_GROUP(acl_profile) {
   void teardown() {
     syncThreads();
     if (threadNum() == 0) {
+      acl_test_unsetenv("ACL_RUNTIME_PROFILING_ACTIVE");
+      acl_test_unsetenv("ACL_PROFILE_TIMER");
       this->unload_program(m_program);
       this->unload();
       acl_test_teardown_generic_system();
@@ -449,63 +444,35 @@ TEST(acl_profile, valid_checks) {
 }
 
 TEST(acl_profile, shared_counter_checks) {
-  const std::string env_name = "ACL_INTERAL_SHARED_CONTROL_SETTING";
-#ifdef _WIN32
-  _putenv((env_name + "=").c_str());
-#else // Linux
-  unsetenv(env_name.c_str());
-#endif
+  acl_test_unsetenv("ACL_INTERAL_SHARED_CONTROL_SETTING");
   set_env_shared_counter_val();
   CHECK_EQUAL(-1, get_env_profile_shared_counter_val());
 
   for (int i = 0; i < 4; i++) {
     const std::string env_value = std::to_string(i);
-#ifdef _WIN32
-    _putenv((env_name + "=" + env_value).c_str());
-#else // Linux
-    setenv(env_name.c_str(), env_value.c_str(), 1);
-#endif
+    acl_test_setenv("ACL_INTERAL_SHARED_CONTROL_SETTING", env_value.c_str());
     set_env_shared_counter_val();
     CHECK_EQUAL(i, get_env_profile_shared_counter_val());
   }
+
+  acl_test_unsetenv("ACL_INTERAL_SHARED_CONTROL_SETTING");
 }
 
 TEST(acl_profile, init_profiler) {
-  char profiling_runtime_invalid_value[] = "ACL_RUNTIME_PROFILING_ACTIVE=2";
-  char profiling_timer_invalid_value[] = "ACL_PROFILE_TIMER=2";
-#ifdef _WIN32
-  _putenv(profiling_runtime_invalid_value);
-  _putenv(profiling_timer_invalid_value);
-#else // Linux
-  putenv(profiling_runtime_invalid_value);
-  putenv(profiling_timer_invalid_value);
-#endif
+  acl_test_setenv("ACL_RUNTIME_PROFILING_ACTIVE", "2");
+  acl_test_setenv("ACL_PROFILE_TIMER", "2");
   ACL_LOCKED(acl_init_profiler());
   CHECK(!is_profile_enabled());
   CHECK(!is_profile_timer_on());
 
-  char profiling_runtime_enabled[] = "ACL_RUNTIME_PROFILING_ACTIVE=1";
-  char profiling_timer_enabled[] = "ACL_PROFILE_TIMER=1";
-#ifdef _WIN32
-  _putenv(profiling_runtime_enabled);
-  _putenv(profiling_timer_enabled);
-#else // Linux
-  putenv(profiling_runtime_enabled);
-  putenv(profiling_timer_enabled);
-#endif
+  acl_test_setenv("ACL_RUNTIME_PROFILING_ACTIVE", "1");
+  acl_test_setenv("ACL_PROFILE_TIMER", "1");
   ACL_LOCKED(acl_init_profiler());
   CHECK(is_profile_enabled());
   CHECK(is_profile_timer_on());
 
-  char profiling_runtime_disabled[] = "ACL_RUNTIME_PROFILING_ACTIVE=";
-  char profiling_timer_disabled[] = "ACL_PROFILE_TIMER=";
-#ifdef _WIN32
-  _putenv(profiling_runtime_disabled);
-  _putenv(profiling_timer_disabled);
-#else // Linux
-  putenv(profiling_runtime_disabled);
-  putenv(profiling_timer_disabled);
-#endif
+  acl_test_unsetenv("ACL_RUNTIME_PROFILING_ACTIVE");
+  acl_test_unsetenv("ACL_PROFILE_TIMER");
   ACL_LOCKED(acl_init_profiler());
   CHECK(!is_profile_enabled());
   CHECK(!is_profile_timer_on());
@@ -645,14 +612,6 @@ MT_TEST_GROUP(acl_no_profile) {
   void setup() {
     if (threadNum() == 0) {
       remove(PROFILE_MON);
-
-#ifdef _WIN32
-      char profile_runtime_env_var[] = "ACL_RUNTIME_PROFILING_ACTIVE=";
-      _putenv(profile_runtime_env_var);
-#else // Linux
-      char profile_runtime_env_var[] = "ACL_RUNTIME_PROFILING_ACTIVE";
-      unsetenv(profile_runtime_env_var);
-#endif
 
       acl_test_setup_generic_system();
 
