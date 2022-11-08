@@ -301,13 +301,8 @@ TEST(acl_hal, debugging) {
   const char test_str[] = "hal debug printf test\n";
   CHECK(acl_set_hal(&simple_hal));
   const acl_hal_t *hal = acl_get_hal();
-  char env[] = "ACL_DEBUG=0";
 
-#ifdef _WIN32
-  _putenv(env);
-#else
-  putenv(env);
-#endif
+  acl_test_setenv("ACL_DEBUG", "0");
   char *acl_debug_env = getenv("ACL_DEBUG");
   CHECK(acl_debug_env);
   debug_mode = atoi(acl_debug_env);
@@ -318,32 +313,17 @@ TEST(acl_hal, debugging) {
   CHECK_EQUAL(0, acl_print_debug_msg(""));
 
   // Now start debugging.
-  env[10] = '4';
-#ifdef _WIN32
-  _putenv(env);
-#else
-  putenv(env);
-#endif
+  acl_test_setenv("ACL_DEBUG", "4");
   acl_debug_env = getenv("ACL_DEBUG");
   CHECK(acl_debug_env);
   debug_mode = atoi(acl_debug_env);
   CHECK_EQUAL(4, debug_mode);
-  env[10] = '3';
-#ifdef _WIN32
-  _putenv(env);
-#else
-  putenv(env);
-#endif
+  acl_test_setenv("ACL_DEBUG", "3");
   acl_debug_env = getenv("ACL_DEBUG");
   CHECK(acl_debug_env);
   debug_mode = atoi(acl_debug_env);
   CHECK_EQUAL(3, debug_mode);
-  env[10] = '2';
-#ifdef _WIN32
-  _putenv(env);
-#else
-  putenv(env);
-#endif
+  acl_test_setenv("ACL_DEBUG", "2");
   acl_debug_env = getenv("ACL_DEBUG");
   CHECK(acl_debug_env);
   debug_mode = atoi(acl_debug_env);
@@ -353,17 +333,13 @@ TEST(acl_hal, debugging) {
       acl_print_debug_msg(test_str)); // -1 because source array includes a NUL
                                       // char, but we don't print it.
   CHECK_EQUAL(0, acl_print_debug_msg(""));
-  env[10] = '0';
-#ifdef _WIN32
-  _putenv(env);
-#else
-  putenv(env);
-#endif
+  acl_test_setenv("ACL_DEBUG", "0");
   acl_debug_env = getenv("ACL_DEBUG");
   CHECK(acl_debug_env);
   debug_mode = atoi(acl_debug_env);
   CHECK_EQUAL(0, debug_mode);
   CHECK_EQUAL(0, acl_print_debug_msg(test_str));
+  acl_test_unsetenv("ACL_DEBUG");
 
   cl_int temp;
   CHECK_EQUAL(1, hal->query_temperature(0, &temp));
