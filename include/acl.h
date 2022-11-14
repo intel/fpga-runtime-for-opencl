@@ -526,6 +526,8 @@ typedef struct acl_device_def_autodiscovery_t {
   // Device global definition.
   std::unordered_map<std::string, acl_device_global_mem_def_t>
       device_global_mem_defs;
+  bool cra_ring_root_exist =
+      true; // Set the default value to true for backwards compatibility flows.
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {

@@ -482,11 +482,11 @@ TEST(auto_configure, many_ok_forward_compatibility) {
   // sections and subsections to check forward compatibility
 
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 28 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 29 "
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx 0 1 15 DDR 2 1 6 0 2147483648 100 "
                                     "100 100 100 200 200 200 200 0 0 0 0 2 "
-                                    "1 name1 1 name2 47 "
+                                    "1 name1 name2 0 0 47 "
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 0 500 500 500 0 0 "
                                     "0 0 1 1 1 3 1 1 1 3 1 0 0 800 800 800 "
@@ -1409,4 +1409,64 @@ TEST(auto_configure, two_streaming_args_and_non_streaming_kernel) {
   for (size_t i = 2; i < args.size(); ++i) {
     CHECK(!args[i].streaming_arg_info_available);
   }
+}
+
+TEST(auto_configure, cra_ring_root_not_exist) {
+  const std::string config_str{
+      "23 50 2ccb683dee8e34a004c1a27e6d722090a8cc684d custom_ipa 0 1 9 0 2 1 2 "
+      "0 2199023255552 3 "
+      "- 0 6 5 ZTSZ4mainE4MyIP_arg_input_a 1 0 8 32768 "
+      "ZTSZ4mainE4MyIP_arg_input_b 1 0 8 32768 ZTSZ4mainE4MyIP_arg_input_c"
+      " 1 0 8 32768 ZTSZ4mainE4MyIP_arg_n 1 0 4 32768 "
+      "ZTSZ4mainE4MyIP_streaming_start 1 0 0 32768 "
+      "ZTSZ4mainE4MyIP_streaming_done"
+      " 0 1 0 32768 0 0 0 0 1 64 _ZTSZ4mainE4MyIP 0 128 1 0 0 1 0 1 0 4 8 2 1 "
+      "8 4 0 0 1 ZTSZ4mainE4MyIP_arg_input_a 8"
+      " 2 1 8 4 0 0 1 ZTSZ4mainE4MyIP_arg_input_b 8 2 1 8 4 0 0 1 "
+      "ZTSZ4mainE4MyIP_arg_input_c"
+      " 8 0 0 4 1 0 0 1 ZTSZ4mainE4MyIP_arg_n 0 0 0 0 1 1 1 3 1 1 1 3 1 1 1 "
+      "ZTSZ4mainE4MyIP_streaming_start"
+      " ZTSZ4mainE4MyIP_streaming_done"};
+
+  acl_device_def_autodiscovery_t devdef;
+  {
+    bool result;
+    std::string err_str;
+    ACL_LOCKED(result =
+                   acl_load_device_def_from_str(config_str, devdef, err_str));
+    std::cerr << err_str;
+    CHECK(result);
+  }
+
+  CHECK_EQUAL(0, devdef.cra_ring_root_exist);
+}
+
+TEST(auto_configure, cra_ring_root_exist) {
+  const std::string config_str{
+      "23 50 2ccb683dee8e34a004c1a27e6d722090a8cc684d custom_ipa 0 1 9 0 2 1 2 "
+      "0 2199023255552 3 "
+      "- 0 6 5 ZTSZ4mainE4MyIP_arg_input_a 1 0 8 32768 "
+      "ZTSZ4mainE4MyIP_arg_input_b 1 0 8 32768 ZTSZ4mainE4MyIP_arg_input_c"
+      " 1 0 8 32768 ZTSZ4mainE4MyIP_arg_n 1 0 4 32768 "
+      "ZTSZ4mainE4MyIP_streaming_start 1 0 0 32768 "
+      "ZTSZ4mainE4MyIP_streaming_done"
+      " 0 1 0 32768 0 0 0 1 1 64 _ZTSZ4mainE4MyIP 0 128 1 0 0 1 0 1 0 4 8 2 1 "
+      "8 4 0 0 1 ZTSZ4mainE4MyIP_arg_input_a 8"
+      " 2 1 8 4 0 0 1 ZTSZ4mainE4MyIP_arg_input_b 8 2 1 8 4 0 0 1 "
+      "ZTSZ4mainE4MyIP_arg_input_c"
+      " 8 0 0 4 1 0 0 1 ZTSZ4mainE4MyIP_arg_n 0 0 0 0 1 1 1 3 1 1 1 3 1 1 1 "
+      "ZTSZ4mainE4MyIP_streaming_start"
+      " ZTSZ4mainE4MyIP_streaming_done"};
+
+  acl_device_def_autodiscovery_t devdef;
+  {
+    bool result;
+    std::string err_str;
+    ACL_LOCKED(result =
+                   acl_load_device_def_from_str(config_str, devdef, err_str));
+    std::cerr << err_str;
+    CHECK(result);
+  }
+
+  CHECK_EQUAL(1, devdef.cra_ring_root_exist);
 }
