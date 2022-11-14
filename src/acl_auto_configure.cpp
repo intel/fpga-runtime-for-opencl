@@ -99,6 +99,25 @@ static bool read_uint_counters(const std::string &str,
   return true;
 }
 
+// Reads the next word in str and converts it into a boolean.
+// Returns true if a valid integer was read or false if an error occurred.
+// pos is updated to the position immediately following the parsed word
+// even if an error occurs.
+static bool read_bool_counters(const std::string &str,
+                               std::string::size_type &pos, bool &val,
+                               std::vector<int> &counters) noexcept {
+  std::string result;
+  pos = read_word(str, pos, result);
+  decrement_section_counters(counters);
+  try {
+    val = static_cast<bool>(std::stoi(result));
+  } catch (const std::exception &e) {
+    UNREFERENCED_PARAMETER(e);
+    return false;
+  }
+  return true;
+}
+
 // Reads the next word in str and converts it into an unsigned.
 // Returns true if a valid integer was read or false if an error occurred.
 // pos is updated to the position immediately following the parsed word
@@ -1050,6 +1069,12 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   if (result && counters.back() > 0) {
     result = read_device_global_mem_defs(
         config_str, curr_pos, devdef.device_global_mem_defs, counters, err_str);
+  }
+
+  // Check whether csr_ring_root exist in the IP.
+  if (result && counters.back() > 0) {
+    result = read_bool_counters(config_str, curr_pos,
+                                devdef.cra_ring_root_exist, counters);
   }
 
   // forward compatibility: bypassing remaining fields at the end of device

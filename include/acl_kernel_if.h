@@ -50,7 +50,28 @@ typedef struct {
 
   acl_bsp_io io;
 
-  unsigned int csr_version;
+  // csr_version is absent if there is no accelerators or cra_ring_root doesn't
+  // exist
+  std::optional<unsigned int> csr_version;
+
+  // The real kern->cra_ring_root_exist value is initialized in the
+  // acl_kernel_if_update() function (reading the actual auto-discovery string
+  // at that time).
+  // However, the kern->cra_ring_root_exist is referenced in the
+  // acl_kernel_if_post_pll_config_init() to check whether it's OK to read from
+  // the CSR. And acl_kernel_if_post_pll_config_init() can be called prior to
+  // the acl_kernel_if_update(), using a dummy auto-discovery string.
+  // Therefore we must set a default value. (Otherwise, it's reading an
+  // uninitialized value)
+
+  // The reason of setting it to false:
+  // Currently the cra read function will not be called in the early
+  // acl_kernel_if_post_pll_config_init() call, because the kern->num_accel is 0
+  // with dummy auto-discovery string, there is an if statement guard that. With
+  // the default value to false, it will hit the assertions in the cra
+  // read/write functions in case those are accidentally invoked too early,
+  // e.g., in a future code refactoring.
+  bool cra_ring_root_exist = false;
 
   // Depth of hardware kernel invocation queue
   unsigned int *accel_invoc_queue_depth;

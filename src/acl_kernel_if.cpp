@@ -477,6 +477,7 @@ static uintptr_t acl_kernel_cra_set_segment_rom(acl_kernel_if *kern,
 
 static int acl_kernel_cra_read(acl_kernel_if *kern, unsigned int accel_id,
                                unsigned int addr, unsigned int *val) {
+  assert(kern->cra_ring_root_exist);
   uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
   acl_assert_locked_or_sig();
   return acl_kernel_if_read_32b(
@@ -485,6 +486,7 @@ static int acl_kernel_cra_read(acl_kernel_if *kern, unsigned int accel_id,
 
 int acl_kernel_cra_read_64b(acl_kernel_if *kern, unsigned int accel_id,
                             unsigned int addr, uint64_t *val) {
+  assert(kern->cra_ring_root_exist);
   uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
   acl_assert_locked_or_sig();
   return acl_kernel_if_read_64b(
@@ -536,6 +538,7 @@ static int acl_kernel_rom_cra_read_block(acl_kernel_if *kern, unsigned int addr,
 
 static int acl_kernel_cra_write(acl_kernel_if *kern, unsigned int accel_id,
                                 unsigned int addr, unsigned int val) {
+  assert(kern->cra_ring_root_exist);
   uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
   acl_assert_locked_or_sig();
   return acl_kernel_if_write_32b(
@@ -544,6 +547,7 @@ static int acl_kernel_cra_write(acl_kernel_if *kern, unsigned int accel_id,
 
 static int acl_kernel_cra_write_64b(acl_kernel_if *kern, unsigned int accel_id,
                                     unsigned int addr, uint64_t val) {
+  assert(kern->cra_ring_root_exist);
   uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
   acl_assert_locked();
   return acl_kernel_if_write_64b(
@@ -553,6 +557,7 @@ static int acl_kernel_cra_write_64b(acl_kernel_if *kern, unsigned int accel_id,
 static int acl_kernel_cra_write_block(acl_kernel_if *kern,
                                       unsigned int accel_id, unsigned int addr,
                                       unsigned int *val, size_t size) {
+  assert(kern->cra_ring_root_exist);
   uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
   uintptr_t logical_addr =
       kern->accel_csr[accel_id].address + addr - OFFSET_KERNEL_CRA;
@@ -711,8 +716,6 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   kern->accel_csr = NULL;
   kern->accel_perf_mon = NULL;
   kern->accel_num_printfs = NULL;
-
-  kern->csr_version = 0;
 
   kern->autorun_profiling_kernel_id = -1;
 
@@ -897,6 +900,11 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
 
   acl_kernel_if_close(kern);
 
+  // Initialize whether the cra_ring_root exist in the design
+  kern->cra_ring_root_exist = devdef.cra_ring_root_exist;
+  ACL_KERNEL_IF_DEBUG_MSG(kern, "Number of cra_ring_root : %d\n",
+                          kern->cra_ring_root_exist);
+
   // Setup the PCIe HAL Structures
   kern->num_accel = static_cast<unsigned>(devdef.accel.size());
   ACL_KERNEL_IF_DEBUG_MSG(kern, "Number of Accelerators : %d\n",
@@ -1040,7 +1048,8 @@ int acl_kernel_if_post_pll_config_init(acl_kernel_if *kern) {
     kern->io.printf("HAL Kern Error: Post PLL init: Invalid kernel handle");
     assert(0 && "Invalid kernel handle");
   }
-  if (kern->num_accel > 0) {
+
+  if (kern->num_accel > 0 && kern->cra_ring_root_exist) {
     acl_kernel_cra_read(kern, 0, KERNEL_OFFSET_CSR, &csr);
     version = ACL_KERNEL_READ_BIT_RANGE(csr, KERNEL_CSR_LAST_VERSION_BIT,
                                         KERNEL_CSR_FIRST_VERSION_BIT);
@@ -1054,7 +1063,9 @@ int acl_kernel_if_post_pll_config_init(acl_kernel_if *kern) {
       kern->cra_address_offset = 0;
     }
   } else {
-    kern->csr_version = 0;
+    ACL_KERNEL_IF_DEBUG_MSG(kern,
+                            "No accelerator found or CRA ring root doesn't "
+                            "exist, not setting kern->csr_version\n");
   }
 
   // If environment variables set, configure the profile hardware
@@ -1161,7 +1172,8 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   // Version is defined in upper 16-bits of the status register and cached
   // in the kern->csr_version field.  The value is cached after PLL init to
   // avoid reading back on every kernel launch, which would add overhead.
-  if (!(kern->csr_version >= CSR_VERSION_ID_18_1 &&
+  if (kern->csr_version.has_value() &&
+      !(kern->csr_version >= CSR_VERSION_ID_18_1 &&
         kern->csr_version <= CSR_VERSION_ID)) {
     kern->io.printf("Hardware CSR version ID differs from version expected by "
                     "software.  Either:\n");
@@ -1253,7 +1265,8 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
       }
     }
 
-    if (kern->csr_version != CSR_VERSION_ID_18_1) {
+    if (kern->csr_version.has_value() &&
+        (kern->csr_version != CSR_VERSION_ID_18_1)) {
       for (uintptr_t p = 0; p < image->arg_value_size; p += sizeof(int)) {
         unsigned int pword = *(unsigned int *)(image->arg_value + p);
         ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
@@ -1270,7 +1283,9 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
     acl_kernel_cra_write_block(kern, accel_id, offset, (unsigned int *)image_p,
                                image_size_static);
   }
-  if (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0) {
+
+  if (kern->csr_version.has_value() &&
+      (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0)) {
     acl_kernel_cra_write_block(
         kern, accel_id, offset + (unsigned int)image_size_static,
         (unsigned int *)image->arg_value, image->arg_value_size);
