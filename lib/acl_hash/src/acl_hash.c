@@ -213,12 +213,24 @@ static void l_close(acl_hash_sha1_context_t *c, char *digest_buf) {
   digest_buf[40] = 0;
 }
 
-static uint32_t l_leftrotate(uint32_t v, unsigned bits) {
-  uint64_t both = ((uint64_t)v) << bits;
-  uint32_t hi = both >> 32;
-  uint32_t lo = both & 0xffffffff;
-  return hi | lo;
+#ifdef _MSC_VER
+#pragma warning(push)
+// The MSVC /sdl flag turns this false-positive warning into an error:
+// C4146: unary minus operator applied to unsigned type, result still unsigned
+// https://developercommunity.visualstudio.com/t/c4146-unary-minus-operator-applied-to-unsigned-typ/884520
+#pragma warning(disable : 4146)
+#endif
+
+// See Safe, Efficient, and Portable Rotate in C/C++ by John Regehr.
+// https://blog.regehr.org/archives/1063
+static uint32_t l_leftrotate(uint32_t v, uint32_t bits) {
+  assert(bits < 32);
+  return (v << bits) | (v >> ((-bits) & 31));
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 static uint32_t l_read_bigendian_i32(const unsigned char *buf) {
   // Need to cast to uchar so we don't sign extend when widening out to 32 bits.
