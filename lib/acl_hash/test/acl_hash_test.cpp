@@ -177,3 +177,40 @@ TEST(Hash, hexdigest_str129) {
   CHECK_EQUAL(0, strcmp(m_digest, "7bcbe82f22dcf896409dd4759fc45ea83e4c05d2"));
   CHECK_EQUAL(0, m_ctx.is_open);
 }
+
+TEST_GROUP(Internal){};
+
+TEST(Internal, Rotate) {
+  CHECK_EQUAL(0x12345678, l_leftrotate(0x12345678, 0));
+  CHECK_EQUAL(0x2468acf0, l_leftrotate(0x12345678, 1));
+  CHECK_EQUAL(0x48d159e0, l_leftrotate(0x12345678, 2));
+  CHECK_EQUAL(0x91a2b3c0, l_leftrotate(0x12345678, 3));
+  CHECK_EQUAL(0x23456781, l_leftrotate(0x12345678, 4));
+  CHECK_EQUAL(0x468acf02, l_leftrotate(0x12345678, 5));
+  CHECK_EQUAL(0x8d159e04, l_leftrotate(0x12345678, 6));
+  CHECK_EQUAL(0x1a2b3c09, l_leftrotate(0x12345678, 7));
+  CHECK_EQUAL(0x34567812, l_leftrotate(0x12345678, 8));
+  CHECK_EQUAL(0x68acf024, l_leftrotate(0x12345678, 9));
+  CHECK_EQUAL(0xd159e048, l_leftrotate(0x12345678, 10));
+  CHECK_EQUAL(0xa2b3c091, l_leftrotate(0x12345678, 11));
+  CHECK_EQUAL(0x45678123, l_leftrotate(0x12345678, 12));
+  CHECK_EQUAL(0x8acf0246, l_leftrotate(0x12345678, 13));
+  CHECK_EQUAL(0x159e048d, l_leftrotate(0x12345678, 14));
+  CHECK_EQUAL(0x2b3c091a, l_leftrotate(0x12345678, 15));
+  CHECK_EQUAL(0x56781234, l_leftrotate(0x12345678, 16));
+  CHECK_EQUAL(0xacf02468, l_leftrotate(0x12345678, 17));
+  CHECK_EQUAL(0x59e048d1, l_leftrotate(0x12345678, 18));
+  CHECK_EQUAL(0xb3c091a2, l_leftrotate(0x12345678, 19));
+  CHECK_EQUAL(0x67812345, l_leftrotate(0x12345678, 20));
+  CHECK_EQUAL(0xcf02468a, l_leftrotate(0x12345678, 21));
+  CHECK_EQUAL(0x9e048d15, l_leftrotate(0x12345678, 22));
+  CHECK_EQUAL(0x3c091a2b, l_leftrotate(0x12345678, 23));
+  CHECK_EQUAL(0x78123456, l_leftrotate(0x12345678, 24));
+  CHECK_EQUAL(0xf02468ac, l_leftrotate(0x12345678, 25));
+  CHECK_EQUAL(0xe048d159, l_leftrotate(0x12345678, 26));
+  CHECK_EQUAL(0xc091a2b3, l_leftrotate(0x12345678, 27));
+  CHECK_EQUAL(0x81234567, l_leftrotate(0x12345678, 28));
+  CHECK_EQUAL(0x02468acf, l_leftrotate(0x12345678, 29));
+  CHECK_EQUAL(0x048d159e, l_leftrotate(0x12345678, 30));
+  CHECK_EQUAL(0x091a2b3c, l_leftrotate(0x12345678, 31));
+}
