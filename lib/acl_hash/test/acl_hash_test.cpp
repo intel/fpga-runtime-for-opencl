@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "acl_hash/acl_hash.h"
+#include "acl_hash.c"
 #include "acl_test.h"
 
 TEST_GROUP(Hash) {
