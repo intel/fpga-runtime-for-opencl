@@ -119,11 +119,15 @@ int acl_tls_set(acl_tls_key_t key, const void *data) {
 void acl_set_process_affinity_mask(unsigned long long process_affinity_mask) {
   cpu_set_t mask;
   CPU_ZERO(&mask);
-  int i = 0;
+  // While the Linux man page for CPU_SET(3) states that the cpu argument
+  // is of type int, glibc changed this macro to use type size_t instead.
+  // https://man7.org/linux/man-pages/man3/CPU_SET.3.html
+  // https://sourceware.org/git/?p=glibc.git;a=commit;h=2b7e92df930b8ed1ace659bf6e0b8dff41d65bf0
+  size_t cpu = 0;
   while (process_affinity_mask > 0) {
     if (process_affinity_mask % 2)
-      CPU_SET(i, &mask);
-    i++;
+      CPU_SET(cpu, &mask);
+    cpu++;
     process_affinity_mask >>= 1;
   }
   sched_setaffinity(0, sizeof(mask), &mask);
