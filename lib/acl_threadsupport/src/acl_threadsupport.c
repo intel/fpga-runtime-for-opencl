@@ -386,7 +386,7 @@ void acl_release_condvar(struct acl_condvar_s *C) {
 // value otherwise.
 int acl_timed_wait_condvar(struct acl_condvar_s *C, unsigned timeout_period) {
   int my_entry_q;
-  int timed_out = 0;
+  unsigned int timed_out = 0;
   if (!C)
     return -1;
 
@@ -449,7 +449,7 @@ int acl_timed_wait_condvar(struct acl_condvar_s *C, unsigned timeout_period) {
   }
 
   // Still have the waiter mutex!
-  return timed_out;
+  return (int)timed_out;
 }
 
 // Wait on the condition variable, then release the mutex.
