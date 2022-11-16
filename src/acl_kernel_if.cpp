@@ -1052,6 +1052,14 @@ int acl_kernel_if_post_pll_config_init(acl_kernel_if *kern) {
       // Register addresses are pushed back since previous versions
       // doesn't have the start register
       kern->cra_address_offset = 0;
+    } else {
+      // In case an old CSR version is queried before we program our new aocx,
+      // make sure the offset is set correctly when we query the correct CSR
+      // aocx from the newly compile aocx. Old CSR versions may be queried since
+      // users may trigger context creation whenever they try to query device
+      // info, which would lead to reading the CSR before programming the actual
+      // aocx and it would read from the default aocx provided by the BSP.
+      kern->cra_address_offset = 8;
     }
   } else {
     kern->csr_version = 0;
