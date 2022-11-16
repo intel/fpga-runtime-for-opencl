@@ -409,6 +409,9 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
     break;
 
   case ACL_ARG_ADDR_NONE:
+    if (arg_value == NULL) {
+      ERR_RET(CL_INVALID_ARG_VALUE, context, "Argument value is NULL");
+    }
     if (is_sampler && arg_value != 0 &&
         acl_sampler_is_valid_ptr(*((cl_sampler *)arg_value))) {
       if (arg_size != sizeof(cl_sampler)) {
@@ -424,9 +427,6 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
       is_pipe = CL_TRUE;
     } else if (arg_size != arg_info->size) {
       ERR_RET(CL_INVALID_ARG_SIZE, context, "Argument size is the wrong size");
-    }
-    if (arg_value == 0) {
-      ERR_RET(CL_INVALID_ARG_VALUE, context, "Argument value is NULL");
     }
     break;
   }
