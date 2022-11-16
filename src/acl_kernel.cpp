@@ -436,6 +436,7 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
   // shouldn't spend time setting up the argument properly.
   if (is_pipe) {
     cl_mem pipe_ptr = *((cl_mem *)arg_value);
+    assert(pipe_ptr != NULL);
 
     kernel->arg_is_svm[arg_index] = CL_FALSE;
     kernel->arg_is_ptr[arg_index] = CL_FALSE;
