@@ -614,6 +614,7 @@ CL_API_ENTRY cl_int CL_API_CALL clGetProfileDataDeviceIntelFPGA(
                                            "autorun kernel profiling enabled";
       ERR_RET(status, program->context, message);
     }
+    assert(accel_def != NULL);
 
     // use autodiscovery info to find out how many words will be read from the
     // profiler
