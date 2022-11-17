@@ -640,6 +640,8 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgIntelFPGA(cl_kernel kernel,
         kernel->arg_is_ptr[arg_index] = CL_FALSE;
       } else if (is_sampler) {
         cl_sampler sampler = *(cl_sampler *)arg_value;
+        assert(sampler != NULL);
+
         int sampler_bitfield = 0;
 
         sampler_bitfield = 0;
