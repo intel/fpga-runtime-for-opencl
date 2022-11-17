@@ -267,14 +267,14 @@ AOCL_MMD_CALL int aocl_mmd_read(int handle, aocl_mmd_op_t op, size_t len,
     fprintf(stderr, "Error: Not handling read of 0x%x in unit test\n",
             (unsigned int)offset);
     return -1;
-  case OFFSET_CONFIGURATION_ROM:
-    if (strlen(config_str) <= len) {
-      memcpy(dst, (void *)config_str, len);
-      return 0;
-    } else {
+  case OFFSET_CONFIGURATION_ROM: {
+    const size_t config_len = strlen(config_str);
+    if (!(config_len < len)) {
       return -1;
     }
-    break;
+    memcpy(dst, config_str, config_len + 1);
+    return 0;
+  }
   case OFFSET_COUNTER:
     fprintf(stderr, "Error: Not handling read of 0x%x in unit test\n",
             (unsigned int)offset);
