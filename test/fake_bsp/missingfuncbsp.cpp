@@ -44,7 +44,7 @@ typedef enum {
   }
 #define RESULT_STR(X)                                                          \
   do {                                                                         \
-    size_t Xlen = strnlen(X, MAX_NAME_SIZE) + 1;                               \
+    size_t Xlen = strlen(X) + 1;                                               \
     memcpy((void *)param_value, X,                                             \
            (param_value_size <= Xlen) ? param_value_size : Xlen);              \
     if (param_size_ret)                                                        \
@@ -268,7 +268,7 @@ AOCL_MMD_CALL int aocl_mmd_read(int handle, aocl_mmd_op_t op, size_t len,
             (unsigned int)offset);
     return -1;
   case OFFSET_CONFIGURATION_ROM:
-    if (strnlen(config_str, MAX_NAME_SIZE) <= len) {
+    if (strlen(config_str) <= len) {
       memcpy(dst, (void *)config_str, len);
       return 0;
     } else {
