@@ -997,6 +997,12 @@ MT_TEST(acl_kernel, set_kernel_arg) {
       clSetKernelArg(kernel, 4, sizeof(cl_mem),
                      &src_mem)); // can pass mem object to __constant arg
 
+  // Invalid null arg.
+  CHECK_EQUAL(
+      CL_INVALID_ARG_VALUE,
+      clSetKernelArg(kernel, 1, sizeof(cl_mem),
+                     nullptr)); // cannot pass NULL ARG as a non-memory type
+
   // Check that we can set a pipe argument
   // At the moment we don't do anything with the pipe argument, so we
   // just want to make sure that if we create a pipe and pass it to a
