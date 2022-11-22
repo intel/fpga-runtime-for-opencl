@@ -145,6 +145,7 @@ CL_API_ENTRY void *CL_API_CALL clSVMAllocIntelFPGA(cl_context context,
 #endif // SYSTEM_SVM
   svm_entry = context->svm_list;
   context->svm_list = (acl_svm_entry_t *)malloc(sizeof(acl_svm_entry_t));
+  assert(context->svm_list);
 
   context->svm_list->next = svm_entry;
   if (flags & CL_MEM_READ_ONLY) {
