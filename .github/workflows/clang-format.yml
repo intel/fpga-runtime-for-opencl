@@ -3,14 +3,9 @@
 
 # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
 
-name: run clang-format
+name: clang-format
 
-# https://github.blog/changelog/2021-04-20-github-actions-control-permissions-for-github_token/
 permissions:
-  # Grant read permissions to repository in case it is not a forked public
-  # repository, but a private repository that was created manually.
-  contents: read
-
   # Grant read permissions to private container images.
   packages: read
 
@@ -36,7 +31,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     container:
-      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-clang:main
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-22.04-dev:main
 
     steps:
       - name: checkout code
