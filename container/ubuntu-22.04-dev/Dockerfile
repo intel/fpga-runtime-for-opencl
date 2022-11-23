@@ -25,6 +25,7 @@ RUN apt-get -y update \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   build-essential \
   ca-certificates \
+  ccache \
   clang-format-13 \
   cmake \
   curl \
