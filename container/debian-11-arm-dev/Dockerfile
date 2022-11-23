@@ -21,6 +21,7 @@ RUN dpkg --add-architecture armhf \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   build-essential \
   ca-certificates \
+  ccache \
   cmake \
   curl \
   git \
