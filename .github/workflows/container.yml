@@ -40,7 +40,6 @@ on:
       - 'container/opensuse-leap-15-dev/**'
       - 'container/ubuntu-18.04-dev/**'
       - 'container/ubuntu-20.04-dev/**'
-      - 'container/ubuntu-20.04-clang/**'
       - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
 
@@ -53,7 +52,6 @@ on:
       - 'container/opensuse-leap-15-dev/**'
       - 'container/ubuntu-18.04-dev/**'
       - 'container/ubuntu-20.04-dev/**'
-      - 'container/ubuntu-20.04-clang/**'
       - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
 
@@ -75,7 +73,6 @@ jobs:
           - opensuse-leap-15-dev
           - ubuntu-18.04-dev
           - ubuntu-20.04-dev
-          - ubuntu-20.04-clang
           - ubuntu-22.04-dev
 
     env:
