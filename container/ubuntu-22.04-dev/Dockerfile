@@ -25,6 +25,7 @@ RUN apt-get -y update \
   && DEBIAN_FRONTEND=noninteractive apt-get -y dist-upgrade \
   build-essential \
   ca-certificates \
+  clang-format-13 \
   cmake \
   curl \
   git \
@@ -45,5 +46,6 @@ RUN apt-get -y update \
 USER build
 WORKDIR /home/build
 
-ENV PATH="/opt/aocl/hld/bin:$PATH"
+ENV PATH="/opt/aocl/hld/bin:/usr/lib/llvm-13/bin:$PATH"
 RUN aoc -version
+RUN clang-format --version
