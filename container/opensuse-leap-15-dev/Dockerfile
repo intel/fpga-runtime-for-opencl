@@ -17,6 +17,7 @@ COPY scripts/. ./
 
 RUN zypper -n update \
   && zypper -n install \
+  ccache \
   cmake \
   curl \
   gcc \
