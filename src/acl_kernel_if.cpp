@@ -725,8 +725,8 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   if (use_offline_only == ACL_CONTEXT_MPSIM) {
     std::string err_msg;
     auto parse_result = acl_load_device_def_from_str(
-        std::string(acl_shipped_board_cfgs[1]),
-        sysdef->device[0].autodiscovery_def, err_msg);
+        acl_shipped_board_cfgs[0].cfg, sysdef->device[0].autodiscovery_def,
+        err_msg);
     // Fill in definition for all device global memory
     // Simulator does not have any global memory interface information until the
     // actual aocx is loaded. (Note this is only a problem for simulator not
