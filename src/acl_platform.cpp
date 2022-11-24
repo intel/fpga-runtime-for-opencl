@@ -3,9 +3,11 @@
 
 // System headers.
 #include <assert.h>
+#include <optional>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -68,8 +70,7 @@ cl_platform_id acl_get_platform() { return &acl_platform; }
 // Static global copies of shipped board definitions.
 // Need either this storage, or a way to deep copy the accelerator
 // definitions.
-static acl_system_def_t shipped_board_def[ACL_MAX_DEVICE];
-static int shipped_board_def_valid[ACL_MAX_DEVICE + 1];
+static std::vector<std::optional<acl_system_def_t>> shipped_board_defs;
 
 //////////////////////////////
 // Local functions.
@@ -569,8 +570,6 @@ static void l_show_devs(const char *prefix) {
 }
 
 static void l_initialize_offline_devices(int offline_mode) {
-  unsigned i = 0;
-
   acl_platform.global_mem.range.begin = 0;
   acl_platform.global_mem.range.next = 0;
 
@@ -579,38 +578,37 @@ static void l_initialize_offline_devices(int offline_mode) {
   //
   // See acl_shipped_board_cfgs.h which is generated via the
   // board_cfgs makefile target.
-  // It's an array of strings where index 2k is board name, and 2k+1 is
-  // the auto configuration string.
-  // The array always terminates with two NULLs.
-  for (i = 0; i < ACL_MAX_DEVICE + 1; i++)
-    shipped_board_def_valid[i] = 0;
-
-  for (i = 0; i < ACL_MAX_DEVICE &&
-              2 * i < sizeof(acl_shipped_board_cfgs) / sizeof(const char *);
-       i++) {
+  // It's an array of shipped_board_cfg struct where name is board name, and
+  // board_cfgs is the auto configuration string.
+  shipped_board_defs.clear();
+  for (const auto &board_cfg : acl_shipped_board_cfgs) {
     // This is always different storage.
     // We need this because l_add_device will just pointer-copy the
     // acl_device_def_t.
-    if (!acl_shipped_board_cfgs[2 * i] || !acl_shipped_board_cfgs[2 * i + 1])
-      break; // No more entries
-    const std::string board_cfg{acl_shipped_board_cfgs[2 * i + 1]};
+    auto &board_def = shipped_board_defs.emplace_back();
+    board_def.emplace();
     std::string err_msg;
-    shipped_board_def_valid[i] = acl_load_device_def_from_str(
-        board_cfg, shipped_board_def[i].device[0].autodiscovery_def, err_msg);
-    if (shipped_board_def_valid[i])
-      shipped_board_def[i].num_devices = 1;
+    if (!acl_load_device_def_from_str(
+            board_cfg.cfg, board_def->device[0].autodiscovery_def, err_msg)) {
+      board_def.reset();
+      continue;
+    }
+    board_def->num_devices = 1;
   }
 
   if (offline_mode == ACL_CONTEXT_MPSIM) {
+    auto &board_def = shipped_board_defs.emplace_back();
+    board_def.emplace();
     std::string err_msg;
-    shipped_board_def_valid[i] = acl_load_device_def_from_str(
-        std::string(acl_shipped_board_cfgs[1]),
-        shipped_board_def[i].device[0].autodiscovery_def, err_msg);
-    if (shipped_board_def_valid[i])
-      shipped_board_def[i].num_devices = 1;
-    // Need to change the name here or before we send the string
-    shipped_board_def[i].device[0].autodiscovery_def.name =
-        ACL_MPSIM_DEVICE_NAME;
+    if (!acl_load_device_def_from_str(acl_shipped_board_cfgs[0].cfg,
+                                      board_def->device[0].autodiscovery_def,
+                                      err_msg)) {
+      board_def.reset();
+    } else {
+      board_def->num_devices = 1;
+      // Need to change the name here or before we send the string
+      board_def->device[0].autodiscovery_def.name = ACL_MPSIM_DEVICE_NAME;
+    }
   }
 
   if (!acl_platform.offline_device.empty()) {
@@ -624,27 +622,22 @@ static void l_initialize_offline_devices(int offline_mode) {
 
     // If the user specified an offline device, then load it.
     // Search the shipped board defs for the device:
-    for (i = 0;
-         i < ACL_MAX_DEVICE &&
-         2 * i < sizeof(acl_shipped_board_cfgs) / sizeof(const char *) + 1;
-         i++) {
-      int is_present = 0;
-      if (!shipped_board_def_valid[i])
+    for (const auto &board_def : shipped_board_defs) {
+      if (!board_def.has_value())
         continue;
       if (acl_platform.offline_device !=
-          shipped_board_def[i].device[0].autodiscovery_def.name)
+          board_def->device[0].autodiscovery_def.name)
         continue;
 
-      is_present = (offline_mode == ACL_CONTEXT_MPSIM);
+      const bool is_present = (offline_mode == ACL_CONTEXT_MPSIM);
       for (unsigned j = 0; j < board_count; j++) {
         // Bail if not present and we haven't been told to use absent devices
-        if (!is_present &&
-            acl_platform.offline_device !=
-                shipped_board_def[i].device[0].autodiscovery_def.name)
+        if (!is_present && acl_platform.offline_device !=
+                               board_def->device[0].autodiscovery_def.name)
           continue;
         // Add HW specific device definition
         acl_platform.device[device_index].def =
-            shipped_board_def[i].device[0]; // Struct Copy
+            board_def->device[0]; // Struct Copy
         acl_platform.device[device_index].present = is_present;
         device_index++;
       }
