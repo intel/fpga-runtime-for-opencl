@@ -1389,11 +1389,8 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
     }
 
     // Partially initialize the full path name.
-    strncpy(full_name, dir_name, FULL_NAME_LENGTH);
-
-    if (full_name[FULL_NAME_LENGTH - 1] != '\0') {
-      full_name[FULL_NAME_LENGTH - 1] = '\0';
-    }
+    strncpy(full_name, dir_name, FULL_NAME_LENGTH - 1);
+    full_name[FULL_NAME_LENGTH - 1] = '\0';
 
     full_name[name_length - 1] = '/';
 
@@ -1577,10 +1574,8 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
   ZInfo z_info;
   int ret;
 
-  strncpy(full_name, out_dir, FULL_NAME_LEN);
-  if (full_name[FULL_NAME_LEN - 1] != '\0') {
-    full_name[FULL_NAME_LEN - 1] = '\0';
-  }
+  strncpy(full_name, out_dir, FULL_NAME_LEN - 1);
+  full_name[FULL_NAME_LEN - 1] = '\0';
 
   // Initialize zlib.
   z_info.strm.zalloc = Z_NULL;
