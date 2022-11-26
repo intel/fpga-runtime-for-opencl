@@ -1551,6 +1551,32 @@ static int read_data(void *data, size_t size, ZInfo *z_info, FILE *in_fd) {
   return 1;
 }
 
+// Creates a world-readable directory named `path` and returns 0 if
+// successful or if the directory exists; otherwise, returns -1.
+static int create_dir(const char *path, char *err_buf, size_t err_bufsize) {
+#ifdef _WIN32
+  DWORD err;
+  if (CreateDirectory(path, NULL) == 0 &&
+      (err = GetLastError()) != ERROR_ALREADY_EXISTS) {
+    strncpy(err_buf, "unknown error", err_bufsize - 1);
+    err_buf[err_bufsize - 1] = '\0';
+    (void)FormatMessage(
+        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, err,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err_buf, err_bufsize, NULL);
+    return -1;
+  }
+#else
+  int err;
+  if (mkdir(path, 0755) != 0 && (err = errno) != EEXIST) {
+    strncpy(err_buf, "unknown error", err_bufsize - 1);
+    err_buf[err_bufsize - 1] = '\0';
+    (void)strerror_r(err, err_buf, err_bufsize);
+    return -1;
+  }
+#endif
+  return 0;
+}
+
 static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
                                          FILE *input, const char *out_dir,
                                          const char *routine_name) {
@@ -1597,12 +1623,15 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     return 0;
   }
 
-  // Create output directory (ignore any errors).
-#ifdef _WIN32
-  CreateDirectory(full_name, NULL);
-#else
-  mkdir(full_name, 0755);
-#endif
+  // Create output directory.
+  {
+    char err_buf[1024];
+    if (create_dir(full_name, err_buf, sizeof(err_buf)) != 0) {
+      fprintf(stderr, "%s: Failed to create directory %s: %s\n", routine_name,
+              full_name, err_buf);
+      return 0;
+    }
+  }
   full_name[out_dir_length] = '/';
 
   // Process the file until we hit the PACK_END record (or finish the
@@ -1645,11 +1674,12 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     }
 
     if (info.kind == PACK_DIR) {
-#ifdef _WIN32
-      CreateDirectory(full_name, NULL);
-#else
-      mkdir(full_name, 0755);
-#endif
+      char err_buf[1024];
+      if (create_dir(full_name, err_buf, sizeof(err_buf)) != 0) {
+        fprintf(stderr, "%s: Failed to create directory %s: %s\n", routine_name,
+                full_name, err_buf);
+        return 0;
+      }
     } else {
       // Read file contents
       FILE *out_file = fopen(full_name, "wb");
