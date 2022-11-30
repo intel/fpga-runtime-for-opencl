@@ -86,7 +86,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     // lot, this guarantees that the alignment will work for all devices. If the
     // min alignment of one device is greater that the max alignment of another,
     // an error will be generated during allocation.
-    for (const auto dev : devices) {
+    for (const auto &dev : devices) {
       alignment = std::max<cl_uint>(alignment,
                                     (cl_uint)dev->def.min_host_mem_alignment);
       same_device &= dev->def.autodiscovery_def.name ==
@@ -119,7 +119,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     properties += 2;
   }
 
-  for (const auto dev : devices) {
+  for (const auto &dev : devices) {
     if (!acl_usm_has_access_capability(dev,
                                        CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL)) {
       BAIL_INFO(
@@ -355,7 +355,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     devices = std::vector<cl_device_id>(context->device,
                                         context->device + context->num_devices);
   }
-  for (const auto dev : devices) {
+  for (const auto &dev : devices) {
     if (!acl_usm_has_access_capability(
             dev, CL_DEVICE_SINGLE_DEVICE_SHARED_MEM_CAPABILITIES_INTEL)) {
       BAIL_INFO(
@@ -1202,7 +1202,7 @@ void l_cl_mem_blocking_free(cl_context context, void *ptr) {
   for (int i = 0; i < num_command_queues; i++) {
     cl_command_queue current_cq = context->command_queue[i];
     // check events in commands
-    for (auto event : current_cq->commands) {
+    for (const auto &event : current_cq->commands) {
       if (event->execution_status != CL_COMPLETE) {
         // check if ptr is used by kernels when we submit to queue
         if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
@@ -1223,7 +1223,7 @@ void l_cl_mem_blocking_free(cl_context context, void *ptr) {
       }
     }
     // check events in inorder commands
-    for (auto event : current_cq->inorder_commands) {
+    for (const auto &event : current_cq->inorder_commands) {
       if (event->execution_status != CL_COMPLETE) {
         // check if ptr is used by kernels when we submit to queue
         if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
