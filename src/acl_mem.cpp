@@ -1521,6 +1521,10 @@ ACL_EXPORT CL_API_ENTRY cl_mem CL_API_CALL clCreateImageIntelFPGA(
     BAIL(local_errcode_ret);
   }
 
+  if (image_desc == NULL) {
+    BAIL_INFO(CL_INVALID_IMAGE_DESCRIPTOR, context, "image_desc is NULL");
+  }
+
   local_errcode_ret = clGetSupportedImageFormats(
       context, flags, image_desc->image_type, 0, NULL, &num_image_formats);
   if (local_errcode_ret != CL_SUCCESS) {
@@ -2060,8 +2064,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
         image->fields.image_objs.image_desc->image_width * src_element_size;
   }
 
-  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D &&
-      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY &&
+  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
       image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
     tmp_slice_pitch = tmp_row_pitch;
   } else {
@@ -2161,8 +2165,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
         image->fields.image_objs.image_desc->image_width * dst_element_size;
   }
 
-  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D &&
-      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY &&
+  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
       image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
     tmp_slice_pitch = tmp_row_pitch;
   } else {
@@ -2351,8 +2355,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
       region[0] *
       dst_element_size; // Width of each row of the memory that ptr points to.
 
-  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D &&
-      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY &&
+  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
       image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
     tmp_slice_pitch = tmp_row_pitch;
   } else {
@@ -2554,8 +2558,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyImageToBufferIntelFPGA(
 
   tmp_row_pitch =
       src_image->fields.image_objs.image_desc->image_width * src_element_size;
-  if (src_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D &&
-      src_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY &&
+  if (src_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      src_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
       src_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
     tmp_slice_pitch = tmp_row_pitch;
   } else {
@@ -2649,8 +2653,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueCopyBufferToImageIntelFPGA(
 
   tmp_row_pitch =
       dst_image->fields.image_objs.image_desc->image_width * dst_element_size;
-  if (dst_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D &&
-      dst_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY &&
+  if (dst_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      dst_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY ||
       dst_image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
     tmp_slice_pitch = tmp_row_pitch;
   } else {
@@ -2954,9 +2958,9 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapBufferIntelFPGA(
       ~(CL_MAP_READ | CL_MAP_WRITE | CL_MAP_WRITE_INVALIDATE_REGION)) {
     BAIL_INFO(CL_INVALID_VALUE, context, "Invalid or unsupported flags");
   }
-  if (((map_flags & CL_MAP_READ) &
+  if (((map_flags & CL_MAP_READ) &&
        (map_flags & CL_MAP_WRITE_INVALIDATE_REGION)) ||
-      ((map_flags & CL_MAP_WRITE) &
+      ((map_flags & CL_MAP_WRITE) &&
        (map_flags & CL_MAP_WRITE_INVALIDATE_REGION))) {
     BAIL_INFO(
         CL_INVALID_VALUE, context,
