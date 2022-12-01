@@ -2030,14 +2030,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadImageIntelFPGA(
             "Pointer argument cannot be NULL");
   }
 
-  if (image != NULL) {
-    src_element_size = acl_get_image_element_size(
-        image->context, image->fields.image_objs.image_format, &errcode_ret);
-    if (errcode_ret != CL_SUCCESS) {
-      return errcode_ret;
-    }
-  } else {
-    src_element_size = 0;
+  if (image == NULL) {
+    return CL_INVALID_MEM_OBJECT;
+  }
+
+  src_element_size = acl_get_image_element_size(
+      image->context, image->fields.image_objs.image_format, &errcode_ret);
+  if (errcode_ret != CL_SUCCESS) {
+    return errcode_ret;
   }
 
   tmp_src_offset[0] = origin[0];
@@ -2127,14 +2127,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteImageIntelFPGA(
   size_t dst_element_size;
   std::scoped_lock lock{acl_mutex_wrapper};
 
-  if (image != NULL) {
-    dst_element_size = acl_get_image_element_size(
-        image->context, image->fields.image_objs.image_format, &errcode_ret);
-    if (errcode_ret != CL_SUCCESS) {
-      return errcode_ret;
-    }
-  } else {
+  if (image == NULL) {
     return CL_INVALID_MEM_OBJECT;
+  }
+
+  dst_element_size = acl_get_image_element_size(
+      image->context, image->fields.image_objs.image_format, &errcode_ret);
+  if (errcode_ret != CL_SUCCESS) {
+    return errcode_ret;
   }
 
   if (!acl_command_queue_is_valid(command_queue)) {
@@ -2231,14 +2231,14 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueFillImageIntelFPGA(
   cl_event tmp_event;
   std::scoped_lock lock{acl_mutex_wrapper};
 
-  if (image != NULL) {
-    dst_element_size = acl_get_image_element_size(
-        image->context, image->fields.image_objs.image_format, &errcode_ret);
-    if (errcode_ret != CL_SUCCESS) {
-      return errcode_ret;
-    }
-  } else {
+  if (image == NULL) {
     return CL_INVALID_MEM_OBJECT;
+  }
+
+  dst_element_size = acl_get_image_element_size(
+      image->context, image->fields.image_objs.image_format, &errcode_ret);
+  if (errcode_ret != CL_SUCCESS) {
+    return errcode_ret;
   }
 
   if (!acl_command_queue_is_valid(command_queue)) {
@@ -2710,7 +2710,7 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
   cl_int status;
   size_t element_size;
   size_t tmp_row_pitch;
-  size_t tmp_slice_pitch;
+  size_t tmp_slice_pitch = 0;
   std::scoped_lock lock{acl_mutex_wrapper};
 
   if (image != NULL) {
@@ -2771,19 +2771,22 @@ CL_API_ENTRY void *CL_API_CALL clEnqueueMapImageIntelFPGA(
       image_slice_pitch == NULL) {
     BAIL_INFO(CL_INVALID_VALUE, command_queue->context,
               "Invalid slice pitch provided");
-  } else {
-    if (image->mem_object_type == CL_MEM_OBJECT_IMAGE2D ||
-        image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
-        image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
-      if (image_slice_pitch != NULL) {
-        *image_slice_pitch = 0;
-      }
-    } else if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY) {
-      *image_slice_pitch = tmp_row_pitch;
-    } else {
-      *image_slice_pitch =
-          image->fields.image_objs.image_desc->image_height * tmp_row_pitch;
+  }
+
+  if (image->mem_object_type == CL_MEM_OBJECT_IMAGE2D ||
+      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D ||
+      image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_BUFFER) {
+    if (image_slice_pitch != NULL) {
+      *image_slice_pitch = 0;
     }
+  } else if (image->mem_object_type == CL_MEM_OBJECT_IMAGE1D_ARRAY) {
+    *image_slice_pitch = tmp_row_pitch;
+  } else {
+    *image_slice_pitch =
+        image->fields.image_objs.image_desc->image_height * tmp_row_pitch;
+  }
+
+  if (image_slice_pitch != NULL) {
     tmp_slice_pitch = *image_slice_pitch;
   }
 
@@ -6824,12 +6827,12 @@ static void acl_dump_mem_internal(cl_mem mem) {
              (mem->block_allocation->region->uses_host_system_malloc
                   ? "is malloc"
                   : "not malloc"));
+      printf("              .begin             %p\n",
+             mem->block_allocation->range.begin);
+      printf("              .end               %p\n",
+             mem->block_allocation->range.next);
     }
     printf("              .mappings          %d\n", mem->mapping_count);
-    printf("              .begin             %p\n",
-           mem->block_allocation->range.begin);
-    printf("              .end               %p\n",
-           mem->block_allocation->range.next);
     acl_print_debug_msg("              .size              %lu\n", mem->size);
     printf("              .host_ptr          %p\n",
            mem->fields.buffer_objs.host_ptr);
