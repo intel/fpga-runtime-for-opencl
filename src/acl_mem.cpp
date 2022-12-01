@@ -4069,7 +4069,6 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
   cl_event local_event = 0;
   unsigned int physical_id;
   unsigned int mem_id;
-  int *needs_release_on_fail;
 
   std::scoped_lock lock{acl_mutex_wrapper};
 
@@ -4114,10 +4113,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
 
   // Try to reserve space for all the buffers to be moved. If we fail, we need
   // to know which buffers to deallocate:
-  needs_release_on_fail = (int *)malloc(sizeof(int) * num_mem_objects);
-  for (i = 0; i < num_mem_objects; ++i) {
-    needs_release_on_fail[i] = 0;
-  }
+  std::vector<bool> needs_release_on_fail(num_mem_objects, false);
 
   status = CL_SUCCESS;
   for (i = 0; i < num_mem_objects; ++i) {
@@ -4132,7 +4128,7 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
         status = CL_MEM_OBJECT_ALLOCATION_FAILURE;
         break;
       }
-      needs_release_on_fail[i] = 1;
+      needs_release_on_fail[i] = true;
     }
     mem_objects[i]->reserved_allocations_count[physical_id][mem_id]++;
   }
@@ -4148,7 +4144,6 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
       }
       mem_objects[i]->reserved_allocations_count[physical_id][mem_id]--;
     }
-    free(needs_release_on_fail);
     return status;
   }
 
@@ -4159,7 +4154,6 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
                        CL_COMMAND_MIGRATE_MEM_OBJECTS, &local_event);
 
   if (status != CL_SUCCESS) {
-    free(needs_release_on_fail);
     return status; // already signalled callback
   }
 
@@ -4204,8 +4198,6 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
     clReleaseEvent(local_event);
     acl_idle_update(command_queue->context); // Clean up early
   }
-
-  free(needs_release_on_fail);
 
   return CL_SUCCESS;
 }
