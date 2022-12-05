@@ -1661,6 +1661,7 @@ static cl_int l_enqueue_kernel_with_type(
   acl_dev_kernel_invocation_image_t *invocation = 0;
   cl_context context;
   acl_mem_migrate_t memory_migration;
+  memory_migration.num_mem_objects = 0;
   cl_int status = CL_SUCCESS;
   int serialization_needed = 0;
   acl_assert_locked();
