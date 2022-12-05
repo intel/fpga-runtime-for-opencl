@@ -3,6 +3,7 @@
 
 // System headers.
 #include <cassert>
+#include <cinttypes>
 #include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
@@ -247,7 +248,7 @@ static int get_auto_discovery_string(acl_kernel_if *kern, char *config_str) {
     kern->io.printf("  HAL Kern: Version ID incorrect\n");
     return -1;
   }
-  ACL_KERNEL_IF_DEBUG_MSG(kern, "Read %d bytes from kernel auto discovery", r);
+  ACL_KERNEL_IF_DEBUG_MSG(kern, "Read %zu bytes from kernel auto discovery", r);
 
   return (r == rom_size) ? 0 : -1;
 }
@@ -288,8 +289,8 @@ static int acl_kernel_if_read_32b(acl_kernel_if *kern, unsigned int addr,
   r = kern->io.read(&kern->io, (dev_addr_t)addr, (char *)val, (size_t)size);
   if (r < size) {
     kern->io.printf(
-        "HAL Kern Error: Read failed from addr %x, read %d expected %d\n", addr,
-        r, size);
+        "HAL Kern Error: Read failed from addr %x, read %zu expected %zu\n",
+        addr, r, size);
     return -1;
   }
   return 0;
@@ -334,8 +335,8 @@ static int acl_kernel_rom_read_block(acl_kernel_if *kern, unsigned int addr,
   r = kern->io.read(&kern->io, (dev_addr_t)addr, config_rom, (size_t)size);
   if (r < size) {
     kern->io.printf(
-        "HAL Kern Error: Read failed from addr %x, read %d expected %d\n", addr,
-        r, size);
+        "HAL Kern Error: Read failed from addr %x, read %zu expected %zu\n",
+        addr, r, size);
     return -1;
   }
   return 0;
@@ -381,9 +382,10 @@ static int acl_kernel_if_write_64b(acl_kernel_if *kern, unsigned int addr,
   r = (int)kern->io.write(&kern->io, (dev_addr_t)addr, (char *)&val,
                           (size_t)size);
   if (r < size) {
-    kern->io.printf("HAL Kern Error: Write failed to addr %x with value %x, "
-                    "wrote %d, expected %d\n",
-                    addr, val, r, size);
+    kern->io.printf(
+        "HAL Kern Error: Write failed to addr %x with value %" PRIx64 ", "
+        "wrote %d, expected %d\n",
+        addr, val, r, size);
     return -1;
   }
   return 0;
@@ -423,8 +425,8 @@ static int acl_kernel_if_write_block(acl_kernel_if *kern, unsigned int addr,
 
   if (r < aligned_size) {
     kern->io.printf("HAL Kern Error: Write failed to addr %x with value %x, "
-                    "wrote %d expected %d\n",
-                    addr, val, r, aligned_size);
+                    "wrote %zu expected %zu\n",
+                    addr, *val, r, aligned_size);
     return -1;
   }
   return 0;
@@ -930,10 +932,10 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
           OFFSET_KERNEL_CRA + devdef.hal_info[ii].csr.address;
       kern->accel_csr[ii].bytes = devdef.hal_info[ii].csr.num_bytes;
 
-      ACL_KERNEL_IF_DEBUG_MSG(kern, "Kernel_%s CSR { 0x%08x, 0x%08x }\n",
-                              devdef.accel[ii].iface.name.c_str(),
-                              kern->accel_csr[ii].address,
-                              kern->accel_csr[ii].bytes);
+      ACL_KERNEL_IF_DEBUG_MSG(
+          kern, "Kernel_%s CSR { 0x%08" PRIxPTR ", 0x%08" PRIxPTR " }\n",
+          devdef.accel[ii].iface.name.c_str(), kern->accel_csr[ii].address,
+          kern->accel_csr[ii].bytes);
     }
 
     // The Kernel performance monitor registers
@@ -942,10 +944,10 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
           OFFSET_KERNEL_CRA + devdef.hal_info[ii].perf_mon.address;
       kern->accel_perf_mon[ii].bytes = devdef.hal_info[ii].perf_mon.num_bytes;
 
-      ACL_KERNEL_IF_DEBUG_MSG(kern, "Kernel_%s perf_mon { 0x%08x, 0x%08x }\n",
-                              devdef.accel[ii].iface.name.c_str(),
-                              kern->accel_perf_mon[ii].address,
-                              kern->accel_perf_mon[ii].bytes);
+      ACL_KERNEL_IF_DEBUG_MSG(
+          kern, "Kernel_%s perf_mon { 0x%08" PRIxPTR ", 0x%08" PRIxPTR " }\n",
+          devdef.accel[ii].iface.name.c_str(), kern->accel_perf_mon[ii].address,
+          kern->accel_perf_mon[ii].bytes);
 
       // printf info
       kern->accel_num_printfs[ii] =
@@ -1056,7 +1058,7 @@ int acl_kernel_if_post_pll_config_init(acl_kernel_if *kern) {
     kern->csr_version = version;
     ACL_KERNEL_IF_DEBUG_MSG(kern,
                             "Read CSR version from kernel 0: Version = %u\n",
-                            kern->csr_version);
+                            kern->csr_version.value());
     if (kern->csr_version < 5) {
       // Register addresses are pushed back since previous versions
       // doesn't have the start register
@@ -1190,7 +1192,7 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
     kern->io.printf("      currently in use, OR\n");
     kern->io.printf("   b) The host can not communicate properly with the "
                     "compiled kernel.\n");
-    kern->io.printf("Saw version=%u, expected=%u.\n", kern->csr_version,
+    kern->io.printf("Saw version=%u, expected=%u.\n", kern->csr_version.value(),
                     CSR_VERSION_ID);
     assert(0); // Assert here because no way to pass an error up to the user.
                // clEnqueue has already returned.
@@ -1885,7 +1887,7 @@ int acl_kernel_if_get_profile_data(acl_kernel_if *kern, cl_uint accel_id,
       data[i] = acl_kernel_if_get_profile_data_word(kern, accel_id);
       ACL_KERNEL_IF_DEBUG_MSG(kern,
                               ":: Read profile hardware:: Accelerator %d "
-                              "profile_data word [%u] is 0x%016llx.\n",
+                              "profile_data word [%" PRIu64 "] is 0x%016llx.\n",
                               accel_id, i, data[i]);
     }
 
