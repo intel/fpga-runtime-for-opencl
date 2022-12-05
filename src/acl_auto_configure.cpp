@@ -724,14 +724,12 @@ static bool read_accel_defs(const std::string &config_str,
     accel[i].mem.next = reinterpret_cast<void *>(0x00020000);
 
     int total_fields_kernel = 0;
-    if (result) {
-      result = read_int_counters(config_str, curr_pos, total_fields_kernel,
-                                 counters);
-    }
+    result = result && read_int_counters(config_str, curr_pos,
+                                         total_fields_kernel, counters);
     counters.emplace_back(total_fields_kernel);
 
-    result =
-        read_string_counters(config_str, curr_pos, hal_info[i].name, counters);
+    result = result && read_string_counters(config_str, curr_pos,
+                                            hal_info[i].name, counters);
 
     if (!result)
       break;
