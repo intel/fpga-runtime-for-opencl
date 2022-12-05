@@ -453,8 +453,6 @@ static uintptr_t acl_kernel_cra_set_segment(acl_kernel_if *kern,
     acl_kernel_if_write_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
                             (unsigned int)segment);
     kern->cur_segment = segment;
-    acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
-                           (unsigned int *)&segment);
   }
 
   return segment_offset;
@@ -470,8 +468,6 @@ static uintptr_t acl_kernel_cra_set_segment_rom(acl_kernel_if *kern,
     acl_kernel_if_write_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
                             (unsigned int)segment);
     kern->cur_segment = segment;
-    acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
-                           (unsigned int *)&segment);
   }
 
   return segment_offset;
@@ -1613,8 +1609,6 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
     acl_kernel_if_write_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
                             (unsigned int)segment_pre_irq);
     kern->cur_segment = segment_pre_irq;
-    acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
-                           (unsigned int *)&segment_pre_irq);
   }
 }
 
