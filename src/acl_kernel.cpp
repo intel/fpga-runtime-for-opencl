@@ -1843,7 +1843,7 @@ static cl_int l_enqueue_kernel_with_type(
     for (idim = 0; idim < work_dim; idim++) {
       unsigned int kernel_max_global_work_dim;
       size_t kernel_compile_work_group_size_idim;
-      acl_print_debug_msg(" local work size[%d] = %d\n", idim,
+      acl_print_debug_msg(" local work size[%d] = %zu\n", idim,
                           local_work_size[idim]);
       // If the work group size was specified in the kernel source, then
       // it must match the passed-in size. If the kernel is workgroup invariant,
