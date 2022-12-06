@@ -2270,6 +2270,65 @@ MT_TEST(acl_mem, read_write_image) {
   size_t origin[3];
   size_t region[3];
 
+  // 1D Image
+  {
+    cl_image_format image_format_1D = {CL_R, CL_FLOAT};
+    cl_image_desc image_desc_1D = {
+        CL_MEM_OBJECT_IMAGE1D, width, 0, 0, 0, 0, 0, 0, 0, {NULL}};
+    image1 = clCreateImage(m_context, 0, &image_format_1D, &image_desc_1D, 0,
+                           &status);
+    CHECK_EQUAL(CL_SUCCESS, status);
+    image2 = clCreateImage(m_context, 0, &image_format_1D, &image_desc_1D, 0,
+                           &status);
+    CHECK_EQUAL(CL_SUCCESS, status);
+
+    origin[0] = 0;
+    origin[1] = 0;
+    origin[2] = 0;
+
+    region[0] = width;
+    region[1] = 1;
+    region[2] = 1;
+
+    input_ptr = (float *)acl_malloc(sizeof(float) * (width));
+    CHECK(input_ptr != 0);
+    output_ptr = (float *)acl_malloc(sizeof(float) * (width));
+    CHECK(output_ptr != 0);
+    for (size_t row = 0; row < width; ++row) {
+      input_ptr[row] = (float)row + (float)1.5;
+      output_ptr[row] = 0.0;
+    }
+
+    status = clEnqueueWriteImage(m_cq, image1, CL_TRUE, origin, region, 0, 0,
+                                 input_ptr, 0, NULL, NULL);
+    CHECK_EQUAL(CL_SUCCESS, status);
+
+    buffer1 = clCreateBuffer(m_context, 0, sizeof(float) * width, 0, &status);
+    CHECK_EQUAL(CL_SUCCESS, status);
+
+    // Copy from 1D image to buffer
+    status = clEnqueueCopyImageToBuffer(m_cq, image1, buffer1, origin, region,
+                                        0, 0, NULL, NULL);
+    CHECK_EQUAL(CL_SUCCESS, status);
+    status = clEnqueueCopyBufferToImage(m_cq, buffer1, image2, 0, origin,
+                                        region, 0, NULL, NULL);
+    CHECK_EQUAL(CL_SUCCESS, status);
+    status = clEnqueueReadImage(m_cq, image2, CL_TRUE, origin, region, 0, 0,
+                                output_ptr, 0, NULL, NULL);
+    CHECK_EQUAL(CL_SUCCESS, status);
+
+    // Compare contents of first pointer with second pointer
+    for (size_t row = 0; row < width; ++row) {
+      CHECK(input_ptr[row] == output_ptr[row]);
+    }
+
+    CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(image1));
+    CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(image2));
+    CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(buffer1));
+    acl_free(input_ptr);
+    acl_free(output_ptr);
+  }
+
   // 2D Image
   cl_image_format image_format = {CL_R, CL_FLOAT};
   cl_image_desc image_desc = {
