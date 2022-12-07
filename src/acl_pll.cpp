@@ -179,7 +179,7 @@ static int _acl_pll_read(acl_pll *pll, dev_addr_t addr, unsigned int *val) {
   size_t size = sizeof(unsigned int);
   size_t r = pll->io.read(&pll->io, addr, (char *)val, size);
   if (r < size) {
-    pll->io.printf("PLL Error: Read failed, %d bytes read, %d expected\n", r,
+    pll->io.printf("PLL Error: Read failed, %zu bytes read, %zu expected\n", r,
                    size);
     return -1;
   }
@@ -192,7 +192,7 @@ static int _acl_pll_write(acl_pll *pll, unsigned int addr, unsigned int val) {
   size_t size = sizeof(unsigned int);
   size_t r = pll->io.write(&pll->io, (dev_addr_t)addr, (char *)&val, size);
   if (r < size) {
-    pll->io.printf("PLL Error: Write failed, %d bytes written, %d expected\n",
+    pll->io.printf("PLL Error: Write failed, %zu bytes written, %zu expected\n",
                    r, size);
     return -1;
   }
