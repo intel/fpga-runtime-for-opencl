@@ -209,8 +209,11 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     RESULT_INT(0);
     break;
   case CL_DEVICE_GLOBAL_MEM_SIZE: {
-    auto gmem_id =
-        static_cast<size_t>(acl_get_default_device_global_memory(device->def));
+    auto gmem_id = acl_get_default_device_global_memory(device->def);
+    if (gmem_id < 0) {
+      RESULT_INT(0);
+      break;
+    }
     cl_ulong size =
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range());
@@ -255,8 +258,11 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     // However conformance_test_api min_max_constant_buffer_size
     // expects to allocate two buffers of the size we say here.
     // So be a shade conservative and cut it down by 4.
-    auto gmem_id =
-        static_cast<size_t>(acl_get_default_device_global_memory(device->def));
+    auto gmem_id = acl_get_default_device_global_memory(device->def);
+    if (gmem_id < 0) {
+      RESULT_INT(0);
+      break;
+    }
     cl_ulong size =
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range()) /
@@ -268,8 +274,11 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     RESULT_ULONG(size);
   } break;
   case CL_DEVICE_MAX_MEM_ALLOC_SIZE: {
-    auto gmem_id =
-        static_cast<size_t>(acl_get_default_device_global_memory(device->def));
+    auto gmem_id = acl_get_default_device_global_memory(device->def);
+    if (gmem_id < 0) {
+      RESULT_INT(0);
+      break;
+    }
     cl_ulong size =
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range());
