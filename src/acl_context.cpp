@@ -1202,7 +1202,7 @@ void acl_idle_update(cl_context context) {
   // firstly update the current context
   acl_update_context(context);
   // update the other contexts from the platform
-  for (auto _context : acl_platform.contexts_set) {
+  for (const cl_context _context : acl_platform.contexts_set) {
     if (context != _context)
       acl_update_context(_context);
   }
