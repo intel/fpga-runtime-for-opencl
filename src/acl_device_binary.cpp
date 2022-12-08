@@ -17,6 +17,7 @@
 #include <acl_device_binary.h>
 #include <acl_globals.h>
 #include <acl_hal.h>
+#include <acl_kernel.h>
 #include <acl_support.h>
 #include <acl_util.h>
 
@@ -262,8 +263,13 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
     AND_CHECK(acl_pkg_read_section(pkg, ".acl.rand_hash", pkg_rand_hash.data(),
                                    data_len + 1),
               CL_INVALID_BINARY, FAILREAD_MSG " (rand_hash)");
+    // Note that we use dev_prog->device when checking for device global
+    // Having the same binary suggest that the aocx on the device currently is
+    // the same as the aocx used to create program, so we can peek the device
+    // global setup now instead of later after acl_load_device_def_from_str
     if (dev_prog->device->def.autodiscovery_def.binary_rand_hash ==
-        std::string(pkg_rand_hash.data())) {
+            std::string(pkg_rand_hash.data()) &&
+        (!acl_device_has_reprogram_device_globals(dev_prog->device))) {
       dev_prog->device->last_bin = this;
       dev_prog->device->loaded_bin = this;
     }
