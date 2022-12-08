@@ -3011,6 +3011,18 @@ int acl_kernel_has_unmapped_subbuffers(acl_mem_migrate_t *mem_migration) {
   return 0;
 }
 
+bool acl_device_has_reprogram_device_globals(cl_device_id device) {
+  const auto &device_global_mem_defs =
+      device->def.autodiscovery_def.device_global_mem_defs;
+  return device_global_mem_defs.end() !=
+         std::find_if(device_global_mem_defs.begin(),
+                      device_global_mem_defs.end(),
+                      [](const auto &name_and_def) {
+                        return name_and_def.second.init_mode ==
+                               ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM;
+                      });
+}
+
 int acl_submit_kernel_device_op(cl_event event) {
   // No user-level scheduling blocks this kernel enqueue from running.
   // So submit it to the device op queue.
@@ -3049,15 +3061,18 @@ int acl_submit_kernel_device_op(cl_event event) {
     need_reprogram =
         device->last_bin->get_devdef().autodiscovery_def.binary_rand_hash !=
         dev_bin->get_devdef().autodiscovery_def.binary_rand_hash;
-  } else {
-    // compare hash of program that is on the device and the program required by
-    // kernel
+  } else if (!acl_device_has_reprogram_device_globals(device)) {
+    // last_bin is null suggests there is no reprograms scheduled at this
+    // point so if the target device contains device global with reprogram
+    // init mode we force a reprogram, otherwise check random hash
+    // compare hash of program that is on the device and the program
+    // required by kernel
     need_reprogram = device->def.autodiscovery_def.binary_rand_hash !=
                      dev_bin->get_devdef().autodiscovery_def.binary_rand_hash;
   }
 
+  // Always reprogram in split kernel mode. This is a temporary workaround.
   if (event->context->split_kernel) {
-    // Always reprogram in split kernel mode. This is a temporary workaround.
     need_reprogram = true;
   }
 

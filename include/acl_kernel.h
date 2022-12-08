@@ -54,6 +54,13 @@ void acl_receive_kernel_update(int activation_id, cl_int status);
 // safe to submit a kernel with subbuffers to the device_op_queue
 int acl_kernel_has_unmapped_subbuffers(acl_mem_migrate_t *mem_migration);
 
+// Checks if the program currently loaded on the passed-in device contains
+// any device globals with reprogram init mode. When a kernel is submitted
+// for the first time and this function returns true, a force reprogram will
+// be scheduled even when the kernel binary hash matches the hash of the
+// currently loaded program.
+bool acl_device_has_reprogram_device_globals(cl_device_id device);
+
 #if defined(__cplusplus)
 } /* extern "C" */
 #endif

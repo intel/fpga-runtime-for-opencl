@@ -3968,7 +3968,7 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   // set MEM_MIGRATE2.1 to COMPLETE +
   // set MEM_MIGRATE2.2 to RUNNING +
   // set MEM_MIGRATE2.2 to COMPLETE +
-  // submit KERNEL2 to device = 5
+  // submit KERNEL2 to device = 10
   CHECK_EQUAL(offset + 15, m_devlog.num_ops);
 
   // Should have copied the memory over.
@@ -4330,6 +4330,270 @@ TEST(acl_kernel_reprogram_scheduler, switch_prog) {
   CHECK_EQUAL(CL_SUCCESS, clReleaseKernel(k0));
   CHECK_EQUAL(CL_SUCCESS, clReleaseKernel(k1));
   CHECK_EQUAL(CL_SUCCESS, clReleaseCommandQueue(cq2));
+}
+
+TEST(acl_kernel_reprogram_scheduler, device_global_reprogram) {
+  // In this test, we will force the device to contain reprogram
+  // device global. The device will be first reprogrammed eagerly
+  // due to the clCreateProgramWithBinary call which will set the
+  // last_bin and loaded_bin. We revert that by setting them to
+  // null again to emulate a hw device with binary on the board
+  // but not yet reprogrammed in execution.
+  // The kernel will be launched two times, the first time should
+  // trigger a reprogram even thought the random hash matches due
+  // to the device global, the second time shouldn't as the device
+  // has been reprogrammed in the execution.
+
+  // Force device to contain device global
+  m_device->def.autodiscovery_def.device_global_mem_defs.insert(
+      {"dev_glob1",
+       {/* address */ 1024,
+        /* size */ 1024,
+        /* host_access */ ACL_DEVICE_GLOBAL_HOST_ACCESS_READ_WRITE,
+        /* init_mode */ ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM,
+        /* implement_in_csr */ false}});
+
+  // Initial eager reprogram
+  int offset = m_devlog.num_ops;
+  CHECK_EQUAL(3, offset);
+  // Just the initial program load.
+  CHECK_EQUAL(m_first_dev_bin, m_device->last_bin);
+  CHECK_EQUAL(m_first_dev_bin, m_device->loaded_bin);
+
+  // Pretend execution starts now
+  m_device->last_bin->unload_content();
+  m_device->last_bin = nullptr;
+  m_device->loaded_bin->unload_content();
+  m_device->loaded_bin = nullptr;
+
+  acl_device_program_info_t *dp0 = check_dev_prog(m_program0);
+  m_context->reprogram_buf_read_callback = read_mem_callback;
+  m_context->reprogram_buf_write_callback = write_mem_callback;
+
+  // A device side buffer
+  cl_int status = CL_INVALID_VALUE;
+  cl_mem mem = clCreateBuffer(m_context, CL_MEM_READ_WRITE, 2048, 0, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK(mem);
+  memset(mem->host_mem.aligned_ptr, 'X', mem->size);
+  memset(mem->block_allocation->range.begin, 'x', mem->size);
+
+  CHECK_EQUAL(1, m_context->device_buffers_have_backing_store);
+  CHECK_EQUAL(0, mem->block_allocation->region->is_host_accessible);
+  CHECK_EQUAL(0, mem->writable_copy_on_host);
+
+  cl_kernel k = get_kernel(m_program0);
+  cl_event ue1 = get_user_event();
+  cl_event ue2 = get_user_event();
+  cl_event k_e1 = 0;
+  cl_event k_e2 = 0;
+
+  // Launch the kernel for the first time
+  CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(k, 0, sizeof(cl_mem), &mem));
+  CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(k, 1, sizeof(cl_mem), &mem));
+  CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k, 1, &ue1, &k_e1));
+  CHECK_EQUAL(CL_COMMAND_TASK, k_e1->cmd.type);
+  CHECK(m_device->def.autodiscovery_def.binary_rand_hash ==
+        k_e1->cmd.info.ndrange_kernel.dev_bin->get_devdef()
+            .autodiscovery_def.binary_rand_hash);
+
+  // last_bin and loaded_bin should still in a reset state
+  CHECK(m_device->last_bin == nullptr);
+  CHECK(m_device->loaded_bin == nullptr);
+
+  acl_print_debug_msg("Forcing user event completion for first kernel\n");
+  CHECK_EQUAL(CL_SUCCESS, clSetUserEventStatus(ue1, CL_COMPLETE));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(ue1));
+
+  // Should have recorded that we loaded the program.
+  CHECK_EQUAL(&(dp0->device_binary), m_device->last_bin);
+  CHECK_EQUAL(&(dp0->device_binary), m_device->loaded_bin);
+
+  // submit device global forced REPROGRAM +
+  // set REPROGRAM to RUNNING +
+  // set REPROGRAM to COMPLETE +
+  // set MEM_MIGRATE 1 to RUNNING +
+  // set MEM_MIGRATE 1 to COMPLETE +
+  // set MEM_MIGRATE 2 to RUNNING +
+  // set MEM_MIGRATE 2 to COMPLETE +
+  // submit KERNEL = 8
+  CHECK_EQUAL(offset + 8, m_devlog.num_ops);
+  const acl_device_op_t *op0submit = &(m_devlog.before[3]);
+  const acl_device_op_t *op0running = &(m_devlog.before[4]);
+  const acl_device_op_t *op0complete = &(m_devlog.before[5]);
+
+  // Device global forced reprogram
+  CHECK_EQUAL(ACL_DEVICE_OP_REPROGRAM, op0submit->info.type);
+  CHECK_EQUAL(0, op0submit->id);
+  CHECK(op0submit->info.event);
+  CHECK_EQUAL(CL_SUBMITTED, op0submit->status);
+  CHECK_EQUAL(0, op0submit->info.num_printf_bytes_pending);
+  CHECK_EQUAL(1, op0submit->first_in_group);
+  CHECK_EQUAL(0, op0submit->last_in_group);
+
+  CHECK_EQUAL(ACL_DEVICE_OP_REPROGRAM, op0running->info.type);
+  CHECK_EQUAL(0, op0running->id);
+  CHECK(op0running->info.event);
+  CHECK_EQUAL(CL_RUNNING, op0running->status);
+  CHECK_EQUAL(0, op0running->info.num_printf_bytes_pending);
+  CHECK_EQUAL(1, op0running->first_in_group);
+  CHECK_EQUAL(0, op0running->last_in_group);
+
+  CHECK_EQUAL(ACL_DEVICE_OP_REPROGRAM, op0complete->info.type);
+  CHECK_EQUAL(0, op0complete->id);
+  CHECK(op0complete->info.event);
+  CHECK_EQUAL(CL_COMPLETE, op0complete->status);
+  CHECK_EQUAL(0, op0complete->info.num_printf_bytes_pending);
+  CHECK_EQUAL(1, op0complete->first_in_group);
+  CHECK_EQUAL(0, op0complete->last_in_group);
+
+  // The device is still programmed with the same program.
+  CHECK_EQUAL(&(dp0->device_binary), m_device->last_bin);
+  CHECK_EQUAL(&(dp0->device_binary), m_device->loaded_bin);
+
+  const acl_device_op_t *op1submit = &(m_devlog.before[10]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op1submit->info.type);
+  CHECK_EQUAL(k_e1, op1submit->info.event);
+  CHECK_EQUAL(CL_SUBMITTED, op1submit->status);
+  CHECK_EQUAL(0, op1submit->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op1submit->first_in_group); // reprogram is first
+  CHECK_EQUAL(1, op1submit->last_in_group);
+
+  // The user-level event is linked to the kernel device op now.
+  CHECK_EQUAL(op1submit->id, k_e1->current_device_op->id);
+
+  // Pretend to start the kernel
+  acl_print_debug_msg("Say kernel is running\n");
+  ACL_LOCKED(
+      acl_receive_kernel_update(k_e1->current_device_op->id, CL_RUNNING));
+  CHECK_EQUAL(CL_RUNNING, k_e1->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+
+  // Now we have a "running" transition
+  CHECK_EQUAL(offset + 9, m_devlog.num_ops);
+  const acl_device_op_t *op1running = &(m_devlog.after[11]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op1running->info.type);
+  CHECK_EQUAL(k_e1, op1running->info.event);
+  CHECK_EQUAL(CL_RUNNING, op1running->status);
+  CHECK_EQUAL(0, op1running->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op1running->first_in_group);
+  CHECK_EQUAL(1, op1running->last_in_group);
+
+  // The running status was propagated up to the user-level event.
+  CHECK_EQUAL(CL_RUNNING, k_e1->execution_status);
+
+  acl_print_debug_msg("Say kernel is complete\n");
+  ACL_LOCKED(
+      acl_receive_kernel_update(k_e1->current_device_op->id, CL_COMPLETE));
+  CHECK_EQUAL(CL_COMPLETE, k_e1->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+  // Now we have a "complete" transition
+  CHECK_EQUAL(offset + 10, m_devlog.num_ops);
+  const acl_device_op_t *op1complete = &(m_devlog.after[12]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op1complete->info.type);
+  CHECK_EQUAL(k_e1, op1complete->info.event);
+  CHECK_EQUAL(CL_COMPLETE, op1complete->status);
+  CHECK_EQUAL(0, op1complete->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op1complete->first_in_group);
+  CHECK_EQUAL(1, op1complete->last_in_group);
+
+  // Completion timestamp has propagated up to the user level event.
+  CHECK_EQUAL(
+      acl_platform.device_op_queue.op[op1complete->id].timestamp[CL_COMPLETE],
+      k_e1->timestamp[CL_COMPLETE]);
+
+  // Completion wipes out the downlink.
+  CHECK_EQUAL(0, k_e1->current_device_op);
+
+  // Launch the kernel for the second time
+  CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k, 1, &ue2, &k_e2));
+  CHECK_EQUAL(CL_COMMAND_TASK, k_e2->cmd.type);
+  CHECK(m_device->def.autodiscovery_def.binary_rand_hash ==
+        k_e2->cmd.info.ndrange_kernel.dev_bin->get_devdef()
+            .autodiscovery_def.binary_rand_hash);
+
+  acl_print_debug_msg("Forcing user event completion for second kernel\n");
+  CHECK_EQUAL(CL_SUCCESS, clSetUserEventStatus(ue2, CL_COMPLETE));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(ue2));
+
+  // Should still have the same program loaded
+  CHECK_EQUAL(&(dp0->device_binary), m_device->last_bin);
+  CHECK_EQUAL(&(dp0->device_binary), m_device->loaded_bin);
+
+  // set MEM_MIGRATE 1 to RUNNING +
+  // set MEM_MIGRATE 1 to COMPLETE +
+  // set MEM_MIGRATE 2 to RUNNING +
+  // set MEM_MIGRATE 2 to COMPLETE +
+  // submit KERNEL = 5
+  CHECK_EQUAL(offset + 15, m_devlog.num_ops);
+  const acl_device_op_t *op2submit = &(m_devlog.before[17]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op2submit->info.type);
+  CHECK_EQUAL(k_e2, op2submit->info.event);
+  CHECK_EQUAL(CL_SUBMITTED, op2submit->status);
+  CHECK_EQUAL(0, op2submit->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op2submit->first_in_group); // mem migration is first
+  CHECK_EQUAL(1, op2submit->last_in_group);
+
+  // The user-level event is linked to the kernel device op now.
+  CHECK_EQUAL(op2submit->id, k_e2->current_device_op->id);
+
+  // Pretend to start the kernel
+  acl_print_debug_msg("Say kernel is running\n");
+  ACL_LOCKED(
+      acl_receive_kernel_update(k_e2->current_device_op->id, CL_RUNNING));
+  CHECK_EQUAL(CL_RUNNING, k_e2->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+
+  // Now we have a "running" transition
+  CHECK_EQUAL(offset + 16, m_devlog.num_ops);
+  const acl_device_op_t *op2running = &(m_devlog.after[18]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op2running->info.type);
+  CHECK_EQUAL(k_e2, op2running->info.event);
+  CHECK_EQUAL(CL_RUNNING, op2running->status);
+  CHECK_EQUAL(0, op2running->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op2running->first_in_group);
+  CHECK_EQUAL(1, op2running->last_in_group);
+
+  // The running status was propagated up to the user-level event.
+  CHECK_EQUAL(CL_RUNNING, k_e2->execution_status);
+
+  acl_print_debug_msg("Say kernel is complete\n");
+  ACL_LOCKED(
+      acl_receive_kernel_update(k_e2->current_device_op->id, CL_COMPLETE));
+  CHECK_EQUAL(CL_COMPLETE, k_e2->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+  // Now we have a "complete" transition
+  CHECK_EQUAL(offset + 17, m_devlog.num_ops);
+  const acl_device_op_t *op2complete = &(m_devlog.after[19]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op2complete->info.type);
+  CHECK_EQUAL(k_e2, op2complete->info.event);
+  CHECK_EQUAL(CL_COMPLETE, op2complete->status);
+  CHECK_EQUAL(0, op2complete->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op2complete->first_in_group);
+  CHECK_EQUAL(1, op2complete->last_in_group);
+
+  // Completion timestamp has propagated up to the user level event.
+  CHECK_EQUAL(
+      acl_platform.device_op_queue.op[op2complete->id].timestamp[CL_COMPLETE],
+      k_e2->timestamp[CL_COMPLETE]);
+
+  // Completion wipes out the downlink.
+  CHECK_EQUAL(0, k_e2->current_device_op);
+
+  // And let go.
+  // (Don't check for CL_INVALID_EVENT on a second release of each of
+  // these events because the events might be reused.)
+  CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(mem));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(k_e1));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(k_e2));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseKernel(k));
+
+  // Clean up device global
+  m_device->def.autodiscovery_def.device_global_mem_defs.clear();
 }
 
 TEST(acl_kernel_reprogram_scheduler, use_host_buf_as_arg) {
