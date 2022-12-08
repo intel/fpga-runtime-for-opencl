@@ -4362,9 +4362,9 @@ TEST(acl_kernel_reprogram_scheduler, device_global_reprogram) {
 
   // Pretend execution starts now
   m_device->last_bin->unload_content();
-  m_device->last_bin = nullptr;
+  m_device->last_bin = NULL;
   m_device->loaded_bin->unload_content();
-  m_device->loaded_bin = nullptr;
+  m_device->loaded_bin = NULL;
 
   acl_device_program_info_t *dp0 = check_dev_prog(m_program0);
   m_context->reprogram_buf_read_callback = read_mem_callback;
@@ -4398,8 +4398,8 @@ TEST(acl_kernel_reprogram_scheduler, device_global_reprogram) {
             .autodiscovery_def.binary_rand_hash);
 
   // last_bin and loaded_bin should still in a reset state
-  CHECK(m_device->last_bin == nullptr);
-  CHECK(m_device->loaded_bin == nullptr);
+  CHECK(m_device->last_bin == NULL);
+  CHECK(m_device->loaded_bin == NULL);
 
   acl_print_debug_msg("Forcing user event completion for first kernel\n");
   CHECK_EQUAL(CL_SUCCESS, clSetUserEventStatus(ue1, CL_COMPLETE));
@@ -4594,6 +4594,133 @@ TEST(acl_kernel_reprogram_scheduler, device_global_reprogram) {
 
   // Clean up device global
   m_device->def.autodiscovery_def.device_global_mem_defs.clear();
+}
+
+TEST(acl_kernel_reprogram_scheduler, skip_reprogram_on_start) {
+  // Test if reprogram is skipped if the binary currently loaded
+  // on the board is the same as the one to be loaded
+
+  // Initial eager reprogram
+  int offset = m_devlog.num_ops;
+  CHECK_EQUAL(3, offset);
+  // Just the initial program load.
+  CHECK_EQUAL(m_first_dev_bin, m_device->last_bin);
+  CHECK_EQUAL(m_first_dev_bin, m_device->loaded_bin);
+
+  // Pretend execution starts now
+  m_device->last_bin->unload_content();
+  m_device->last_bin = NULL;
+  m_device->loaded_bin->unload_content();
+  m_device->loaded_bin = NULL;
+
+  acl_device_program_info_t *dp0 = check_dev_prog(m_program0);
+  m_context->reprogram_buf_read_callback = read_mem_callback;
+  m_context->reprogram_buf_write_callback = write_mem_callback;
+
+  // A device side buffer
+  cl_int status = CL_INVALID_VALUE;
+  cl_mem mem = clCreateBuffer(m_context, CL_MEM_READ_WRITE, 2048, 0, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK(mem);
+  memset(mem->host_mem.aligned_ptr, 'X', mem->size);
+  memset(mem->block_allocation->range.begin, 'x', mem->size);
+
+  CHECK_EQUAL(1, m_context->device_buffers_have_backing_store);
+  CHECK_EQUAL(0, mem->block_allocation->region->is_host_accessible);
+  CHECK_EQUAL(0, mem->writable_copy_on_host);
+
+  cl_kernel k = get_kernel(m_program0);
+  cl_event ue = get_user_event();
+  cl_event k_e = 0;
+
+  // Launch the kernel for the first time
+  CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(k, 0, sizeof(cl_mem), &mem));
+  CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(k, 1, sizeof(cl_mem), &mem));
+  CHECK_EQUAL(CL_SUCCESS, clEnqueueTask(m_cq, k, 1, &ue, &k_e));
+  CHECK_EQUAL(CL_COMMAND_TASK, k_e->cmd.type);
+  CHECK(m_device->def.autodiscovery_def.binary_rand_hash ==
+        k_e->cmd.info.ndrange_kernel.dev_bin->get_devdef()
+            .autodiscovery_def.binary_rand_hash);
+
+  // last_bin and loaded_bin should still in a reset state
+  CHECK(m_device->last_bin == NULL);
+  CHECK(m_device->loaded_bin == NULL);
+
+  acl_print_debug_msg("Forcing user event completion for first kernel\n");
+  CHECK_EQUAL(CL_SUCCESS, clSetUserEventStatus(ue, CL_COMPLETE));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(ue));
+
+  // Since reprogram didn't occur, only last_bin should be updated
+  CHECK_EQUAL(&(dp0->device_binary), m_device->last_bin);
+  CHECK(m_device->loaded_bin == NULL);
+
+  // set MEM_MIGRATE 1 to RUNNING +
+  // set MEM_MIGRATE 1 to COMPLETE +
+  // set MEM_MIGRATE 2 to RUNNING +
+  // set MEM_MIGRATE 2 to COMPLETE +
+  // submit KERNEL = 5
+  CHECK_EQUAL(offset + 5, m_devlog.num_ops);
+  const acl_device_op_t *op0submit = &(m_devlog.before[7]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op0submit->info.type);
+  CHECK_EQUAL(k_e, op0submit->info.event);
+  CHECK_EQUAL(CL_SUBMITTED, op0submit->status);
+  CHECK_EQUAL(0, op0submit->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op0submit->first_in_group); // mem migrate is first
+  CHECK_EQUAL(1, op0submit->last_in_group);
+
+  // The user-level event is linked to the kernel device op now.
+  CHECK_EQUAL(op0submit->id, k_e->current_device_op->id);
+
+  // Pretend to start the kernel
+  acl_print_debug_msg("Say kernel is running\n");
+  ACL_LOCKED(acl_receive_kernel_update(k_e->current_device_op->id, CL_RUNNING));
+  CHECK_EQUAL(CL_RUNNING, k_e->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+
+  // Now we have a "running" transition
+  CHECK_EQUAL(offset + 6, m_devlog.num_ops);
+  const acl_device_op_t *op0running = &(m_devlog.after[8]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op0running->info.type);
+  CHECK_EQUAL(k_e, op0running->info.event);
+  CHECK_EQUAL(CL_RUNNING, op0running->status);
+  CHECK_EQUAL(0, op0running->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op0running->first_in_group);
+  CHECK_EQUAL(1, op0running->last_in_group);
+
+  // The running status was propagated up to the user-level event.
+  CHECK_EQUAL(CL_RUNNING, k_e->execution_status);
+
+  acl_print_debug_msg("Say kernel is complete\n");
+  ACL_LOCKED(
+      acl_receive_kernel_update(k_e->current_device_op->id, CL_COMPLETE));
+  CHECK_EQUAL(CL_COMPLETE, k_e->current_device_op->execution_status);
+
+  ACL_LOCKED(acl_idle_update(m_context));
+  // Now we have a "complete" transition
+  CHECK_EQUAL(offset + 7, m_devlog.num_ops);
+  const acl_device_op_t *op0complete = &(m_devlog.after[9]);
+  CHECK_EQUAL(ACL_DEVICE_OP_KERNEL, op0complete->info.type);
+  CHECK_EQUAL(k_e, op0complete->info.event);
+  CHECK_EQUAL(CL_COMPLETE, op0complete->status);
+  CHECK_EQUAL(0, op0complete->info.num_printf_bytes_pending);
+  CHECK_EQUAL(0, op0complete->first_in_group);
+  CHECK_EQUAL(1, op0complete->last_in_group);
+
+  // Completion timestamp has propagated up to the user level event.
+  CHECK_EQUAL(
+      acl_platform.device_op_queue.op[op0complete->id].timestamp[CL_COMPLETE],
+      k_e->timestamp[CL_COMPLETE]);
+
+  // Completion wipes out the downlink.
+  CHECK_EQUAL(0, k_e->current_device_op);
+
+  // And let go.
+  // (Don't check for CL_INVALID_EVENT on a second release of each of
+  // these events because the events might be reused.)
+  CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(mem));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(k_e));
+  CHECK_EQUAL(CL_SUCCESS, clReleaseKernel(k));
 }
 
 TEST(acl_kernel_reprogram_scheduler, use_host_buf_as_arg) {
