@@ -855,6 +855,7 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
       }
       fin.close();
     }
+    closedir(dir);
   }
 
   if (num_vendor_files_found == 0) {
@@ -876,8 +877,6 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
     }
   }
 
-  if (dir)
-    closedir(dir);
   return num_boards_found == 0 ? CL_FALSE : CL_TRUE;
 }
 #endif
