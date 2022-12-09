@@ -1819,6 +1819,9 @@ static cl_int l_build_from_source_in_dir(acl_device_program_info_t *dev_prog,
   if (status == CL_SUCCESS && context->compiles_programs) {
     for (unsigned i = 0; i < num_build_cmds; i++) {
       struct acl_file_handle_t *cmdfp = acl_fopen(cmdfile[i], "wb");
+      if (debug_mode > 0) {
+        printf(" cmdfp %p\n", cmdfp);
+      }
       size_t bytes_written = 0;
       if (cmdfp) {
         bytes_written = (size_t)acl_fprintf(cmdfp, "%s", cmd[i].c_str());
@@ -1826,7 +1829,6 @@ static cl_int l_build_from_source_in_dir(acl_device_program_info_t *dev_prog,
       }
       if (!cmdfp || (cmd[i].length() != bytes_written)) {
         if (debug_mode > 0) {
-          printf(" cmdfp %p\n", cmdfp);
           printf(" cmdlen %d  bw %d\n", (int)cmd[i].length(),
                  (int)bytes_written);
         }
