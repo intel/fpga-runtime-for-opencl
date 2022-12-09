@@ -142,8 +142,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseProgramIntelFPGA(cl_program program) {
       if (program->device[i]->last_bin != nullptr)
         program->device[i]->last_bin->unload_content();
     }
-    if (program)
-      l_free_program(program);
+    l_free_program(program);
   }
   return CL_SUCCESS;
 }
