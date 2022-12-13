@@ -16,6 +16,8 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 #ifdef __linux__
@@ -188,10 +190,7 @@ unsigned acl_convert_mmd_capabilities(unsigned mmd_capabilities);
 const static size_t MIN_SOF_SIZE = 1;
 const static size_t MIN_PLL_CONFIG_SIZE = 1;
 
-std::vector<acl_mmd_dispatch_t> internal_mmd_dispatch;
-
 // Dynamically load board mmd & symbols
-static size_t num_board_pkgs;
 static double min_MMD_version = DBL_MAX;
 extern "C" {
 void *null_fn = NULL;
@@ -247,12 +246,12 @@ char *acl_strtok(char *str, const char *delim, char **saveptr) {
     if (REQUIRED) {                                                            \
       ACL_HAL_DEBUG_MSG_VERBOSE(                                               \
           1, "Function X is not defined statically by board library\n");       \
-      return NULL;                                                             \
+      return {};                                                               \
     } else {                                                                   \
-      STRUCT.X = NULL;                                                         \
+      STRUCT->X = NULL;                                                        \
     }                                                                          \
   }                                                                            \
-  STRUCT.X = X;
+  STRUCT->X = X;
 
 #define ADD_DYNAMIC_FN_TO_HAL(STRUCT, LIBRARY, X, REQUIRED, TYPE)              \
   STRUCT->X = (TYPE)my_dlsym(LIBRARY, #X, &error_msg);                         \
@@ -262,7 +261,7 @@ char *acl_strtok(char *str, const char *delim, char **saveptr) {
       printf("(message: %s)", error_msg);                                      \
     }                                                                          \
     printf("\n");                                                              \
-    return CL_FALSE;                                                           \
+    return nullptr;                                                            \
   }
 
 #ifdef _WIN32
@@ -426,7 +425,6 @@ static void *my_dlsym(void *library, const char *function_name,
 }
 
 static void my_dlclose(void *library) {
-  acl_assert_locked();
 #ifdef _WIN32
   FreeLibrary((HMODULE)library);
 #else
@@ -434,9 +432,22 @@ static void my_dlclose(void *library) {
 #endif
 }
 
-cl_bool l_load_board_functions(acl_mmd_dispatch_t *mmd_dispatch,
-                               const char *library_name, void *mmd_library,
-                               char *error_msg) {
+struct acl_mmd_library {
+  struct deleter {
+    void operator()(void *library) { my_dlclose(library); }
+  };
+
+  using pointer = std::unique_ptr<void, deleter>;
+
+  pointer ptr;
+  std::unique_ptr<acl_mmd_dispatch_t> dispatch;
+};
+
+static std::vector<acl_mmd_library> internal_mmd_dispatch;
+
+static std::unique_ptr<acl_mmd_dispatch_t>
+l_load_board_functions(const char *library_name, void *mmd_library,
+                       char *error_msg) {
   acl_assert_locked();
 // my_dlsym returns a void pointer to be generic but the functions have a
 // specific prototype. Ignore the resulting warning.
@@ -445,6 +456,7 @@ cl_bool l_load_board_functions(acl_mmd_dispatch_t *mmd_dispatch,
 #pragma warning(disable : 4152)
 #endif
 
+  auto mmd_dispatch = std::make_unique<acl_mmd_dispatch_t>();
   mmd_dispatch->library_name = library_name;
   mmd_dispatch->mmd_library = mmd_library;
   ADD_DYNAMIC_FN_TO_HAL(
@@ -509,7 +521,7 @@ cl_bool l_load_board_functions(acl_mmd_dispatch_t *mmd_dispatch,
 
   ACL_HAL_DEBUG_MSG_VERBOSE(1, "Successfully loaded board MMD %s\n",
                             library_name);
-  return CL_TRUE;
+  return mmd_dispatch;
 }
 
 #ifdef __linux__
@@ -548,9 +560,8 @@ static int lib_checker(struct dl_phdr_info *info, size_t size, void *data) {
 }
 #endif
 
-cl_bool l_load_single_board_library(const char *library_name,
-                                    size_t &num_boards_found,
-                                    cl_bool load_libraries) {
+static std::optional<acl_mmd_library>
+l_load_single_board_library(const char *library_name) {
   acl_assert_locked();
 
   char *error_msg = nullptr;
@@ -561,38 +572,67 @@ cl_bool l_load_single_board_library(const char *library_name,
     lib_already_loaded = false;
     dl_iterate_phdr(lib_checker, (void *)library_name);
     if (lib_already_loaded)
-      return CL_FALSE;
+      return {};
   }
 #endif
-  auto *mmd_library = my_dlopen(library_name, &error_msg);
+  acl_mmd_library::pointer mmd_library{my_dlopen(library_name, &error_msg)};
   if (!mmd_library) {
     std::cout << "Error: Could not load board library " << library_name;
     if (error_msg && error_msg[0] != '\0') {
       std::cout << " (error_msg: " << error_msg << ")";
     }
     std::cout << "\n";
-    return CL_FALSE;
+    return {};
   }
 
-  if (load_libraries) {
-    auto result =
-        l_load_board_functions(&(internal_mmd_dispatch[num_boards_found]),
-                               library_name, mmd_library, error_msg);
-    if (result == CL_FALSE) {
-      std::cout << "Error: Could not load board library " << library_name
-                << " due to failure to load symbols\n";
-      return result;
-    }
+  auto mmd_dispatch =
+      l_load_board_functions(library_name, mmd_library.get(), error_msg);
+  if (!mmd_dispatch) {
+    std::cout << "Error: Could not load board library " << library_name
+              << " due to failure to load symbols\n";
+    return {};
   }
-  ++num_boards_found;
 
-  return CL_TRUE;
+  return acl_mmd_library{std::move(mmd_library), std::move(mmd_dispatch)};
 }
 
+static std::optional<acl_mmd_library> l_load_static_board_library() {
+  auto dispatch = std::make_unique<acl_mmd_dispatch_t>();
+
+  dispatch->library_name = "runtime_static";
+  dispatch->mmd_library = nullptr;
+
+  dispatch->aocl_mmd_get_offline_info = aocl_mmd_get_offline_info;
+
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_offline_info, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_info, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_open, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_close, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_interrupt_handler, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_device_interrupt_handler, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_status_handler, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_yield, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_read, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_write, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_copy, 1);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_reprogram, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_alloc, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_free, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_create, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_destroy, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_get_buffer, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_ack_buffer, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_program, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_host_alloc, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_free, 0);
+  ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_alloc, 0);
+
+  return acl_mmd_library{nullptr, std::move(dispatch)};
+}
+
+static cl_bool l_load_board_libraries() {
 #ifdef _WIN32
-cl_bool l_load_board_libraries(cl_bool load_libraries) {
   char library_name[1024] = {0};
-  size_t num_boards_found = 0;
 
   // On Windows it will check the regkey. If ACL_BOARD_VENDOR_PATH is defined it
   // will check HKCU, otherwise HKLM
@@ -641,16 +681,16 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
       }
 
       // add the library
-      cl_bool cl_result = l_load_single_board_library(
-          library_name, num_boards_found, load_libraries);
-      if (!cl_result) {
+      auto mmd_library = l_load_single_board_library(library_name);
+      if (!mmd_library) {
         result = RegCloseKey(boards_key);
         if (ERROR_SUCCESS != result) {
           printf("Failed to close platforms key %s, ignoring\n",
                  (char *)boards_key);
         }
-        return cl_result;
+        return {};
       }
+      internal_mmd_dispatch.emplace_back(std::move(*mmd_library));
     }
   } else {
     if (hkey_name == "HKCU") {
@@ -694,16 +734,16 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
           }
 
           // add the library
-          auto cl_result = l_load_single_board_library(
-              library_name, num_boards_found, load_libraries);
-          if (!cl_result) {
+          auto mmd_library = l_load_single_board_library(library_name);
+          if (!mmd_library) {
             result = RegCloseKey(boards_key);
             if (ERROR_SUCCESS != result) {
               printf("Failed to close platforms key %s, ignoring\n",
                      (char *)boards_key);
             }
-            return cl_result;
+            return {};
           }
+          internal_mmd_dispatch.emplace_back(std::move(*mmd_library));
         }
       } else {
         ACL_HAL_DEBUG_MSG_VERBOSE(
@@ -738,14 +778,8 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
     }
   }
 
-  if (!load_libraries) {
-    num_board_pkgs = num_boards_found;
-    internal_mmd_dispatch.resize(num_board_pkgs);
-  }
   return CL_TRUE;
-}
 #else // Linux
-cl_bool l_load_board_libraries(cl_bool load_libraries) {
   // Keeping the old path for backward compatibility
   std::string board_vendor_path_old = "/opt/Intel/OpenCL_boards/";
   std::string board_vendor_path = "/opt/Intel/OpenCL/Boards/";
@@ -764,7 +798,6 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
   ACL_HAL_DEBUG_MSG_VERBOSE(1, "Intel(R) FPGA Board Vendor Path: %s\n",
                             board_vendor_path.c_str());
 
-  size_t num_boards_found = 0;
   auto num_vendor_files_found = 0;
   auto num_passes = 2;
   DIR *dir = nullptr;
@@ -819,13 +852,14 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
                                   "(length is %zu, last char is '%c')\n",
                                   library_name.c_str(), library_name.length(),
                                   library_name[library_name.length() - 1]);
-        auto result_status = l_load_single_board_library(
-            library_name.c_str(), num_boards_found, load_libraries);
-        if (!result_status) {
+        auto mmd_library = l_load_single_board_library(library_name.c_str());
+        if (!mmd_library) {
           printf("Failed to dynamically load board MMD %s\n",
                  library_name.c_str());
           // Ignoring this failure since other libraries may successfully load.
+          continue;
         }
+        internal_mmd_dispatch.emplace_back(std::move(*mmd_library));
       }
       fin.close();
     }
@@ -844,16 +878,9 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
         1, "install the board library so that it can be loaded at runtime.\n");
   }
 
-  if (!load_libraries) {
-    num_board_pkgs = num_boards_found;
-    if (num_board_pkgs) {
-      internal_mmd_dispatch.resize(num_board_pkgs);
-    }
-  }
-
-  return num_boards_found == 0 ? CL_FALSE : CL_TRUE;
-}
+  return internal_mmd_dispatch.empty() ? CL_FALSE : CL_TRUE;
 #endif
+}
 
 void acl_hal_mmd_pll_override(unsigned int physical_device_id) {
   char *env_pllsettings_str = getenv("ACL_PLL_SETTINGS");
@@ -1104,7 +1131,7 @@ void l_close_device(unsigned int physical_device_id,
   return;
 }
 
-static acl_mmd_dispatch_t *get_msim_mmd_layer() {
+static std::optional<acl_mmd_library> get_msim_mmd_layer() {
 #ifdef _WIN32
 
   const char *acl_root_dir = acl_getenv("INTELFPGAOCLSDKROOT");
@@ -1129,7 +1156,7 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
       ipa_simulator ? mmd_lib_name_ipa : mmd_lib_name_aoc;
 
   char *error_msg = nullptr;
-  auto *mmd_lib = my_dlopen(mmd_lib_name, &error_msg);
+  acl_mmd_library::pointer mmd_lib{my_dlopen(mmd_lib_name, &error_msg)};
   typedef acl_mmd_dispatch_t *(*fcn_type)();
   if (!mmd_lib) {
     std::cout << "Error: Could not load simulation MMD library "
@@ -1138,9 +1165,9 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
       std::cout << " (error_msg: " << error_msg << ")";
     }
     std::cout << "\n";
-    return nullptr;
+    return {};
   }
-  auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
+  auto *sym = my_dlsym(mmd_lib.get(), sym_name, &error_msg);
   if (!sym) {
     std::cout << "Error: Symbol " << sym_name
               << " not found in simulation MMD library ";
@@ -1148,7 +1175,7 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
       std::cout << "(message: " << error_msg << ")";
     }
     std::cout << "\n";
-    return nullptr;
+    return {};
   }
 
   // Now call the function. Ignore the Windows cast to fcn pointer
@@ -1157,10 +1184,13 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
 #pragma warning(push)
 #pragma warning(disable : 4055)
 #endif
-  return ((fcn_type)sym)();
+  auto mmd_dispatch = std::make_unique<acl_mmd_dispatch_t>(*((fcn_type)sym)());
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif
+
+  return std::make_optional<acl_mmd_library>(
+      {std::move(mmd_lib), std::move(mmd_dispatch)});
 }
 
 ACL_HAL_EXPORT const acl_hal_t *
@@ -1221,101 +1251,51 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
 #endif
 
   // Dynamically load board mmd & symbols
+  internal_mmd_dispatch.clear();
+
   (void)acl_get_offline_device_user_setting(&use_offline_only);
   if (use_offline_only == ACL_CONTEXT_MPSIM) {
 
     // Substitute the simulator MMD layer.
-    auto *result = get_msim_mmd_layer();
-    if (!result)
+    auto dispatch = get_msim_mmd_layer();
+    if (!dispatch) {
       return nullptr;
-    else
-      internal_mmd_dispatch.push_back(*result);
+    }
+    internal_mmd_dispatch.emplace_back(std::move(*dispatch));
 
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "Use simulation MMD\n");
-    num_board_pkgs = 1;
   } else if (IS_VALID_FUNCTION(aocl_mmd_get_offline_info)) {
-    num_board_pkgs = 1; // It is illegal to define more than one board package
-                        // while statically linking a board package to the host.
-    internal_mmd_dispatch.resize(num_board_pkgs);
+    // It is illegal to define more than one board package
+    // while statically linking a board package to the host.
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "Board MMD is statically linked\n");
 
-    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[0];
-
-    dispatch.library_name = "runtime_static";
-    dispatch.mmd_library = nullptr;
-
-    dispatch.aocl_mmd_get_offline_info = aocl_mmd_get_offline_info;
-
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_offline_info, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_info, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_open, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_close, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_interrupt_handler, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_device_interrupt_handler, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_status_handler, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_yield, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_read, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_write, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_copy, 1);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_reprogram, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_alloc, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_free, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_create, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_destroy, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_get_buffer, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_ack_buffer, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_program, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_host_alloc, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_free, 0);
-    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_alloc, 0);
+    auto dispatch = l_load_static_board_library();
+    if (!dispatch) {
+      return nullptr;
+    }
+    internal_mmd_dispatch.emplace_back(std::move(*dispatch));
   } else if (_libraries_to_load) {
-    for (auto ipass = 0; ipass < 2; ++ipass) {
-      cl_bool load_libraries;
-      size_t num_boards_found = 0;
-      acl_mmd_library_names_t *next_library;
-      if (ipass == 0) {
-        load_libraries = CL_FALSE;
-      } else {
-        load_libraries = CL_TRUE;
+    for (const auto *l = _libraries_to_load; l; l = l->next) {
+      const auto &name = l->library_name;
+      ACL_HAL_DEBUG_MSG_VERBOSE(1, "Trying to dynamically load board MMD %s\n",
+                                name.c_str());
+      auto dispatch = l_load_single_board_library(name.c_str());
+      if (!dispatch) {
+        return nullptr;
       }
-      next_library = _libraries_to_load;
-      while (next_library) {
-        const auto &library_name = next_library->library_name;
-        ACL_HAL_DEBUG_MSG_VERBOSE(1,
-                                  "Trying to dynamically load board MMD %s\n",
-                                  library_name.c_str());
-        auto result_status = l_load_single_board_library(
-            library_name.c_str(), num_boards_found, load_libraries);
-        if (!result_status) {
-          return NULL;
-        }
-        next_library = next_library->next;
-      }
-      if (!load_libraries) {
-        num_board_pkgs = num_boards_found;
-        internal_mmd_dispatch.resize(num_board_pkgs);
-      }
+      internal_mmd_dispatch.emplace_back(std::move(*dispatch));
     }
   } else {
-    cl_bool result_status;
-    // Call twice. Once to count number of libraries and once to load them
-    result_status = l_load_board_libraries(CL_FALSE);
-    if (!result_status) {
-      ACL_HAL_DEBUG_MSG_VERBOSE(
-          1, "Error: Could not load FPGA board libraries successfully.\n");
-      return NULL;
-    }
-    result_status = l_load_board_libraries(CL_TRUE);
-    if (!result_status) {
+    if (!l_load_board_libraries()) {
       printf("Error: Could not load FPGA board libraries successfully.\n");
-      return NULL;
+      return nullptr;
     }
   }
 
   sys->num_devices = 0;
   num_physical_devices = 0;
-  for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
+  for (const auto &board : internal_mmd_dispatch) {
+    acl_mmd_dispatch_t &dispatch = *board.dispatch;
 
     dispatch.aocl_mmd_get_offline_info(AOCL_MMD_VERSION, sizeof(buf), buf,
                                        NULL);
@@ -1386,8 +1366,8 @@ int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
       buf[MAX_BOARD_NAMES_LEN]; // This is a bit subtle, pointers to device
                                 // names might get cached by various routines
 
-  for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
+  for (const auto &board : internal_mmd_dispatch) {
+    acl_mmd_dispatch_t &dispatch = *board.dispatch;
 
     dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
                                        MAX_BOARD_NAMES_LEN, buf, NULL);
@@ -1456,8 +1436,8 @@ failed:
   // failed. Then return an error.
   physical_device_id = 0;
 
-  for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
+  for (const auto &board : internal_mmd_dispatch) {
+    acl_mmd_dispatch_t &dispatch = *board.dispatch;
 
     dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
                                        MAX_BOARD_NAMES_LEN, buf, NULL);
@@ -2472,7 +2452,7 @@ void *acl_hal_mmd_legacy_shared_alloc(cl_context context, size_t size,
   acl_mmd_dispatch_t *mmd_dispatch_found = NULL;
   acl_assert_locked();
 
-  if (num_board_pkgs == 0) {
+  if (internal_mmd_dispatch.empty()) {
     printf("mmd legacy_shared_alloc: No board libaries found so cannot "
            "allocate shared memory\n");
     return NULL;
@@ -2480,7 +2460,7 @@ void *acl_hal_mmd_legacy_shared_alloc(cl_context context, size_t size,
   // Since this function is called for the context and not for a specific
   // device, it is only supported when only one board package is used within
   // that context.
-  if (num_board_pkgs > 1) {
+  if (internal_mmd_dispatch.size() > 1) {
     mmd_dispatch_found = device_info[0].mmd_dispatch;
     for (idevice = 1; idevice < context->num_devices; ++idevice) {
       unsigned device_id = context->device[idevice]->def.physical_device_id;
@@ -2534,7 +2514,7 @@ void acl_hal_mmd_legacy_shared_free(cl_context context, void *host_ptr,
   acl_mmd_dispatch_t *mmd_dispatch_found = NULL;
   acl_assert_locked();
 
-  if (num_board_pkgs == 0) {
+  if (internal_mmd_dispatch.empty()) {
     printf("mmd legacy_shared_free: No board libaries found so cannot free "
            "shared memory\n");
     return;
@@ -2542,7 +2522,7 @@ void acl_hal_mmd_legacy_shared_free(cl_context context, void *host_ptr,
   // Since this function is called for the context and not for a specific
   // device, it is only supported when only one board package is used within
   // that context.
-  if (num_board_pkgs > 1) {
+  if (internal_mmd_dispatch.size() > 1) {
     mmd_dispatch_found = device_info[0].mmd_dispatch;
     for (idevice = 1; idevice < context->num_devices; ++idevice) {
       unsigned device_id = context->device[idevice]->def.physical_device_id;
