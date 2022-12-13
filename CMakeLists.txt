@@ -297,7 +297,7 @@ target_compile_definitions(acl_objs PUBLIC
   # the internal runtime API that exposes C++ structures and functions.
   # https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html
   _GLIBCXX_USE_CXX11_ABI=0
-  ACL_SUPPORT_DOUBLE=0
+  ACL_SUPPORT_DOUBLE=1
   ACL_HAS_STDLIB_STDIO
   CL_USE_DEPRECATED_OPENCL_1_0_APIS=1
   CL_USE_DEPRECATED_OPENCL_1_1_APIS=1
