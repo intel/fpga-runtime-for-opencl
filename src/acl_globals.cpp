@@ -203,7 +203,9 @@ cl_bool acl_init_from_hal_discovery(void) {
     return CL_FALSE;
   }
   // Probe the HAL for a device.
-  acl_set_hal(board_hal);
+  if (!acl_set_hal(board_hal)) {
+    return CL_FALSE;
+  }
 
   if (use_offline_only != ACL_CONTEXT_OFFLINE_ONLY) {
     acl_present_board_is_valid_value = 1;
