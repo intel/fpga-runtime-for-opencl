@@ -6,6 +6,9 @@
 # https://docs.docker.com/config/pruning/
 name: prune container images on self-hosted runners
 
+# docker permits only a single prune operation at a time
+concurrency: container-prune
+
 on:
   push:
     branches:
