@@ -248,14 +248,14 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
     acl_idle_update(pipe->context);
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
-
-  // Error checking
   if (pipe->host_pipe_info == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This pipe is not a host pipe");
   }
+
+  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+
+  // Error checking
   if (!(pipe->flags & CL_MEM_HOST_READ_ONLY)) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
@@ -349,14 +349,14 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
     acl_idle_update(pipe->context);
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
-
   // Error checking
   if (pipe->host_pipe_info == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This pipe is not a host pipe");
   }
+
+  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+
   if (!(pipe->flags & CL_MEM_HOST_WRITE_ONLY)) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
@@ -465,6 +465,11 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
     acl_idle_update(pipe->context);
   }
 
+  if (pipe->host_pipe_info == NULL) {
+    BAIL_INFO(CL_INVALID_MEM_OBJECT, pipe->context,
+              "This pipe is not a host pipe");
+  }
+
   acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
 
   if (errcode_ret) {
@@ -478,12 +483,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
               "Invalid pointer was provided for mapped_size argument");
   }
   *mapped_size = 0;
-
-  if (pipe->host_pipe_info == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
-    BAIL_INFO(CL_INVALID_MEM_OBJECT, pipe->context,
-              "This pipe is not a host pipe");
-  }
 
   if (!pipe->host_pipe_info->m_binded_kernel) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
@@ -595,14 +594,14 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
     acl_idle_update(pipe->context);
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
-
-  // Error checking
   if (pipe->host_pipe_info == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This pipe is not a host pipe");
   }
+
+  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+
+  // Error checking
   if (!pipe->host_pipe_info->m_binded_kernel) {
     acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
