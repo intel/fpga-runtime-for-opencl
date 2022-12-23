@@ -378,7 +378,7 @@ TEST(offline_device, offline_hal) {
   cl_bool result;
 
   acl_test_setenv(m_env, offline_device);
-  ACL_LOCKED(acl_reset());
+  acl_reset_join_thread();
   ACL_LOCKED(result = acl_init_from_hal_discovery());
   CHECK_EQUAL(CL_TRUE, result);
   // Exercise the offline HAL: printing, and the timestamps.
@@ -390,6 +390,11 @@ TEST(offline_device, offline_hal) {
   ACL_LOCKED(now = acl_get_hal()->get_timestamp());
   ACL_LOCKED(acl_print_debug_msg("offline hal time is %08x%08x", (now >> 32),
                                  (now & 0xffffffff)));
+
+  syncThreads();
+  if (threadNum() == 0) {
+    acl_test_teardown_system();
+  }
 }
 
 struct live_info_t {
@@ -435,7 +440,7 @@ MT_TEST_GROUP(track_object) {
     syncThreads();
     if (threadNum() == 0) {
       acl_test_unsetenv(m_offline_env);
-      ACL_LOCKED(acl_reset());
+      acl_reset_join_thread();
     }
     acl_test_run_standard_teardown_checks();
   }

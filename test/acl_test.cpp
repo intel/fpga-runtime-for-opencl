@@ -117,8 +117,8 @@ void acl_test_teardown_sample_default_board_system(void) {
 
 void acl_test_teardown_generic_system(void) { acl_test_teardown_system(); }
 void acl_test_teardown_system(void) {
+  acl_reset_join_thread();
   acl_mutex_wrapper.lock();
-  acl_reset();
   acl_reset_hal();
   acltest_hal_teardown();
   acl_mutex_wrapper.unlock();
@@ -347,7 +347,7 @@ static void l_load_example_binary(void) {
     acl_test_setenv(envvar_program_lib, program_lib_old_value);
   }
 
-  ACL_LOCKED(acl_test_teardown_generic_system());
+  acl_test_teardown_generic_system();
 }
 
 // Return a context properties array that specifies preloaded binary only.

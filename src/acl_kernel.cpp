@@ -3203,6 +3203,10 @@ void acl_receive_kernel_update(int activation_id, cl_int status) {
   std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {
     lock.lock();
+  } else {
+    // Let the device op queue update thread know there is an interrupt from
+    // the kernel interrupt signal handler
+    acl_platform.outstanding_interrupt = 1;
   }
 
   if (activation_id >= 0 && activation_id < doq->max_ops) {

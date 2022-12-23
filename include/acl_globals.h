@@ -22,6 +22,8 @@ int acl_present_board_is_valid(void);
 // Can't use ACL after this.
 // Undoes acl_init().
 void acl_reset(void);
+// Version of reset used in unit test only
+void acl_reset_join_thread(void);
 
 // Initializes the HAL and loads the builtin system definition.
 //

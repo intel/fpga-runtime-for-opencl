@@ -1636,6 +1636,9 @@ typedef struct _cl_platform_id
   // The device operation queue.
   // These are the operations that can run immediately on the device.
   acl_device_op_queue_t device_op_queue;
+  // Thread used to update device_op_queue when kernel interrupt triggers
+  acl_thread_t device_op_queue_update_thread;
+  bool outstanding_interrupt;
 
   // Limits. See clGetDeviceInfo for semantics.
   unsigned int max_param_size;
