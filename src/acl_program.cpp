@@ -1638,9 +1638,7 @@ void acl_program_device(void *user_data, acl_device_op_t *op) {
     dev_prog->device->def.autodiscovery_def =
         dev_bin->get_devdef().autodiscovery_def;
 
-    int offline_mode = 0;
-    (void)acl_get_offline_device_user_setting(&offline_mode);
-    if (offline_mode == ACL_CONTEXT_MPSIM) {
+    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
       // Override the device name to the simulator.
       // In function acl_device_binary_t::load_binary_pkg, the name member will
       // be checked against the .acl.board section of the aocx file, which would

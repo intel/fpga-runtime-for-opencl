@@ -553,7 +553,6 @@ static cl_int l_finalize_context(cl_context context, cl_uint num_devices,
 static cl_int l_load_properties(cl_context context,
                                 const cl_context_properties *properties) {
   const char *default_compile_cmd = 0;
-  int env_override = 0;
   acl_assert_locked();
 
   // Set defaults.
@@ -717,8 +716,6 @@ static cl_int l_load_properties(cl_context context,
   // Always terminate list. After all, 'properties' might be empty!
   context->properties[context->num_property_entries++] = 0;
 
-  (void)acl_get_offline_device_user_setting(&env_override);
-
   context->compiles_programs_incompletely = 0;
   switch (context->compiler_mode) {
   case static_cast<acl_compiler_mode_t>(
@@ -788,7 +785,7 @@ static cl_int l_load_properties(cl_context context,
   // We need backing store for the buffers.
   context->device_buffers_have_backing_store = 1;
 
-  if (env_override == ACL_CONTEXT_MPSIM) {
+  if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
     //  Simulator should support save/restore buffers around programming if
     //  reprogramming on-the-fly is supported
     context->saves_and_restores_buffers_for_reprogramming = 1;

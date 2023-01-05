@@ -175,13 +175,10 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
 #define FAILREAD_MSG "Could not read parts of the program binary."
   size_t data_len = 0;
 
-  int env_override = 0;
-
   acl_assert_locked();
 
-  (void)acl_get_offline_device_user_setting(&env_override);
-
-  if (env_override == ACL_CONTEXT_MPSIM && !validate_compile_options &&
+  if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM &&
+      !validate_compile_options &&
       context->compiler_mode != CL_CONTEXT_COMPILER_MODE_OFFLINE_INTELFPGA &&
       get_binary_len() < 1024) {
     // IF the binary is ridiculously small (arbitrary number) we are going
@@ -258,7 +255,7 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
   // runtime.
   if (acl_pkg_section_exists(pkg, ".acl.rand_hash", &data_len) &&
       dev_prog->device->loaded_bin == nullptr &&
-      env_override != ACL_CONTEXT_MPSIM) {
+      acl_platform.offline_mode != ACL_CONTEXT_MPSIM) {
     std::vector<char> pkg_rand_hash(data_len + 1);
     AND_CHECK(acl_pkg_read_section(pkg, ".acl.rand_hash", pkg_rand_hash.data(),
                                    data_len + 1),
@@ -305,7 +302,7 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
       // For simulator flow, we treat as if the device has already been
       // programmed and check device global memory layout against
       // dev_prog->device->last_bin
-      if (env_override == ACL_CONTEXT_MPSIM) {
+      if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
         if (validate_memory_layout && dev_prog->device->last_bin) {
           AND_CHECK(get_devdef().autodiscovery_def.num_global_mem_systems <=
                             1 ||
@@ -357,7 +354,7 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
   is_simulator = 0;
   if (status == CL_SUCCESS &&
       acl_pkg_section_exists(pkg, ".acl.simulator_object", &data_len)) {
-    if (env_override != ACL_CONTEXT_MPSIM) {
+    if (acl_platform.offline_mode != ACL_CONTEXT_MPSIM) {
       acl_context_callback(
           context,
           "aocx contains simulated kernel, but simulation mode not set!");
@@ -382,7 +379,7 @@ cl_int acl_device_binary_t::load_binary_pkg(int validate_compile_options,
         context,
         "aocx contains unsupported legacy opencl emulated kernel for windows!");
   }
-  if (status == CL_SUCCESS && env_override == ACL_CONTEXT_MPSIM &&
+  if (status == CL_SUCCESS && acl_platform.offline_mode == ACL_CONTEXT_MPSIM &&
       !is_simulator) {
     acl_context_callback(context,
                          "Simulation mode set but aocx is for hardware!");
