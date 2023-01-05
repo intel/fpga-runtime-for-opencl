@@ -148,9 +148,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     {
       auto mmd_properties_it = mmd_properties.begin();
       if (mem_id) {
-        int use_offline_only;
-        acl_get_offline_device_user_setting(&use_offline_only);
-        if (use_offline_only == ACL_CONTEXT_MPSIM) {
+        if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
           *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
           *mmd_properties_it++ = *mem_id;
         }
@@ -433,9 +431,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     {
       auto mmd_properties_it = mmd_properties.begin();
       if (mem_id) {
-        int use_offline_only;
-        acl_get_offline_device_user_setting(&use_offline_only);
-        if (use_offline_only == ACL_CONTEXT_MPSIM) {
+        if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
           *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
           *mmd_properties_it++ = *mem_id;
         }

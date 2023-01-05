@@ -1576,6 +1576,10 @@ typedef struct _cl_platform_id
   // The setting of environment variable CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA, if
   // any.
   std::string offline_device;
+  // Cache context offline mode specified by environment variables
+  // CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA, CL_CONTEXT_MPSIM_DEVICE_INTELFPGA
+  // or CL_CONTEXT_MSIM_DEVICE_INTELFPGA
+  int offline_mode;
 
   // Should we track and automatically release leaked objects?
   // This helps immensely with the OpenCL conformance tests which tend to

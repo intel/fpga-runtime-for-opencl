@@ -224,6 +224,7 @@ void acl_reset(void) {
   l_reset_present_board();
 
   acl_platform.offline_device = "";
+  acl_platform.offline_mode = ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY;
   acl_platform.num_devices = 0;
   for (unsigned i = 0; i < ACL_MAX_DEVICE; ++i) {
     acl_platform.device[i] = _cl_device_id();

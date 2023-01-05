@@ -288,7 +288,6 @@ const char *acl_platform_extensions() {
 // Initialize the internal bookkeeping based on the system definition
 // provided to us.
 void acl_init_platform(void) {
-  int offline_mode = 0;
   acl_assert_locked();
 
   acl_platform.dispatch = &acl_icd_dispatch;
@@ -304,9 +303,9 @@ void acl_init_platform(void) {
 
   // Set offline_device property
   const char *offline_device =
-      acl_get_offline_device_user_setting(&offline_mode);
+      acl_get_offline_device_user_setting(&acl_platform.offline_mode);
   if (offline_device) {
-    if (offline_mode == ACL_CONTEXT_MPSIM) {
+    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
       acl_platform.offline_device = ACL_MPSIM_DEVICE_NAME;
     } else {
       acl_platform.offline_device = offline_device;
@@ -383,7 +382,7 @@ void acl_init_platform(void) {
   // having.
   acl_platform.initial_board_def = acl_present_board_def();
 
-  switch (offline_mode) {
+  switch (acl_platform.offline_mode) {
   case ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY:
     acl_platform.num_devices =
         acl_platform.initial_board_def->num_devices +
@@ -409,7 +408,7 @@ void acl_init_platform(void) {
     l_add_device(static_cast<int>(i));
   }
 
-  l_initialize_offline_devices(offline_mode);
+  l_initialize_offline_devices(acl_platform.offline_mode);
 
   // Device operation queue.
   acl_init_device_op_queue(&acl_platform.device_op_queue);
@@ -516,15 +515,12 @@ void acl_init_platform(void) {
 
 void acl_finalize_init_platform(unsigned int num_devices,
                                 const cl_device_id *devices) {
-  int offline_mode = 0;
   int have_single_bank_with_shared_memory;
   acl_assert_locked();
   assert(num_devices > 0);
 
-  (void)acl_get_offline_device_user_setting(&offline_mode);
-
-  l_initialize_devices(acl_present_board_def(), offline_mode, num_devices,
-                       devices);
+  l_initialize_devices(acl_present_board_def(), acl_platform.offline_mode,
+                       num_devices, devices);
 
   if (is_SOC_device()) {
     size_t cur_num_banks =

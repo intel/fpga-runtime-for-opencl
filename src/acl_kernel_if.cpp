@@ -706,7 +706,6 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   char description_size_lsb[KERNEL_ROM_SIZE_BYTES_READ + 1];
   unsigned int size_location, version, size;
   int result = 0;
-  int use_offline_only = 0;
   acl_assert_locked();
 
   assert(acl_bsp_io_is_valid(&bsp_io));
@@ -723,8 +722,7 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
 
   // The simulator doesn't have any kernel interface information until the aocx
   // is loaded, which happens later.
-  acl_get_offline_device_user_setting(&use_offline_only);
-  if (use_offline_only == ACL_CONTEXT_MPSIM) {
+  if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
     std::string err_msg;
     auto parse_result = acl_load_device_def_from_str(
         acl_shipped_board_cfgs[0].cfg, sysdef->device[0].autodiscovery_def,

@@ -1248,7 +1248,7 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
 #endif
 
   // Dynamically load board mmd & symbols
-  acl_get_offline_device_user_setting(&use_offline_only);
+  (void)acl_get_offline_device_user_setting(&use_offline_only);
   if (use_offline_only == ACL_CONTEXT_MPSIM) {
 
     // Substitute the simulator MMD layer.
