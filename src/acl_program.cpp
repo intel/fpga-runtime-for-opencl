@@ -253,8 +253,6 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithSourceIntelFPGA(
         }
         offset += len;
         break;
-      default:
-        break;
       }
     }
     if (pass == 1)
