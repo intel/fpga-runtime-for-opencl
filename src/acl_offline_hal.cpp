@@ -179,7 +179,7 @@ static void acl_offline_hal_copy_hostmem_to_hostmem(cl_event event,
 
   acl_offline_hal_event_callback(
       event, CL_RUNNING); // in "real life" this in response to a hw message
-  acl_print_debug_msg(" Copying %d bytes from %p to %p event %p\n", size, src,
+  acl_print_debug_msg(" Copying %zu bytes from %p to %p event %p\n", size, src,
                       dest, event);
   memmove(dest, src, size);
   acl_offline_hal_event_callback(
