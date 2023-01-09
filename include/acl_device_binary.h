@@ -26,6 +26,12 @@ class acl_device_binary_t {
 public:
   ~acl_device_binary_t() { unload_content(); }
 
+  acl_device_binary_t &operator=(const acl_device_binary_t &) = delete;
+
+  acl_device_binary_t(const acl_device_binary_t &) = delete;
+
+  acl_device_binary_t() = default;
+
   inline void set_dev_prog(acl_device_program_info_t *dev_prog) {
     m_dev_prog = dev_prog;
   }
