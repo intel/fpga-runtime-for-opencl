@@ -374,7 +374,7 @@ char *acl_dlerror(void) {
   }
 }
 
-int acl_dlpresent(void) { return LoadLibrary != 0; }
+int acl_dlpresent(void) { return &LoadLibrary != nullptr; }
 
 int acl_dlclose(void *handle) { return (int)FreeLibrary((HMODULE)handle); }
 
@@ -400,7 +400,7 @@ void *acl_dlsym(void *dllhandle, const char *symbolname) {
 
 char *acl_dlerror(void) { return dlerror(); }
 
-int acl_dlpresent(void) { return dlopen != 0; }
+int acl_dlpresent(void) { return &dlopen != nullptr; }
 
 int acl_dlclose(void *dllhandle) { return !dlclose(dllhandle); }
 
