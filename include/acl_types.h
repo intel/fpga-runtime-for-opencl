@@ -216,6 +216,20 @@ typedef enum {
   ACL_COMPILER_MODE_NUM_MODES = CL_CONTEXT_COMPILER_MODE_NUM_MODES_INTELFPGA
 } acl_compiler_mode_t;
 
+// Looks at environment variable CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA.
+// If it exists and is prefixed by "+" then:
+//    Return a pointer to the device name (without the "+" prefix).
+//    Set *use_offline_ret_only = 1
+// If it exists and is not prefixed by "+" then
+//    Return a pointer to the device name.
+//    Set *use_offline_ret_only = 0
+typedef enum {
+  ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY,
+  ACL_CONTEXT_OFFLINE_ONLY,
+  ACL_CONTEXT_MSIM,
+  ACL_CONTEXT_MPSIM
+} acl_context_offline_mode_t;
+
 /* When a feature is still in development, it might need enum values
  * that are distinct from all published enums in the OpenCL token registry.
  * There is a reserved range for values for such "experimental" features.
@@ -1226,7 +1240,8 @@ typedef struct _cl_device_id {
 
   unsigned int address_bits; // cache address bits to avoid GetDeviceInfo calls
 
-  int present; // Is the device present in the host system?
+  bool present; // Is the device present in the host system?
+  bool offline; // Is the device a real (i.e., not simulator) offline device?
 
   // Error notification callback.
   CL_EXCEPTION_TYPE_INTEL device_exception_status;
@@ -1573,13 +1588,16 @@ typedef struct _cl_platform_id
   int device_exception_platform_counter; // indicates number of devices with at
                                          // least one exception
 
-  // The setting of environment variable CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA, if
-  // any.
-  std::string offline_device;
+  // Record whether the platform has (non-simulator) offline device,
+  // value will be:
+  // 1: if there is a valid offline device specified by environment variable
+  // 0: if there is no offline device specified by environment variable
+  // -1: if the offline device specified by environment variable is invalid
+  int has_offline_device;
   // Cache context offline mode specified by environment variables
   // CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA, CL_CONTEXT_MPSIM_DEVICE_INTELFPGA
   // or CL_CONTEXT_MSIM_DEVICE_INTELFPGA
-  int offline_mode;
+  acl_context_offline_mode_t offline_mode;
 
   // Should we track and automatically release leaked objects?
   // This helps immensely with the OpenCL conformance tests which tend to

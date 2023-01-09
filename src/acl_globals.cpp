@@ -73,8 +73,10 @@ static void l_reset_present_board() {
 // If it's prefixed by "+", then it's in addition to any auto-discovered
 // devices.
 // If not, then we don't even probe for auto-discovered devices.
-const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
-  int use_offline_only = 0;
+acl_context_offline_mode_t
+acl_get_offline_device_user_setting(std::string *offline_device) {
+  acl_context_offline_mode_t use_offline_only =
+      ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY;
   const char *setting = 0;
   const char *setting_deprecated = 0;
   const char *result = 0;
@@ -136,8 +138,15 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
     }
   }
 
-  *use_offline_only_ret = use_offline_only;
-  return result;
+  if (offline_device) {
+    if (use_offline_only == ACL_CONTEXT_MPSIM) {
+      *offline_device = ACL_MPSIM_DEVICE_NAME;
+    } else if (result) {
+      *offline_device = result;
+    }
+  }
+
+  return use_offline_only;
 }
 
 int acl_init(const acl_system_def_t *newsys) {
@@ -166,11 +175,11 @@ int acl_init(const acl_system_def_t *newsys) {
 // This function returns CL_TRUE if a hal is initialized and CL_FALSE
 // if it is not.
 cl_bool acl_init_from_hal_discovery(void) {
-  int use_offline_only = 0;
   const acl_hal_t *board_hal;
   acl_assert_locked();
 
-  (void)acl_get_offline_device_user_setting(&use_offline_only);
+  acl_context_offline_mode_t use_offline_only =
+      acl_get_offline_device_user_setting(NULL);
 
   // Two jobs:
   // 1. Set the HAL from the linked-in HAL library.
@@ -223,8 +232,8 @@ void acl_reset(void) {
 
   l_reset_present_board();
 
-  acl_platform.offline_device = "";
   acl_platform.offline_mode = ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY;
+  acl_platform.has_offline_device = 0;
   acl_platform.num_devices = 0;
   for (unsigned i = 0; i < ACL_MAX_DEVICE; ++i) {
     acl_platform.device[i] = _cl_device_id();

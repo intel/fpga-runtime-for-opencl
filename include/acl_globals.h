@@ -44,18 +44,8 @@ void acl_reset(void);
 // if it is not.
 cl_bool acl_init_from_hal_discovery(void);
 
-// Looks at environment variable CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA.
-// If it exists and is prefixed by "+" then:
-//    Return a pointer to the device name (without the "+" prefix).
-//    Set *use_offline_ret_only = 1
-// If it exists and is not prefixed by "+" then
-//    Return a pointer to the device name.
-//    Set *use_offline_ret_only = 0
-#define ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY 0
-#define ACL_CONTEXT_OFFLINE_ONLY 1
-#define ACL_CONTEXT_MSIM 3
-#define ACL_CONTEXT_MPSIM 4
-const char *acl_get_offline_device_user_setting(int *use_offline_only_ret);
+acl_context_offline_mode_t
+acl_get_offline_device_user_setting(std::string *offline_device);
 
 ACL_EXPORT
 extern struct _cl_platform_id acl_platform;

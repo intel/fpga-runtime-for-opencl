@@ -48,7 +48,6 @@ static void
 l_init_kernel_invocation_wrapper(acl_kernel_invocation_wrapper_t *wrapper,
                                  unsigned i);
 static void l_forcibly_release_allocations(cl_context context);
-static cl_device_id l_find_device_by_name(const std::string &name);
 static cl_int l_update_program_library_root(cl_context context,
                                             const char *new_root);
 static cl_int l_update_compile_command(cl_context context, const char *new_cmd);
@@ -606,12 +605,11 @@ static cl_int l_load_properties(cl_context context,
     }
   }
 
-  // Environment variable can specify we always an offline device.
-  if (!acl_platform.offline_device.empty()) {
-    if (!l_find_device_by_name(acl_platform.offline_device))
-      ERR_RET(CL_INVALID_VALUE, context,
-              "Invalid offline device specified by environment variable "
-              "CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA");
+  // Check if environment variable specified offline device is valid
+  if (acl_platform.has_offline_device < 0) {
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid offline device specified by environment variable "
+            "CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA");
   }
 
   // Get default for program_library_root.
@@ -817,17 +815,6 @@ static cl_int l_load_properties(cl_context context,
   return CL_SUCCESS;
 }
 
-static cl_device_id l_find_device_by_name(const std::string &name) {
-  acl_assert_locked();
-
-  for (unsigned i = 0; i < acl_platform.num_devices; ++i) {
-    if (name == acl_platform.device[i].def.autodiscovery_def.name) {
-      return &(acl_platform.device[i]);
-    }
-  }
-  return 0;
-}
-
 // Initialize the given context.
 // Yes, this is like a "placement new".
 //
@@ -883,8 +870,6 @@ static cl_int l_init_context_with_devices(cl_context context,
   int num_present = 0;
   int num_absent = 0;
   for (cl_uint i = 0; i < num_devices; i++) {
-    int usable = devices[i]->present;
-
     // Can't mix both (actually) present and absent devices because there
     // is no consistent way to place device global memory.
     if (devices[i]->present) {
@@ -900,10 +885,7 @@ static cl_int l_init_context_with_devices(cl_context context,
               "Can't create a context with both offline and online devices");
     }
 
-    usable = usable || acl_platform.offline_device ==
-                           devices[i]->def.autodiscovery_def.name;
-
-    if (!usable)
+    if (!devices[i]->present && !devices[i]->offline)
       ERR_RET(CL_DEVICE_NOT_AVAILABLE, context, "Device not available");
 
     // Mark the device(s) as opened
