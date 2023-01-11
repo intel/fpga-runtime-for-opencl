@@ -186,10 +186,10 @@ int acl_sem_destroy(acl_sem_t *sem);
 // The very tricky part is that the signaler can only use
 // semaphore-increment, and therefore *does not have a lock*.
 //
-// See this Microsoft Research paper on how to implement condition
-// variables with only semaphores
-//    http://research.microsoft.com/pubs/64242/implementingcvs.pdf
-// It's veyr instructive, but we can't use its implementation because:
+// See
+// Andrew D. Birrell, Implementing Condition Variables with Semaphores (2003).
+// https://web.archive.org/web/20091122223051/http://research.microsoft.com/pubs/64242/implementingcvs.pdf
+// It's very instructive, but we can't use its implementation because:
 //    - The signaler acquires a mutex
 //    - It keeps an explicit linked list of waiters
 //
