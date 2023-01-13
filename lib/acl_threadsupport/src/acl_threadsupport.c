@@ -421,13 +421,6 @@ int acl_timed_wait_condvar(struct acl_condvar_s *C, unsigned timeout_period) {
     // Switch groups.
     C->entry_q = 1 - C->entry_q;
 
-    // Before exiting, lower signal if it was sent between timeout_period and
-    // now
-    if (timed_out) {
-      if (!acl_sem_trywait(&C->signal_sem)) {
-        timed_out = 0;
-      }
-    }
     C->timedout[my_entry_q] = timed_out;
 
     l_dump("Wake end");
