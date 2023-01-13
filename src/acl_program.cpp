@@ -1350,7 +1350,7 @@ static cl_int l_build_program_for_device(cl_program program,
     }
     // num_global_mem_systems of device binary autodiscovery def will remain 0
     // only when CL_CONTEXT_COMPILER_MODE_INTELFPGA is
-    // ACL_COMPILER_MODE_PRELOADED_BINARY_ONLY or ACL_COMPILER_MODE_SIMULATION,
+    // ACL_COMPILER_MODE_PRELOADED_BINARY_ONLY,
     // in these situations we should only use num_global_memory_system of device
     // autodiscovery def which would be initialized with acl_kernel_if_init by
     // reading the autodiscovery string of the bitstream currently programmed on
