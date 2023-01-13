@@ -948,7 +948,7 @@ MT_TEST(Context, compiler_mode) {
       {"x", false, false}, {"x1", false, false}, {"-1", false, false},
       {"0", true, true},   {"1", true, true},    {"2", true, true},
       {"3", true, true},   {"4", true, true},    {"5", true, true},
-      {"6", true, true},   {"7", true, false}};
+      {"6", true, false}};
 
   for (unsigned ienv = 0; ienv < sizeof(envvals) / sizeof(envvals[0]); ienv++) {
     // don't set env vars until all threads are ready to use it
