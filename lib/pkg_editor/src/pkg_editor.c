@@ -39,9 +39,7 @@
 #endif
 
 #include "pkg_editor/pkg_editor.h"
-#if USE_ZLIB
-#include "zlib_interface.h"
-#endif
+#include "zlib.h"
 
 typedef struct acl_pkg_file {
   const char *fname;
@@ -1194,7 +1192,7 @@ static int append_data(const void *data, size_t size, ZInfo *z_info, FILE *of,
       int ret;
       z_info->strm.avail_out = sizeof(z_info->buffer);
       z_info->strm.next_out = z_info->buffer;
-      ret = zlib_deflate(&z_info->strm, Z_FINISH);
+      ret = deflate(&z_info->strm, Z_FINISH);
       assert(ret != Z_STREAM_ERROR);
       output_size = sizeof(z_info->buffer) - z_info->strm.avail_out;
       if (output_size > 0) {
@@ -1206,7 +1204,7 @@ static int append_data(const void *data, size_t size, ZInfo *z_info, FILE *of,
   } else {
     // Only dump the output buffer when it is full.
     do {
-      int ret = zlib_deflate(&z_info->strm, Z_NO_FLUSH);
+      int ret = deflate(&z_info->strm, Z_NO_FLUSH);
       assert(ret != Z_STREAM_ERROR);
       if (z_info->strm.avail_out == 0) {
         if (fwrite(z_info->buffer, sizeof(z_info->buffer), 1, of) != 1) {
@@ -1476,7 +1474,8 @@ int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
   z_info.strm.opaque = Z_NULL;
   z_info.strm.avail_out = sizeof(z_info.buffer);
   z_info.strm.next_out = z_info.buffer;
-  ret = zlib_deflateInit(&z_info.strm, Z_BEST_COMPRESSION);
+  ret = deflateInit_(&z_info.strm, Z_BEST_COMPRESSION, ZLIB_VERSION,
+                     (int)sizeof(z_stream));
   if (ret != Z_OK) {
     fprintf(stderr, "acl_pkg_pack: Unable to initialize zlib for writing %s\n",
             out_file);
@@ -1491,7 +1490,7 @@ int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
     if (result == PACK_END) {
       // We had a failure; stop here.
       fclose(of);
-      zlib_deflateEnd(&z_info.strm);
+      deflateEnd(&z_info.strm);
       return 0;
     }
     input_files_dirs++;
@@ -1505,10 +1504,10 @@ int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
   if (fclose(of) != 0) {
     fprintf(stderr, "acl_pkg_pack: Write of %s failed: %s\n", out_file,
             strerror(errno));
-    zlib_deflateEnd(&z_info.strm);
+    deflateEnd(&z_info.strm);
     return 0;
   }
-  zlib_deflateEnd(&z_info.strm);
+  deflateEnd(&z_info.strm);
   return 1 /* success */;
 }
 
@@ -1534,7 +1533,7 @@ static int read_data(void *data, size_t size, ZInfo *z_info, FILE *in_fd) {
       z_info->strm.next_in = z_info->buffer;
     }
     // Grab the next chunk of data from the input buffer.
-    ret = zlib_inflate(&z_info->strm, Z_NO_FLUSH);
+    ret = inflate(&z_info->strm, Z_NO_FLUSH);
     assert(ret != Z_STREAM_ERROR);
     if (ret == Z_STREAM_END) {
       // Last bit of data.
@@ -1590,7 +1589,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     z_info.strm.avail_in = 0;
     z_info.strm.next_in = NULL;
   }
-  ret = zlib_inflateInit(&z_info.strm);
+  ret = inflateInit_(&z_info.strm, ZLIB_VERSION, (int)sizeof(z_stream));
   if (ret != Z_OK) {
     fprintf(stderr, "%s: Unable to initialize zlib for reading from buffer\n",
             routine_name);
@@ -1611,13 +1610,13 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     acl_pkg_pack_info info;
     if (!read_data(&info, sizeof(info), &z_info, input)) {
       fprintf(stderr, "%s: Error reading from buffer\n", routine_name);
-      zlib_inflateEnd(&z_info.strm);
+      inflateEnd(&z_info.strm);
       return 0;
     }
     if (info.magic != PACK_MAGIC) {
       fprintf(stderr, "%s: Incorrect magic number read from buffer\n",
               routine_name);
-      zlib_inflateEnd(&z_info.strm);
+      inflateEnd(&z_info.strm);
       return 0;
     }
 
@@ -1630,7 +1629,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     if (!read_data(name, info.name_length, &z_info, input)) {
       fprintf(stderr, "%s: Error reading file name from buffer\n",
               routine_name);
-      zlib_inflateEnd(&z_info.strm);
+      inflateEnd(&z_info.strm);
       return 0;
     }
 
@@ -1656,7 +1655,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
       if (out_file == NULL) {
         fprintf(stderr, "%s: Unable to open %s for writing: %s\n", routine_name,
                 full_name, strerror(errno));
-        zlib_inflateEnd(&z_info.strm);
+        inflateEnd(&z_info.strm);
         return 0;
       }
       if (info.file_length > 0) {
@@ -1666,14 +1665,14 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
             fprintf(stderr, "%s: Error reading file data for %s from buffer\n",
                     routine_name, full_name);
             fclose(out_file);
-            zlib_inflateEnd(&z_info.strm);
+            inflateEnd(&z_info.strm);
             return 0;
           }
           if (fwrite(buf, info.file_length, 1, out_file) != 1) {
             fprintf(stderr, "%s: Failed to write to %s: %s\n", routine_name,
                     full_name, strerror(errno));
             fclose(out_file);
-            zlib_inflateEnd(&z_info.strm);
+            inflateEnd(&z_info.strm);
             return 0;
           }
         } else {
@@ -1683,7 +1682,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
                     routine_name, full_name, strerror(errno));
             fclose(out_file);
             free(buf2);
-            zlib_inflateEnd(&z_info.strm);
+            inflateEnd(&z_info.strm);
             return PACK_END;
           }
           if (!read_data(buf2, info.file_length, &z_info, input)) {
@@ -1691,7 +1690,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
                     routine_name, full_name);
             fclose(out_file);
             free(buf2);
-            zlib_inflateEnd(&z_info.strm);
+            inflateEnd(&z_info.strm);
             return 0;
           }
           if (fwrite(buf2, info.file_length, 1, out_file) != 1) {
@@ -1699,7 +1698,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
                     full_name, strerror(errno));
             fclose(out_file);
             free(buf2);
-            zlib_inflateEnd(&z_info.strm);
+            inflateEnd(&z_info.strm);
             return 0;
           }
           free(buf2);
@@ -1709,7 +1708,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     }
   }
 
-  zlib_inflateEnd(&z_info.strm);
+  inflateEnd(&z_info.strm);
   return 1;
 }
 
@@ -1742,24 +1741,6 @@ int acl_pkg_unpack(const char *in_file, const char *out_dir) {
     fclose(input);
   }
   return ret;
-}
-
-#else // USE_ZLIB
-
-int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
-  // Not implemented if no ZLIB
-  return 0;
-}
-
-int acl_pkg_unpack(const char *in_file, const char *out_dir) {
-  // Not implemented if no ZLIB
-  return 0;
-}
-
-int acl_pkg_unpack_buffer(const char *buffer, size_t buffer_size,
-                          const char *out_dir) {
-  // Not implemented if no ZLIB
-  return 0;
 }
 
 #endif // USE_ZLIB

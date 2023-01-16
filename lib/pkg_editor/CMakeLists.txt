@@ -20,7 +20,6 @@ if(ZLIB_FOUND)
     target_compile_definitions(pkg_editor PRIVATE WINDOWS_ZLIB_PATH="${WINDOWS_ZLIB_DLL_PATH}")
   endif()
   target_link_libraries(pkg_editor PRIVATE ZLIB::ZLIB)
-  target_sources(pkg_editor PRIVATE src/zlib.c)
 endif()
 
 install(TARGETS pkg_editor
