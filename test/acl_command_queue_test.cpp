@@ -52,9 +52,8 @@ MT_TEST_GROUP(acl_command_queue) {
     CHECK_EQUAL(CL_SUCCESS,
                 clGetDeviceIDs(m_platform, CL_DEVICE_TYPE_ALL, MAX_DEVICES,
                                &m_device[0], &m_num_devices));
-    int offline_only = 0;
-    CHECK_EQUAL(0, acl_get_offline_device_user_setting(&offline_only));
-    CHECK_EQUAL(0, offline_only);
+    CHECK_EQUAL(ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY,
+                acl_get_offline_device_user_setting(NULL));
     CHECK(m_num_devices > 0);
   }
 

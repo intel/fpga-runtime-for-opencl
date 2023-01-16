@@ -54,8 +54,7 @@ struct _cl_platform_id acl_platform = {
     ,
     0 // default value for device_exception_platform_counter
     ,
-    "" // No offline device specified by an environment variable, as far as we
-       // know right now.
+    0 // No offline device specified by an environment variable so far
 };
 
 // Used to detect if user is creating contexts/getting platform ids in multiple
@@ -74,9 +73,9 @@ static std::vector<std::optional<acl_system_def_t>> shipped_board_defs;
 
 //////////////////////////////
 // Local functions.
-static void l_initialize_offline_devices(int offline_mode);
+static void l_initialize_offline_devices(std::string offline_device);
 static void l_initialize_devices(const acl_system_def_t *present_board_def,
-                                 int offline_mode, unsigned int num_devices,
+                                 unsigned int num_devices,
                                  const cl_device_id *devices);
 static void l_add_device(int idx);
 
@@ -128,7 +127,7 @@ clGetPlatformIDsIntelFPGA(cl_uint num_entries, cl_platform_id *platforms,
     //    - Probed devices we find actually attached to the host (probed on
     //    PCIe), if any,
     //    - Followed by followed by the list of devices we ship.
-    // Only probed devices will be marked with .present == 1.
+    // Only probed devices will be marked with .present == true.
     //
     // In the end this calls back into acl_init_platform which also sets
     // acl_platform.initialized = 1.
@@ -302,15 +301,9 @@ void acl_init_platform(void) {
   acl_platform.cl_obj_head = 0;
 
   // Set offline_device property
-  const char *offline_device =
-      acl_get_offline_device_user_setting(&acl_platform.offline_mode);
-  if (offline_device) {
-    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
-      acl_platform.offline_device = ACL_MPSIM_DEVICE_NAME;
-    } else {
-      acl_platform.offline_device = offline_device;
-    }
-  }
+  std::string offline_device = "";
+  acl_platform.offline_mode =
+      acl_get_offline_device_user_setting(&offline_device);
 
   acl_platform.name = "Intel(R) FPGA SDK for OpenCL(TM)";
   acl_platform.vendor = "Intel(R) Corporation";
@@ -386,8 +379,9 @@ void acl_init_platform(void) {
   case ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY:
     acl_platform.num_devices =
         acl_platform.initial_board_def->num_devices +
-        (offline_device ? 1 : 0); // the devices in the board def + 1 for the
-                                  // offline device, if it exists
+        (offline_device.empty() ? 0
+                                : 1); // the devices in the board def + 1 for
+                                      // the offline device, if it exists
     break;
   case ACL_CONTEXT_MPSIM:
 #ifdef __linux__
@@ -408,7 +402,7 @@ void acl_init_platform(void) {
     l_add_device(static_cast<int>(i));
   }
 
-  l_initialize_offline_devices(acl_platform.offline_mode);
+  l_initialize_offline_devices(offline_device);
 
   // Device operation queue.
   acl_init_device_op_queue(&acl_platform.device_op_queue);
@@ -519,8 +513,7 @@ void acl_finalize_init_platform(unsigned int num_devices,
   acl_assert_locked();
   assert(num_devices > 0);
 
-  l_initialize_devices(acl_present_board_def(), acl_platform.offline_mode,
-                       num_devices, devices);
+  l_initialize_devices(acl_present_board_def(), num_devices, devices);
 
   if (is_SOC_device()) {
     size_t cur_num_banks =
@@ -565,7 +558,7 @@ static void l_show_devs(const char *prefix) {
   }
 }
 
-static void l_initialize_offline_devices(int offline_mode) {
+static void l_initialize_offline_devices(std::string offline_device) {
   acl_platform.global_mem.range.begin = 0;
   acl_platform.global_mem.range.next = 0;
 
@@ -592,7 +585,7 @@ static void l_initialize_offline_devices(int offline_mode) {
     board_def->num_devices = 1;
   }
 
-  if (offline_mode == ACL_CONTEXT_MPSIM) {
+  if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
     auto &board_def = shipped_board_defs.emplace_back();
     board_def.emplace();
     std::string err_msg;
@@ -607,36 +600,47 @@ static void l_initialize_offline_devices(int offline_mode) {
     }
   }
 
-  if (!acl_platform.offline_device.empty()) {
+  if (!offline_device.empty()) {
     unsigned int board_count = 1;
     int device_index = 0;
-    if (offline_mode == ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY) {
+    if (acl_platform.offline_mode == ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY) {
       // In this case, we place the offline device at the end of the device list
       // (after the autodiscovered devices).
       device_index = (int)(acl_platform.num_devices - board_count);
     }
 
+    const bool is_present = (acl_platform.offline_mode == ACL_CONTEXT_MPSIM);
     // If the user specified an offline device, then load it.
     // Search the shipped board defs for the device:
     for (const auto &board_def : shipped_board_defs) {
       if (!board_def.has_value())
         continue;
-      if (acl_platform.offline_device !=
-          board_def->device[0].autodiscovery_def.name)
+
+      // Currently we either have a single simulator device or a single
+      // offline device, so bail early if device name doesn't match
+      if (offline_device != board_def->device[0].autodiscovery_def.name)
         continue;
 
-      const bool is_present = (offline_mode == ACL_CONTEXT_MPSIM);
       for (unsigned j = 0; j < board_count; j++) {
         // Bail if not present and we haven't been told to use absent devices
-        if (!is_present && acl_platform.offline_device !=
-                               board_def->device[0].autodiscovery_def.name)
+        // In future, need to index offline_device with j when multiple
+        // simulator devices are supported
+        if (!is_present &&
+            offline_device != board_def->device[0].autodiscovery_def.name)
           continue;
         // Add HW specific device definition
         acl_platform.device[device_index].def =
             board_def->device[0]; // Struct Copy
         acl_platform.device[device_index].present = is_present;
+        acl_platform.device[device_index].offline = !is_present;
+        if (!is_present)
+          acl_platform.has_offline_device = 1;
         device_index++;
       }
+    }
+    if (!is_present && acl_platform.has_offline_device == 0) {
+      // Did not find specified offline device in the shipped board defs
+      acl_platform.has_offline_device = -1;
     }
   }
   l_show_devs("offline");
@@ -645,28 +649,25 @@ static void l_initialize_offline_devices(int offline_mode) {
 // Initialize acl_platform with device information.
 // Also determine global mem address range.
 static void l_initialize_devices(const acl_system_def_t *present_board_def,
-                                 int offline_mode, unsigned int num_devices,
+                                 unsigned int num_devices,
                                  const cl_device_id *devices) {
   unsigned int i, j;
   acl_assert_locked();
 
-  acl_print_debug_msg("\n\nReset device list:   %d\n", offline_mode);
+  acl_print_debug_msg("\n\nReset device list:   %d\n",
+                      acl_platform.offline_mode);
 
   if (present_board_def) {
     acl_print_debug_msg("\n\nPresent board def:   %d\n",
                         present_board_def->num_devices);
   }
 
-  // shipped_board_def populated earlier in l_initialize_offline_devices
-
-  if (offline_mode == ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY ||
-      offline_mode == ACL_CONTEXT_MSIM || offline_mode == ACL_CONTEXT_MPSIM) {
+  if (acl_platform.offline_mode != ACL_CONTEXT_OFFLINE_ONLY) {
     unsigned int num_platform_devices = acl_platform.num_devices;
-    if (!acl_platform.offline_device.empty() &&
-        offline_mode != ACL_CONTEXT_MSIM && offline_mode != ACL_CONTEXT_MPSIM) {
-      num_platform_devices -=
-          1; // In this case there's an extra offline devices at the end of the
-             // list. Do not check it.
+    if (acl_platform.has_offline_device == 1) {
+      // There's an extra offline devices at the end of the list, Do not check
+      // it.
+      num_platform_devices -= 1;
     }
 
     // Then add the present devices, if any.
@@ -687,7 +688,7 @@ static void l_initialize_devices(const acl_system_def_t *present_board_def,
             if (acl_platform.device[i].opened_count == 1) {
               acl_platform.device[i].def =
                   present_board_def->device[i]; // Struct copy.
-              acl_platform.device[i].present = 1;
+              acl_platform.device[i].present = true;
             }
             break;
           }
@@ -724,6 +725,7 @@ static void l_add_device(int idx) {
 
   device->min_local_mem_size = 16 * 1024; // Min value for OpenCL full profile.
   device->address_bits = 64;              // Yes, our devices are 64-bit.
+  device->offline = false;                // Not an offline device by default
 }
 
 // These functions check to see if a given object is known to the system.

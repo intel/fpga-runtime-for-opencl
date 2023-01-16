@@ -1198,7 +1198,6 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
       buf[MAX_BOARD_NAMES_LEN]; // This is a bit subtle, pointers to device
                                 // names might get cached by various routines
   char *ptr, *saveptr;
-  int use_offline_only;
 
 #ifdef _WIN32
   // We're really relying on this being called before anything else
@@ -1247,7 +1246,8 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
 #endif
 
   // Dynamically load board mmd & symbols
-  (void)acl_get_offline_device_user_setting(&use_offline_only);
+  acl_context_offline_mode_t use_offline_only =
+      acl_get_offline_device_user_setting(NULL);
   if (use_offline_only == ACL_CONTEXT_MPSIM) {
 
     // Substitute the simulator MMD layer.
