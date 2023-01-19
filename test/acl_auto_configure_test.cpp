@@ -102,8 +102,8 @@ TEST(auto_configure, simple) {
 #define NUM_DEV_GLOBAL_FIELD                                                   \
   " 6" // contains dev_globa_name, address, size, host_access, init_mode,
        // implement_in_csr with the above format
-#define DEV_GLOBAL_1 " kernel15_dev_global 4096 2048 3 1 0"
-#define DEV_GLOBAL_2 " kernel15_dev_global2 2048 1024 1 0 1"
+#define DEV_GLOBAL_1 " kernel15_dev_global 0x1000 2048 3 1 0"
+#define DEV_GLOBAL_2 " kernel15_dev_global2 0x800 1024 1 0 1"
 
   int parsed;
   std::string err_str;
@@ -497,8 +497,8 @@ TEST(auto_configure, many_ok_forward_compatibility) {
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx 0 1 17 DDR 2 1 6 0 2147483648 100 "
                                     "100 100 100 0 - 0 200 200 200 200 0 0 0 "
-                                    "2 9 ms_dev_global1 2048 1024 3 0 0 300 "
-                                    "300 300 ms_dev_global2 4096 1024 1 1 1 "
+                                    "2 9 ms_dev_global1 0x800 1024 3 0 0 300 "
+                                    "300 300 ms_dev_global2 0x1000 1024 1 1 1 "
                                     "300 300 300 0 0 400 400 47 "
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 0 500 500 500 0 0 "
@@ -1213,7 +1213,7 @@ TEST(auto_configure, hostpipe) {
                                     "200 "
                                     "2 9 host_to_dev 1 0 32 32768 300 300 300 "
                                     "300 dev_to_host 0 1 32 32768 300 300 300 "
-                                    "300 400 1 6 dev_global_3 1024 2048 0 0 0 "
+                                    "300 400 1 6 dev_global_3 0x400 2048 0 0 0 "
                                     "1 29 foo 0 128 1 0 0 1 0 1 0 0 0 0 0 0 1 "
                                     "1 1 3 1 1 1 3 1 0 0 800 800 800 900 "
                                     "900"
@@ -1245,11 +1245,11 @@ TEST(auto_configure, streaming) {
   const std::string config_str{
       "23 29 " RANDOM_HASH
       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
-      "0 0 0 1 6 device_global_name 256 128 0 0 0 1 105 _ZTS3CRCILi0EE 0 256 1 "
-      "0 0 1 0 1 0 9 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg0 8 2 1 8 1024 0 3 1 "
-      "k0_ZTS3CRCILi0EE_arg1 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg2 7 0 0 8 1 0 "
-      "0 0 7 0 0 8 1 0 0 0 7 2 1 8 1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 "
-      "7 0 0 8 1 0 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 1 "
+      "0 0 0 1 6 device_global_name 0x100 128 0 0 0 1 105 _ZTS3CRCILi0EE 0 256 "
+      "1 0 0 1 0 1 0 9 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg0 8 2 1 8 1024 0 3 "
+      "1 k0_ZTS3CRCILi0EE_arg1 8 0 0 8 1 0 0 1 k0_ZTS3CRCILi0EE_arg2 7 0 0 8 1 "
+      "0 0 0 7 0 0 8 1 0 0 0 7 2 1 8 1024 0 2 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 "
+      "0 7 0 0 8 1 0 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 1 "
       "k0_ZTS3CRCILi0EE_streaming_start k0_ZTS3CRCILi0EE_streaming_done "};
 
   acl_device_def_autodiscovery_t devdef;
