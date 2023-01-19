@@ -143,7 +143,7 @@ static bool read_uint32_counters(const std::string &str,
 // Returns true if a valid integer was read or false if an error occurred.
 // pos is updated to the position immediately following the parsed word
 // even if an error occurs.
-static bool read_uint64_counters(const std::string &str,
+static bool read_uint64_counters(const std::string &str, int base,
                                  std::string::size_type &pos, uint64_t &val,
                                  std::vector<int> &counters) noexcept {
   std::string result;
@@ -151,7 +151,7 @@ static bool read_uint64_counters(const std::string &str,
   decrement_section_counters(counters);
   try {
     static_assert(sizeof(uint64_t) == sizeof(unsigned long long));
-    val = static_cast<uint64_t>(std::stoull(result));
+    val = static_cast<uint64_t>(std::stoull(result, nullptr, base));
   } catch (const std::exception &e) {
     UNREFERENCED_PARAMETER(e);
     return false;
@@ -508,8 +508,9 @@ static bool read_device_global_mem_defs(
     // read device global address
     uint64_t dev_global_addr = 0; // Default
     if (result && counters.back() > 0) {
-      result =
-          read_uint64_counters(config_str, curr_pos, dev_global_addr, counters);
+      // Parse in base 16
+      result = read_uint64_counters(config_str, 16, curr_pos, dev_global_addr,
+                                    counters);
     }
     // read device global address size
     uint32_t dev_global_size = 0; // Default
