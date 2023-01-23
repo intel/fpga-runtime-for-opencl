@@ -2,15 +2,63 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2023.1] - 2023-03-23
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.0...HEAD
+### Added
+- Enable new CSR protocol from the compiler with separated start registers ([#167], [#200]).
+- Perform a memory copy for simulation buffer with buffer location ([#214]).
+- Implement runtime support for device global with init_mode reprogram ([#161]).
+- Enabled `ACL_SUPPORT_DOUBLE` to support `cl_khr_fp64` ([#230]).
+
+### Changed
+- Refactor runtime multi-threading/synchronization support ([#152]).
+- Skip CSR version check when cra_ring_root doesn't exist ([#195]).
+
+### Fixed
+- Fix integer conversion warning in `acl_hash.cpp`, `acl_hash_test.cpp` and `acl_threadsupport.cpp` ([#199], [#201]).
+- Fix warnings in unit test BSP ([#204]).
+- Fix coverity issue, `AUTO_CAUSES_COPY`, in `acl_usm.cpp` and `acl_context.cpp` ([#218], [#223]).
+- Fix wrong printf formatter and uninitialized scalar variable issue in `acl_kernel.cpp` and `acl_pll.cpp` ([#221], [#224]).
+- Fix `NEGATIVE_RETURNS` Coverity issue in `acl_device.cpp` ([#225]).
+- Fix printf formatter issue in `acl_kernel_if.cpp` ([#220]).
+- Cache context offline device setting specified by environment variables ([#235])
+
+### Security
+- Resolve multiple memory leaks and stack buffer overflow in the `pkg_editor` library and `pkg_editor_test` ([#190], [#191]).
+- Fix undefined behaviour in acl_profiler_test ([#196], [#197]).
+- Enable address sanitizer to catch memory safety issues ([#118]).
+- Check for null pointer before dereference in `acl_svm.cpp`, `acl_kernel.cpp` and `acl_profiler.cpp` ([#202], [#203], [#206]).
+- Unconditionally null-terminate output of `strncpy()` in pkg_editor ([#215])
+- Fix various Coverity issues (memory leaks, wrong conditional statetment, dereference after null check ) in `acl_mem.cpp` and `acl_mem_test.cpp` ([#219]).
+
+[2023.1]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.0...v2023.1
+[#118]: https://github.com/intel/fpga-runtime-for-opencl/pull/118
+[#152]: https://github.com/intel/fpga-runtime-for-opencl/pull/152
+[#161]: https://github.com/intel/fpga-runtime-for-opencl/pull/161
+[#167]: https://github.com/intel/fpga-runtime-for-opencl/pull/167
+[#190]: https://github.com/intel/fpga-runtime-for-opencl/pull/190
+[#191]: https://github.com/intel/fpga-runtime-for-opencl/pull/191
+[#195]: https://github.com/intel/fpga-runtime-for-opencl/pull/195
+[#196]: https://github.com/intel/fpga-runtime-for-opencl/pull/196
+[#197]: https://github.com/intel/fpga-runtime-for-opencl/pull/197
+[#199]: https://github.com/intel/fpga-runtime-for-opencl/pull/199
+[#200]: https://github.com/intel/fpga-runtime-for-opencl/pull/200
+[#201]: https://github.com/intel/fpga-runtime-for-opencl/pull/201
+[#202]: https://github.com/intel/fpga-runtime-for-opencl/pull/202
+[#203]: https://github.com/intel/fpga-runtime-for-opencl/pull/203
+[#204]: https://github.com/intel/fpga-runtime-for-opencl/pull/204
+[#206]: https://github.com/intel/fpga-runtime-for-opencl/pull/206
+[#214]: https://github.com/intel/fpga-runtime-for-opencl/pull/214
+[#215]: https://github.com/intel/fpga-runtime-for-opencl/pull/215
+[#218]: https://github.com/intel/fpga-runtime-for-opencl/pull/218
+[#219]: https://github.com/intel/fpga-runtime-for-opencl/pull/219
+[#220]: https://github.com/intel/fpga-runtime-for-opencl/pull/220
+[#221]: https://github.com/intel/fpga-runtime-for-opencl/pull/221
+[#223]: https://github.com/intel/fpga-runtime-for-opencl/pull/223
+[#224]: https://github.com/intel/fpga-runtime-for-opencl/pull/224
+[#225]: https://github.com/intel/fpga-runtime-for-opencl/pull/225
+[#230]: https://github.com/intel/fpga-runtime-for-opencl/pull/230
+[#235]: https://github.com/intel/fpga-runtime-for-opencl/pull/235
 
 ## [2023.0] - 2022-12-12
 
