@@ -1313,9 +1313,6 @@ static acl_pack_kind add_file(const char *out_file, FILE *of, const char *file,
 
 static acl_pack_kind add_directory(const char *out_file, FILE *of,
                                    const char *dir_name, ZInfo *z_info) {
-#ifdef FULL_NAME_LENGTH
-#undef FULL_NAME_LENGTH
-#endif
   acl_pkg_pack_info info;
   size_t name_length = strlen(dir_name) + 1;
 
@@ -1341,24 +1338,31 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
 
   // Now walk the directory processing each name.
   {
+
 #ifdef _WIN32
 #define FULL_NAME_LENGTH (2 * MAX_PATH)
+#else
+#define FULL_NAME_LENGTH (2 * PATH_MAX)
+#endif
+
     char full_name[FULL_NAME_LENGTH];
-    if (FULL_NAME_LENGTH < name_length) {
+
+    // Full name must be large enough to store dir_name plus a trailing path
+    // separator
+    if (name_length + 1 > FULL_NAME_LENGTH) {
       fprintf(stderr, "acl_pkg_pack: Failed to write to %s: %s\n", out_file,
               "Directory name too long");
       return PACK_END;
     }
+#ifdef _WIN32
     HANDLE file_handle;
     WIN32_FIND_DATA file_info;
 
     // Partially initialize the full path name.
-    strncpy(full_name, dir_name, FULL_NAME_LENGTH);
+    strncpy(full_name, dir_name, FULL_NAME_LENGTH - 1);
     strncpy(full_name + name_length - 1, "\\*.*",
-            FULL_NAME_LENGTH - name_length + 1);
-    if (full_name[FULL_NAME_LENGTH - 1] != '\0') {
-      full_name[FULL_NAME_LENGTH - 1] = '\0';
-    }
+            FULL_NAME_LENGTH - name_length);
+    full_name[FULL_NAME_LENGTH - 1] = '\0';
 
     // Walk through all the files in the directory.
     file_handle = FindFirstFile(full_name, &file_info);
@@ -1372,10 +1376,9 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
 
         // Finish the full file name
         strncpy(full_name + name_length, file_info.cFileName,
-                FULL_NAME_LENGTH - name_length);
-        if (full_name[FULL_NAME_LENGTH - 1] != '\0') {
-          full_name[FULL_NAME_LENGTH - 1] = '\0';
-        }
+                FULL_NAME_LENGTH - name_length - 1);
+        full_name[FULL_NAME_LENGTH - 1] = '\0';
+
         if (add_file_or_dir(out_file, of, full_name, z_info) == PACK_END) {
           FindClose(file_handle);
           return PACK_END;
@@ -1386,14 +1389,6 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
     // Linux
     DIR *dir;
     struct dirent *entry;
-#define FULL_NAME_LENGTH (2 * PATH_MAX)
-    char full_name[FULL_NAME_LENGTH];
-    if (FULL_NAME_LENGTH < name_length) {
-      fprintf(stderr, "acl_pkg_pack: Failed to write to %s: %s\n", out_file,
-              "Directory name too long");
-      return PACK_END;
-    }
-
     // Partially initialize the full path name.
     strncpy(full_name, dir_name, FULL_NAME_LENGTH - 1);
     full_name[FULL_NAME_LENGTH - 1] = '\0';
@@ -1414,10 +1409,9 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
         // Finish the full file name, truncate name if the file is too long to
         // avoid buffer overflow
         size_t buffer_space_left = FULL_NAME_LENGTH - name_length;
-        strncpy(full_name + name_length, entry->d_name, buffer_space_left);
-        if (full_name[FULL_NAME_LENGTH - 1] != '\0') {
-          full_name[FULL_NAME_LENGTH - 1] = '\0';
-        }
+        strncpy(full_name + name_length, entry->d_name, buffer_space_left - 1);
+        full_name[FULL_NAME_LENGTH - 1] = '\0';
+
         if (add_file_or_dir(out_file, of, full_name, z_info) == PACK_END) {
           closedir(dir);
           return PACK_END;
@@ -1427,6 +1421,7 @@ static acl_pack_kind add_directory(const char *out_file, FILE *of,
     }
     closedir(dir);
 #endif
+#undef FULL_NAME_LENGTH
   }
   return PACK_DIR;
 }
@@ -1561,12 +1556,6 @@ static int read_data(void *data, size_t size, ZInfo *z_info, FILE *in_fd) {
 static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
                                          FILE *input, const char *out_dir,
                                          const char *routine_name) {
-#ifdef FULL_NAME_LEN
-#undef FULL_NAME_LEN
-#endif
-#ifdef NAME_LEN
-#undef NAME_LEN
-#endif
 #ifdef _WIN32
 #define FULL_NAME_LEN (3 * MAX_PATH)
 #define NAME_LEN (2 * MAX_PATH)
@@ -1641,15 +1630,18 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
       return 0;
     }
 
-    // Generate the full name, truncate or zero pad to avoid buffer overflow
-    if (FULL_NAME_LEN < out_dir_length) {
+    // Generate the full name, truncate or zero pad to avoid buffer overflow.
+    // FULL_NAME_LEN must be large enough to store out_dir and a trailing path
+    // separator and null terminator
+    if (out_dir_length + 2 > FULL_NAME_LEN) {
       fprintf(stderr, "%s: Directory name too long\n", routine_name);
+      inflateEnd(&z_info.strm);
+      return 0;
     }
+
     strncpy(full_name + out_dir_length + 1, name,
-            FULL_NAME_LEN - out_dir_length - 1);
-    if (full_name[FULL_NAME_LEN - 1] != '\0') {
-      full_name[FULL_NAME_LEN - 1] = '\0';
-    }
+            FULL_NAME_LEN - out_dir_length - 2);
+    full_name[FULL_NAME_LEN - 1] = '\0';
 
     if (info.kind == PACK_DIR) {
 #ifdef _WIN32
@@ -1718,6 +1710,8 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
 
   inflateEnd(&z_info.strm);
   return 1;
+#undef FULL_NAME_LEN
+#undef NAME_LEN
 }
 
 int acl_pkg_unpack_buffer(const char *buffer, size_t buffer_size,
