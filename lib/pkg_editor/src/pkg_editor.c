@@ -493,7 +493,13 @@ static char *read_file_into_buffer(struct acl_pkg_file *pkg,
 
   // get file size
   fseek(f, 0, SEEK_END);
-  file_size = ftell(f);
+  const long ftell_return = ftell(f);
+  if (ftell_return < 0) {
+    fprintf(stderr, "Couldn't determine size of file %s\n", in_file);
+    fclose(f);
+    return NULL;
+  }
+  file_size = (size_t)ftell_return;
   rewind(f);
 
   // slurp the whole file into allocated buf
