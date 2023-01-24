@@ -1514,6 +1514,17 @@ int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
   return 1 /* success */;
 }
 
+static void create_dir(const char *dir_name) {
+  // Create output directory. We can ignore the error output since it will
+  // only delay the failure to the first attempt of creating a file in the
+  // (not) newly created directory.
+#ifdef _WIN32
+  (void)CreateDirectory(dir_name, NULL);
+#else
+  (void)mkdir(dir_name, 0755);
+#endif
+}
+
 static int read_data(void *data, size_t size, ZInfo *z_info, FILE *in_fd) {
   // We want to fill 'data' with 'size' bytes.
   z_info->strm.next_out = data;
@@ -1593,12 +1604,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     return 0;
   }
 
-  // Create output directory (ignore any errors).
-#ifdef _WIN32
-  CreateDirectory(full_name, NULL);
-#else
-  mkdir(full_name, 0755);
-#endif
+  create_dir(full_name);
   full_name[out_dir_length] = '/';
 
   // Process the file until we hit the PACK_END record (or finish the
@@ -1644,11 +1650,7 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
     full_name[FULL_NAME_LEN - 1] = '\0';
 
     if (info.kind == PACK_DIR) {
-#ifdef _WIN32
-      CreateDirectory(full_name, NULL);
-#else
-      mkdir(full_name, 0755);
-#endif
+      create_dir(full_name);
     } else {
       // Read file contents
       FILE *out_file = fopen(full_name, "wb");
