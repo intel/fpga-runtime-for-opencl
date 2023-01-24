@@ -39,7 +39,9 @@
 #endif
 
 #include "pkg_editor/pkg_editor.h"
+#if USE_ZLIB
 #include "zlib.h"
+#endif
 
 typedef struct acl_pkg_file {
   const char *fname;
