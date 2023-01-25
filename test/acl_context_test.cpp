@@ -1096,11 +1096,9 @@ MT_TEST(Context, offline_device) {
     }
 
     syncThreads();
-
-    for (int apitype = 0; apitype < 1; apitype++) { // just do test by type.
+    for (int apitype = 0; apitype < 2; apitype++) { // just do test by type.
       for (int i = 0; i < 2; i++) {                 // without/with platform.
         int idx = 0;
-        cl_context_properties fixed_val = 0;
         if (i) {
           props[idx++] = CL_CONTEXT_PLATFORM;
           props[idx++] = (cl_context_properties)m_platform;
@@ -1118,42 +1116,41 @@ MT_TEST(Context, offline_device) {
                 ? clCreateContextFromType(props, CL_DEVICE_TYPE_ALL, notify_me,
                                           this, &status)
                 : clCreateContext(props, 1, m_device, notify_me, this, &status);
-        ACL_LOCKED(acl_print_debug_msg(" fixed_val %d  valid %d\n",
-                                       (int)fixed_val,
-                                       (int)envvals[ienv].valid));
-        if (fixed_val != 0) {
-          if (!envvals[ienv].valid) {
-            CHECK_EQUAL(CL_INVALID_VALUE, status);
-            continue;
-          }
-          if (envvals[ienv].str != 0) {
-            ACL_LOCKED(acl_print_debug_msg(" %s vs. %s \n", (char *)fixed_val,
-                                           envvals[ienv].str));
-            if (0 != strcmp((char *)fixed_val, envvals[ienv].str)) {
-              CHECK_EQUAL(CL_DEVICE_NOT_AVAILABLE, status);
-              continue;
-            }
-          }
+        ACL_LOCKED(acl_print_debug_msg("valid %d\n", (int)envvals[ienv].valid));
+
+        if (apitype && envvals[ienv].str) {
+          CHECK_EQUAL(CL_INVALID_DEVICE, status);
+        } else {
+          CHECK_EQUAL(CL_SUCCESS, status);
         }
 
-        CHECK_EQUAL(CL_SUCCESS, status);
         ACL_LOCKED(acl_print_debug_msg(" Got context %p\n", context));
 
         cl_context_properties props_ret[20];
         size_t size_ret = 0;
-        CHECK_EQUAL(CL_SUCCESS,
-                    clGetContextInfo(context, CL_CONTEXT_PROPERTIES,
-                                     sizeof(props_ret), props_ret, &size_ret));
-        CHECK_EQUAL(sizeof(cl_context_properties) * idx, size_ret);
 
-        int idx_ret = 0;
-        if (i) {
-          CHECK_EQUAL(CL_CONTEXT_PLATFORM, props_ret[idx_ret++]);
-          CHECK_EQUAL((cl_context_properties)m_platform, props_ret[idx_ret++]);
+        if (apitype && envvals[ienv].str) {
+          CHECK_EQUAL(
+              CL_INVALID_CONTEXT,
+              clGetContextInfo(context, CL_CONTEXT_PROPERTIES,
+                               sizeof(props_ret), props_ret,
+                               &size_ret)); // props_ret and size_ret is not
+                                            // guaranteed to contain anything
+        } else {
+          CHECK_EQUAL(CL_SUCCESS, clGetContextInfo(
+                                      context, CL_CONTEXT_PROPERTIES,
+                                      sizeof(props_ret), props_ret, &size_ret));
+          CHECK_EQUAL(sizeof(cl_context_properties) * idx, size_ret);
+          int idx_ret = 0;
+          if (i) {
+            CHECK_EQUAL(CL_CONTEXT_PLATFORM, props_ret[idx_ret++]);
+            CHECK_EQUAL((cl_context_properties)m_platform,
+                        props_ret[idx_ret++]);
+          }
+
+          CHECK_EQUAL(0, props_ret[idx_ret++]);
+          CHECK_EQUAL(idx, idx_ret);
         }
-
-        CHECK_EQUAL(0, props_ret[idx_ret++]);
-        CHECK_EQUAL(idx, idx_ret);
 
         syncThreads();
         ACL_LOCKED(acl_print_debug_msg(" Releaseing context\n"));
