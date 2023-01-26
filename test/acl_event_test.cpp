@@ -24,6 +24,8 @@
 #include <acl_util.h>
 #include <unref.h>
 
+#include <inttypes.h>
+
 #include "acl_test.h"
 
 MT_TEST_GROUP(acl_event) {
@@ -899,8 +901,9 @@ MT_TEST(acl_event_default_config, event_dependency_exec_order) {
       // Internally consistent event profile.
       // Recall the example HAL bumps up the timestamp on every call.
       CHECK(queued_times[i] < submit_times[i]);
-      acl_print_debug_msg(" Event[%d] times = { %d %d %d %d }\n", i,
-                          queued_times[i], submit_times[i], start_times[i],
+      acl_print_debug_msg(" Event[%d] times = { %" PRIu64 " %" PRIu64
+                          " %" PRIu64 " %" PRIu64 " }\n",
+                          i, queued_times[i], submit_times[i], start_times[i],
                           end_times[i]);
       CHECK(submit_times[i] < start_times[i]);
       CHECK(start_times[i] < end_times[i]);
