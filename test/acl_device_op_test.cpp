@@ -903,8 +903,8 @@ TEST(device_op, prune) {
   CHECK_EQUAL(0, acl_update_device_op_queue(doq));
   CHECK_EQUAL(CL_RUNNING, op1->info.event->execution_status);
   // Still have the op0 timestamp.
-  CHECK_EQUAL(op1->info.event->timestamp[CL_RUNNING],
-              op0->timestamp[CL_RUNNING]);
+  CHECK_EQUAL(op0->timestamp[CL_RUNNING],
+              op1->info.event->timestamp[CL_RUNNING]);
 
   op1->execution_status = CL_COMPLETE;
   op1->timestamp[CL_COMPLETE] = acl_get_hal()->get_timestamp();
@@ -984,7 +984,7 @@ TEST(device_op, inter_group_blocking) {
   CHECK(op0->timestamp[CL_RUNNING] < op0->timestamp[CL_COMPLETE]);
   CHECK(op1->timestamp[CL_RUNNING] < op1->timestamp[CL_COMPLETE]);
   CHECK(op3->timestamp[CL_RUNNING] < op3->timestamp[CL_COMPLETE]);
-  CHECK(op0->timestamp[CL_COMPLETE] < op1->timestamp[CL_RUNNING]);
+  CHECK(op1->timestamp[CL_RUNNING] > op0->timestamp[CL_COMPLETE]);
 }
 
 TEST(device_op, inter_group_all_conflict_types) {
