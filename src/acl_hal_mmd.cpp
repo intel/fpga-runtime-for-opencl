@@ -363,7 +363,8 @@ unsigned interrupt_user_data[ACL_MAX_DEVICE];
 // ********************* Helper functions ********************
 #define MAX_BOARD_NAMES_LEN (ACL_MAX_DEVICE * 30 + 1)
 #define MMD_VERSION_LEN 30
-void *my_dlopen_flags(const char *library_name, int flag, char **error_msg) {
+static void *my_dlopen_flags(const char *library_name, int flag,
+                             char **error_msg) {
   void *library;
   acl_assert_locked();
 
@@ -390,7 +391,8 @@ void *my_dlopen_flags(const char *library_name, int flag, char **error_msg) {
 #endif
   return library;
 }
-void *my_dlopen(const char *library_name, char **error_msg) {
+
+static void *my_dlopen(const char *library_name, char **error_msg) {
 #ifdef _WIN32
   return my_dlopen_flags(library_name, 0, error_msg);
 #else
@@ -398,7 +400,8 @@ void *my_dlopen(const char *library_name, char **error_msg) {
 #endif
 }
 
-void *my_dlsym(void *library, const char *function_name, char **error_msg) {
+static void *my_dlsym(void *library, const char *function_name,
+                      char **error_msg) {
   void *symbol;
   acl_assert_locked();
 #ifdef _WIN32
@@ -422,7 +425,7 @@ void *my_dlsym(void *library, const char *function_name, char **error_msg) {
   return symbol;
 }
 
-void my_dlclose(void *library) {
+static void my_dlclose(void *library) {
   acl_assert_locked();
 #ifdef _WIN32
   FreeLibrary((HMODULE)library);
