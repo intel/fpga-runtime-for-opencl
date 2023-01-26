@@ -19,6 +19,7 @@
 #include <acl_types.h>
 #include <acl_util.h>
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -766,7 +767,7 @@ MT_TEST(Context, create_context_multi) {
   ACL_LOCKED(CHECK(acl_context_is_valid(context0)));
   ACL_LOCKED(CHECK(acl_is_valid_ptr(context0)));
 
-  ACL_LOCKED(acl_print_debug_msg(" newly created context0 <%lu>\n",
+  ACL_LOCKED(acl_print_debug_msg(" newly created context0 <%" PRIu32 ">\n",
                                  acl_ref_count(context0)));
 
   status = CL_INVALID_DEVICE;
