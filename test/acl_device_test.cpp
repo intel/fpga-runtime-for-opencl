@@ -18,6 +18,8 @@
 #include <acl_types.h>
 #include <acl_util.h>
 
+#include <inttypes.h>
+
 #include "acl_hal_test.h"
 #include "acl_test.h"
 
@@ -347,7 +349,7 @@ MT_TEST(DeviceInfo, basic) {
       CHECK_EQUAL(sizeof(cl_bitfield), size_ret);
       cl_bitfield *ptr = (cl_bitfield *)&str[0];
       cl_bitfield value = *ptr;
-      ACL_LOCKED(acl_print_debug_msg("queue prop %8x\n", value));
+      ACL_LOCKED(acl_print_debug_msg("queue prop %8" PRIx64 "\n", value));
       CHECK_EQUAL(CL_QUEUE_PROFILING_ENABLE |
                       CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE,
                   value);
@@ -357,7 +359,7 @@ MT_TEST(DeviceInfo, basic) {
       CHECK_EQUAL(sizeof(cl_bitfield), size_ret);
       cl_bitfield *ptr = (cl_bitfield *)&str[0];
       cl_bitfield value = *ptr;
-      ACL_LOCKED(acl_print_debug_msg("fp config %8x\n", value));
+      ACL_LOCKED(acl_print_debug_msg("fp config %8" PRIx64 "\n", value));
       CHECK_EQUAL((CL_FP_INF_NAN | CL_FP_ROUND_TO_NEAREST), value);
     }
     // Check sanity of device avail
