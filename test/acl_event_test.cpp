@@ -918,7 +918,7 @@ MT_TEST(acl_event_default_config, event_dependency_exec_order) {
 
         // Check separation between dependent events.
         // That is, they actually waited for the prior events.
-        CHECK(end_times[i - 1] < submit_times[i]);
+        CHECK(submit_times[i] > end_times[i - 1]);
       }
     }
 
