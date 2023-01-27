@@ -1239,43 +1239,35 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
     internal_mmd_dispatch.resize(num_board_pkgs);
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "Board MMD is statically linked\n");
 
-    internal_mmd_dispatch[0].library_name = "runtime_static";
-    internal_mmd_dispatch[0].mmd_library = nullptr;
+    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[0];
 
-    internal_mmd_dispatch[0].aocl_mmd_get_offline_info =
-        aocl_mmd_get_offline_info;
+    dispatch.library_name = "runtime_static";
+    dispatch.mmd_library = nullptr;
 
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_get_offline_info,
-                         1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_get_info, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_open, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_close, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0],
-                         aocl_mmd_set_interrupt_handler, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0],
-                         aocl_mmd_set_device_interrupt_handler, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_set_status_handler,
-                         1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_yield, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_read, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_write, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_copy, 1);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_reprogram, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_shared_mem_alloc,
-                         0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_shared_mem_free, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_hostchannel_create,
-                         0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_hostchannel_destroy,
-                         0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0],
-                         aocl_mmd_hostchannel_get_buffer, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0],
-                         aocl_mmd_hostchannel_ack_buffer, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_program, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_host_alloc, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_free, 0);
-    ADD_STATIC_FN_TO_HAL(internal_mmd_dispatch[0], aocl_mmd_shared_alloc, 0);
+    dispatch.aocl_mmd_get_offline_info = aocl_mmd_get_offline_info;
+
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_offline_info, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_get_info, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_open, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_close, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_interrupt_handler, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_device_interrupt_handler, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_set_status_handler, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_yield, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_read, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_write, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_copy, 1);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_reprogram, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_alloc, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_mem_free, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_create, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_destroy, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_get_buffer, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_hostchannel_ack_buffer, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_program, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_host_alloc, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_free, 0);
+    ADD_STATIC_FN_TO_HAL(dispatch, aocl_mmd_shared_alloc, 0);
   } else if (_libraries_to_load) {
     for (auto ipass = 0; ipass < 2; ++ipass) {
       cl_bool load_libraries;
@@ -1323,21 +1315,21 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
   sys->num_devices = 0;
   num_physical_devices = 0;
   for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_VERSION, sizeof(buf), buf, NULL);
+    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
+
+    dispatch.aocl_mmd_get_offline_info(AOCL_MMD_VERSION, sizeof(buf), buf,
+                                       NULL);
     buf[sizeof(buf) - 1] = 0;
-    internal_mmd_dispatch[iboard].mmd_version = atof(buf);
+    dispatch.mmd_version = atof(buf);
     min_MMD_version =
-        (!MMDVERSION_LESSTHAN(min_MMD_version,
-                              internal_mmd_dispatch[iboard].mmd_version))
-            ? internal_mmd_dispatch[iboard].mmd_version
+        (!MMDVERSION_LESSTHAN(min_MMD_version, dispatch.mmd_version))
+            ? dispatch.mmd_version
             : min_MMD_version;
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info version: %s\n", buf);
 
-    if (MMDVERSION_LESSTHAN(
-            atof(AOCL_MMD_VERSION_STRING),
-            internal_mmd_dispatch[iboard].mmd_version) || // MMD newer than HAL
-        MMDVERSION_LESSTHAN(internal_mmd_dispatch[iboard].mmd_version,
+    if (MMDVERSION_LESSTHAN(atof(AOCL_MMD_VERSION_STRING),
+                            dispatch.mmd_version) || // MMD newer than HAL
+        MMDVERSION_LESSTHAN(dispatch.mmd_version,
                             14.0)) // Before this wasn't forward compatible
     {
       printf("  Runtime version: %s\n", AOCL_MMD_VERSION_STRING);
@@ -1351,22 +1343,22 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
 
     // Dump offline info
     if (debug_verbosity > 0) {
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_VENDOR_NAME, sizeof(buf), buf, NULL);
+      dispatch.aocl_mmd_get_offline_info(AOCL_MMD_VENDOR_NAME, sizeof(buf), buf,
+                                         NULL);
       buf[sizeof(buf) - 1] = 0;
       ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info vendor: %s\n", buf);
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_NUM_BOARDS, sizeof(int), &num_boards, NULL);
+      dispatch.aocl_mmd_get_offline_info(AOCL_MMD_NUM_BOARDS, sizeof(int),
+                                         &num_boards, NULL);
       ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info num_boards: %d\n",
                                 num_boards);
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_BOARD_NAMES, sizeof(buf), buf, NULL);
+      dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES, sizeof(buf), buf,
+                                         NULL);
       buf[sizeof(buf) - 1] = 0;
       ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info boards: %s\n", buf);
     }
 
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_BOARD_NAMES, MAX_BOARD_NAMES_LEN, buf, NULL);
+    dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
+                                       MAX_BOARD_NAMES_LEN, buf, NULL);
     buf[MAX_BOARD_NAMES_LEN - 1] = 0;
     // Probe the platform devices by going through all the possibilities in the
     // semicolon delimited list
@@ -1395,15 +1387,17 @@ int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
                                 // names might get cached by various routines
 
   for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_BOARD_NAMES, MAX_BOARD_NAMES_LEN, buf, NULL);
+    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
+
+    dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
+                                       MAX_BOARD_NAMES_LEN, buf, NULL);
     buf[MAX_BOARD_NAMES_LEN - 1] = 0; // ensure it's null terminated
 
     // query for the polling/interrupt mode for each bsp
     int uses_yield = 0;
-    if (!MMDVERSION_LESSTHAN(internal_mmd_dispatch[iboard].mmd_version, 14.1)) {
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_USES_YIELD, sizeof(int), &uses_yield, NULL);
+    if (!MMDVERSION_LESSTHAN(dispatch.mmd_version, 14.1)) {
+      dispatch.aocl_mmd_get_offline_info(AOCL_MMD_USES_YIELD, sizeof(int),
+                                         &uses_yield, NULL);
     }
     // Probe the platform devices by going through all the possibilities in the
     // semicolon delimited list
@@ -1415,8 +1409,7 @@ int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
         if (devices[idevice] == &(platform->device[physical_device_id])) {
           if (devices[idevice]->opened_count == 0) {
             if (l_try_device(physical_device_id, ptr,
-                             platform->initial_board_def,
-                             &(internal_mmd_dispatch[iboard]))) {
+                             platform->initial_board_def, &dispatch)) {
               ACL_HAL_DEBUG_MSG_VERBOSE(1, "Device: %s device is available\n",
                                         ptr);
               if (uses_yield_ref != -1 && uses_yield != uses_yield_ref) {
@@ -1436,8 +1429,7 @@ int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
                 // Enable yield function.  In 14.0 this function was never
                 // called, in 14.1 it is called only if the offline attribute is
                 // set.
-                if (!MMDVERSION_LESSTHAN(
-                        internal_mmd_dispatch[iboard].mmd_version, 14.1)) {
+                if (!MMDVERSION_LESSTHAN(dispatch.mmd_version, 14.1)) {
                   ((acl_hal_t *)acl_get_hal())->yield = acl_hal_mmd_yield;
                 }
               }
@@ -1465,9 +1457,10 @@ failed:
   physical_device_id = 0;
 
   for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
+    acl_mmd_dispatch_t &dispatch = internal_mmd_dispatch[iboard];
 
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_BOARD_NAMES, MAX_BOARD_NAMES_LEN, buf, NULL);
+    dispatch.aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
+                                       MAX_BOARD_NAMES_LEN, buf, NULL);
     buf[MAX_BOARD_NAMES_LEN - 1] = 0; // ensure it's null terminated
 
     // Probe the platform devices by going through all the possibilities in the
@@ -1485,8 +1478,7 @@ failed:
       for (idevice = 0; idevice < num_devices; idevice++) {
         if (devices[idevice] == &(platform->device[physical_device_id])) {
           if (devices[idevice]->opened_count == 1) { // we just opened it
-            l_close_device(physical_device_id,
-                           &(internal_mmd_dispatch[iboard]));
+            l_close_device(physical_device_id, &dispatch);
           }
           devices[idevice]->opened_count--;
         }
