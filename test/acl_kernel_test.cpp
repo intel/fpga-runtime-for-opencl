@@ -2103,7 +2103,7 @@ TEST(acl_kernel, local_arg_alloc) {
   for (size_t itry = 0; itry < sizeof(local_sizes) / sizeof(local_sizes[0]);
        ++itry) {
     const int second_local_size = 1; // doesn't matter, as long as it's positive
-    acl_print_debug_msg("%d ", local_sizes[itry]);
+    acl_print_debug_msg("%zu ", local_sizes[itry]);
     CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(kernel, 1, local_sizes[itry], 0));
     CHECK_EQUAL(CL_SUCCESS, clSetKernelArg(kernel, 2, second_local_size, 0));
 
@@ -2134,7 +2134,7 @@ TEST(acl_kernel, local_arg_alloc) {
       }
       CHECK_EQUAL(0, arg[0]);
       CHECK_EQUAL(0, arg[3]);
-      acl_print_debug_msg(" local args ( %d, %d ) -> %x, %x -> delta %d \n",
+      acl_print_debug_msg(" local args ( %zu, %d ) -> %x, %x -> delta %d \n",
                           local_sizes[itry], second_local_size, arg[1], arg[2],
                           arg[2] - arg[1]);
       CHECK(arg[1] != arg[2]);
