@@ -14,6 +14,7 @@
 
 #include <CL/opencl.h>
 
+#include <cinttypes>
 #include <stdio.h>
 #include <string>
 #include <vector>
@@ -204,7 +205,7 @@ MT_TEST(PlatformInfo, size) {
   ACL_LOCKED(debug_mode++);
   ACL_LOCKED(acl_print_debug_msg("\n"));
 #define SHOWSIZE(X)                                                            \
-  ACL_LOCKED(acl_print_debug_msg("   sizeof(%-30s) = %8d\n", #X, sizeof(X)));
+  ACL_LOCKED(acl_print_debug_msg("   sizeof(%-30s) = %8zu\n", #X, sizeof(X)));
 
   SHOWSIZE(_cl_platform_id);
   SHOWSIZE(_cl_context);
@@ -388,8 +389,8 @@ TEST(offline_device, offline_hal) {
   // We might be testing on a machine that has this board!!!
   cl_ulong now;
   ACL_LOCKED(now = acl_get_hal()->get_timestamp());
-  ACL_LOCKED(acl_print_debug_msg("offline hal time is %08x%08x", (now >> 32),
-                                 (now & 0xffffffff)));
+  ACL_LOCKED(acl_print_debug_msg("offline hal time is %08" PRIx64 "%08" PRIx64,
+                                 (now >> 32), (now & 0xffffffff)));
 }
 
 struct live_info_t {
