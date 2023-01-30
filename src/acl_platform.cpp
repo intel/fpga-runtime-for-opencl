@@ -390,9 +390,6 @@ void acl_init_platform(void) {
                                   // offline device, if it exists
     break;
   case ACL_CONTEXT_MPSIM:
-#ifdef __linux__
-  case ACL_CONTEXT_MSIM:
-#endif
     acl_platform.num_devices =
         acl_platform.initial_board_def
             ->num_devices; // Simulator has its mmd, so it is loaded like an
@@ -660,10 +657,10 @@ static void l_initialize_devices(const acl_system_def_t *present_board_def,
   // shipped_board_def populated earlier in l_initialize_offline_devices
 
   if (offline_mode == ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY ||
-      offline_mode == ACL_CONTEXT_MSIM || offline_mode == ACL_CONTEXT_MPSIM) {
+      offline_mode == ACL_CONTEXT_MPSIM) {
     unsigned int num_platform_devices = acl_platform.num_devices;
     if (!acl_platform.offline_device.empty() &&
-        offline_mode != ACL_CONTEXT_MSIM && offline_mode != ACL_CONTEXT_MPSIM) {
+        offline_mode != ACL_CONTEXT_MPSIM) {
       num_platform_devices -=
           1; // In this case there's an extra offline devices at the end of the
              // list. Do not check it.
