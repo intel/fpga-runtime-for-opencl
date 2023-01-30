@@ -262,12 +262,6 @@ void acl_reset_hal(void);
 extern int debug_mode;
 int acl_print_debug_msg(const char *msg, ...);
 
-#ifdef __linux__
-/// Each HAL must define this function even if it does nothing at all.
-/// Assume that we'll only link to one HAL.
-ACL_HAL_EXPORT const acl_hal_t *
-acl_msim_get_system_definition(acl_system_def_t *system) WEAK;
-#endif
 ACL_HAL_EXPORT const acl_hal_t *
 acl_mmd_get_system_definition(acl_system_def_t *system,
                               acl_mmd_library_names_t *_libraries_to_load);

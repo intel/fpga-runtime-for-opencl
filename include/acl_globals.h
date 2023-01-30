@@ -53,7 +53,6 @@ cl_bool acl_init_from_hal_discovery(void);
 //    Set *use_offline_ret_only = 0
 #define ACL_CONTEXT_OFFLINE_AND_AUTODISCOVERY 0
 #define ACL_CONTEXT_OFFLINE_ONLY 1
-#define ACL_CONTEXT_MSIM 3
 #define ACL_CONTEXT_MPSIM 4
 const char *acl_get_offline_device_user_setting(int *use_offline_only_ret);
 

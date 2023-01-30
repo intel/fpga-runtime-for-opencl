@@ -117,22 +117,6 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
     if (setting) {
       use_offline_only = ACL_CONTEXT_MPSIM;
       result = setting;
-    } else {
-      setting = acl_getenv("CL_CONTEXT_MSIM_DEVICE_INTELFPGA");
-      setting_deprecated = acl_getenv("CL_CONTEXT_MSIM_DEVICE_ALTERA");
-      if (!setting && setting_deprecated) {
-        setting = setting_deprecated;
-        if (0 == warn_depr3) {
-          fprintf(stderr, "[Runtime Warning]: CL_CONTEXT_MSIM_DEVICE_ALTERA "
-                          "has been deprecated. Use "
-                          "CL_CONTEXT_MSIM_DEVICE_INTELFPGA instead.\n");
-          warn_depr3 = 1;
-        }
-      }
-      if (setting) {
-        use_offline_only = ACL_CONTEXT_MSIM;
-        result = 0;
-      }
     }
   }
 
@@ -186,14 +170,6 @@ cl_bool acl_init_from_hal_discovery(void) {
   case ACL_CONTEXT_OFFLINE_ONLY:
     board_hal = acl_get_offline_hal();
     break;
-#ifdef __linux__
-  case ACL_CONTEXT_MSIM:
-    if (&acl_msim_get_system_definition == NULL) {
-      return CL_FALSE;
-    }
-    board_hal = acl_msim_get_system_definition(&builtin_prog_def_value);
-    break;
-#endif
   default:
     // Not a valid setting so don't know which HAL to load
     return CL_FALSE;
