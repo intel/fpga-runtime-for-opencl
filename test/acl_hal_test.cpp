@@ -12,6 +12,7 @@
 
 #include <CL/opencl.h>
 
+#include <cinttypes>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -391,7 +392,7 @@ void acltest_hal_copy_hostmem_to_hostmem(cl_event event, const void *src,
   acltest_hal_event_callback(
       event, CL_RUNNING); // in "real life" this in response to a hw message
   size_t i;
-  acl_print_debug_msg(" Copying %d bytes from %p to %p event %p\n", size, src,
+  acl_print_debug_msg(" Copying %zu bytes from %p to %p event %p\n", size, src,
                       dest, event);
   for (i = 0; i < size; i++) {
     ((char *)dest)[i] = ((char *)src)[i];
@@ -663,7 +664,7 @@ void *acltest_translate_device_address(const void *device_ptr, size_t offset) {
   }
 
   uintptr_t max_dev_addr = 0xfffffff & ((uintptr_t)device_ptr + offset);
-  acl_print_debug_msg("maxdevaddr %p\n", max_dev_addr);
+  acl_print_debug_msg("maxdevaddr %" PRIuPTR "\n", max_dev_addr);
   if (!acltest_hal_device_mem || max_dev_addr >= acltest_hal_device_mem_size) {
     if (!acltest_hal_device_mem) {
       acltest_hal_device_mem = acl_malloc(max_dev_addr + 1);
