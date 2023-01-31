@@ -1502,7 +1502,7 @@ MT_TEST(acl_mem, read_write_buf) {
                 int(flagstrial2));
 
         ACL_LOCKED(
-            acl_print_debug_msg("\n\nBEGIN trial %d flagstrial (%d,%d)\n",
+            acl_print_debug_msg("\n\nBEGIN trial %zu flagstrial (%zu,%zu)\n",
                                 trial, flagstrial1, flagstrial2));
         ACL_LOCKED(acl_print_debug_msg(" result0 is '%s'\n", resultbuf));
 
@@ -1580,7 +1580,8 @@ MT_TEST(acl_mem, read_write_buf) {
             // If COPY_HOST_PTR is specified, then the data is already
             // in mem1, as part of create-buffer operation.
             ACL_LOCKED(acl_print_debug_msg(
-                " result7 data '%s'\n", mem1->block_allocation->range.begin));
+                " result7 data '%s'\n",
+                (char *)mem1->block_allocation->range.begin));
           }
           ACL_LOCKED(acl_print_debug_msg(" result2 is '%s'\n", resultbuf));
           ACL_LOCKED(acl_print_debug_msg("Enqueue read\n"));
@@ -1599,15 +1600,15 @@ MT_TEST(acl_mem, read_write_buf) {
           ACL_LOCKED(CHECK(acl_event_is_valid(write_event)));
           ACL_LOCKED(CHECK(acl_event_is_valid(read_event)));
           ACL_LOCKED(acl_print_debug_msg(
-              "trial %d flagstrial (%d,%d) write event %d perf check\n", trial,
-              flagstrial1, flagstrial2, write_event->id));
+              "trial %zu flagstrial (%zu,%zu) write event %u perf check\n",
+              trial, flagstrial1, flagstrial2, write_event->id));
           this->check_event_perfcounters(write_event);
           ACL_LOCKED(acl_print_debug_msg(
-              "trial %d flagstrial (%d,%d) copy event %d perf check\n", trial,
-              flagstrial1, flagstrial2, copy_event->id));
+              "trial %zu flagstrial (%zu,%zu) copy event %u perf check\n",
+              trial, flagstrial1, flagstrial2, copy_event->id));
           this->check_event_perfcounters(copy_event);
           ACL_LOCKED(acl_print_debug_msg(
-              "trial %d flagstrial (%d,%d) read event %d perf check\n", trial,
+              "trial %d flagstrial (%zu,%zu) read event %u perf check\n", trial,
               flagstrial1, flagstrial2, read_event->id));
           this->check_event_perfcounters(read_event);
           CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(write_event));
@@ -2133,7 +2134,7 @@ MT_TEST(acl_mem, fill_buf) {
     sprintf(str, "deadbeef.%d.", int(flagstrial1));
 
     ACL_LOCKED(
-        acl_print_debug_msg("\n\nBEGIN  flagstrial (%d)\n", flagstrial1));
+        acl_print_debug_msg("\n\nBEGIN  flagstrial (%zu)\n", flagstrial1));
     ACL_LOCKED(acl_print_debug_msg(" result0 is '%s'\n", resultbuf));
 
     // Surround clCreateBuffer calls in syncThreads() to ensure each
@@ -2182,11 +2183,12 @@ MT_TEST(acl_mem, fill_buf) {
     ACL_LOCKED(CHECK(acl_event_is_valid(fill_event)));
     ACL_LOCKED(CHECK(acl_event_is_valid(read_event)));
     ACL_LOCKED(
-        acl_print_debug_msg("flagstrial (%d) write event %d perf check\n",
+        acl_print_debug_msg("flagstrial (%zu) write event %u perf check\n",
                             flagstrial1, fill_event->id));
     this->check_event_perfcounters(fill_event);
-    ACL_LOCKED(acl_print_debug_msg("flagstrial (%d) read event %d perf check\n",
-                                   flagstrial1, read_event->id));
+    ACL_LOCKED(
+        acl_print_debug_msg("flagstrial (%zu) read event %u perf check\n",
+                            flagstrial1, read_event->id));
     this->check_event_perfcounters(read_event);
     CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(fill_event));
     CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(read_event));
