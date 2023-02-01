@@ -2654,9 +2654,10 @@ MT_TEST(acl_mem, fill_image) {
     CHECK_EQUAL(CL_INVALID_EVENT_WAIT_LIST,
                 clEnqueueFillImage(m_cq, image, fill_color_int, origin, region,
                                    1, NULL, &fill_event)); // invalid wait list
+    cl_event event_wait_list[1];
     CHECK_EQUAL(CL_INVALID_EVENT_WAIT_LIST,
                 clEnqueueFillImage(m_cq, image, fill_color_int, origin, region,
-                                   0, &fill_event,
+                                   0, event_wait_list,
                                    &fill_event)); // invalid wait list
 
     CHECK_EQUAL(1, acl_ref_count(image));

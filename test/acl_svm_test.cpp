@@ -463,8 +463,9 @@ MT_TEST(acl_svm, memfill_svm) {
   CHECK_EQUAL(CL_INVALID_COMMAND_QUEUE, status);
 
   // Invalid wait list
+  cl_event event_wait_list[1];
   status = clEnqueueSVMMemFill(m_cq, dst_ptr, &pattern, sizeof(int),
-                               10 * sizeof(int), 0, &event, NULL);
+                               10 * sizeof(int), 0, event_wait_list, NULL);
   CHECK_EQUAL(CL_INVALID_EVENT_WAIT_LIST, status);
   status = clEnqueueSVMMemFill(m_cq, dst_ptr, &pattern, sizeof(int),
                                10 * sizeof(int), 1, NULL, NULL);
