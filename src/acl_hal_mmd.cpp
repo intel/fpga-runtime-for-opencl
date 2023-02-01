@@ -397,13 +397,6 @@ void *my_dlopen(const char *library_name, char **error_msg) {
   return my_dlopen_flags(library_name, RTLD_NOW, error_msg);
 #endif
 }
-void *my_dlopen_global(const char *library_name, char **error_msg) {
-#ifdef _WIN32
-  return my_dlopen_flags(library_name, 0, error_msg);
-#else
-  return my_dlopen_flags(library_name, RTLD_NOW | RTLD_GLOBAL, error_msg);
-#endif
-}
 
 void *my_dlsym(void *library, const char *function_name, char **error_msg) {
   void *symbol;
@@ -578,39 +571,17 @@ cl_bool l_load_single_board_library(const char *library_name,
     return CL_FALSE;
   }
 
-  auto *test_symbol =
-      my_dlsym(mmd_library, "aocl_mmd_get_offline_info", &error_msg);
-  if (!test_symbol) {
-    // On Linux, for custom libraries close the library (which was opened
-    // locally) and then reopen globally. For Windows, there is no option (i.e.
-    // it is always global)
-#ifdef __linux__
-    my_dlclose(mmd_library);
-    ACL_HAL_DEBUG_MSG_VERBOSE(
-        1, "This library is a custom library. Opening globally.\n");
-    mmd_library = my_dlopen_global(library_name, &error_msg);
-    if (!mmd_library) {
-      std::cout << "Error: Could not load custom library " << library_name;
-      if (error_msg && error_msg[0] != '\0') {
-        std::cout << " (error_msg: " << error_msg << ")";
-      }
-      std::cout << "\n";
-      return CL_FALSE;
+  if (load_libraries) {
+    auto result =
+        l_load_board_functions(&(internal_mmd_dispatch[num_boards_found]),
+                               library_name, mmd_library, error_msg);
+    if (result == CL_FALSE) {
+      std::cout << "Error: Could not load board library " << library_name
+                << " due to failure to load symbols\n";
+      return result;
     }
-#endif
-  } else {
-    if (load_libraries) {
-      auto result =
-          l_load_board_functions(&(internal_mmd_dispatch[num_boards_found]),
-                                 library_name, mmd_library, error_msg);
-      if (result == CL_FALSE) {
-        std::cout << "Error: Could not load board library " << library_name
-                  << " due to failure to load symbols\n";
-        return result;
-      }
-    }
-    ++num_boards_found;
   }
+  ++num_boards_found;
 
   return CL_TRUE;
 }
