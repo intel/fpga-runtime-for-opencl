@@ -63,6 +63,7 @@ jobs:
       - run: cov-configure --config config.xml --template --comptype gcc --compiler cc
       - run: cov-configure --config config.xml --template --comptype g++ --compiler c++
       - run: cov-build --config config.xml --dir results ninja -C build -v -k0
+      - run: cov-manage-emit --dir results --tu-pattern "file('/lib/CppUTest/')" delete
       - run: cov-analyze --config config.xml --dir results --concurrency --security --rule --enable-constraint-fpp --enable-fnptr --enable-virtual
       - run: cov-format-errors --text-output-style multiline --dir results --filesort --file "$PWD" --strip-path "$PWD" > cov-errors.txt
       - run: cat cov-errors.txt
