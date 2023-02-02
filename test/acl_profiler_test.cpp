@@ -430,7 +430,7 @@ TEST(acl_profile, op_type_checks) {
 TEST(acl_profile, valid_checks) {
   acl_device_op_t op;
   op.info.type = ACL_DEVICE_OP_KERNEL;
-
+  memset(op.timestamp, 0, sizeof(op.timestamp));
   op.info.event = 0;
   ACL_LOCKED(CHECK(!acl_event_is_valid(op.info.event)));
   ACL_LOCKED(CHECK(!acl_process_profiler_scan_chain(&op)));
@@ -611,7 +611,8 @@ MT_TEST_GROUP(acl_no_profile) {
   enum { MAX_DEVICES = 100, m_num_devices_in_context = 3 };
   void setup() {
     if (threadNum() == 0) {
-      remove(PROFILE_MON);
+      // Remove PROFILE_MON if it exists.
+      (void)remove(PROFILE_MON);
 
       acl_test_setup_generic_system();
 
