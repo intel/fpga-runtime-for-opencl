@@ -1,5 +1,9 @@
 # FPGA Runtime for OpenCL documentation
 
+The FPGA Runtime for OpenCL documentation comes in two categories:
+- `features` directory contains functional descriptions of runtime features
+- `opencl` directory contains introduction to basic runtime concepts such as buffers
+
 ## OpenCL background
 
 [Khronos® OpenCL™] is a standard for writing programs that run across
@@ -33,7 +37,7 @@ abstraction to ease the development flow.
 Each kernel execution may require accessing device memory. The device memory
 needs to be reserved/allocated before kernel execution. The runtime keeps track
 of the memory allocation. There are two main types of memory allocations:
-[buffers](buffers.md) and unified shared memory (USM).
+[buffers](opencl/buffers.md) and unified shared memory (USM).
 
 ### Kernels
 
