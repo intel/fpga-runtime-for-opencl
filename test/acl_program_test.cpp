@@ -129,8 +129,8 @@ protected:
 MT_TEST(acl_program, link) {
   clRetainProgram(0);
   clReleaseProgram(0);
-  ACL_LOCKED(acl_is_valid_ptr<cl_program>(0));
-  ACL_LOCKED(acl_program_is_valid(0));
+  ACL_LOCKED(CHECK(0 == acl_is_valid_ptr<cl_program>(nullptr)));
+  ACL_LOCKED(CHECK(0 == acl_program_is_valid(nullptr)));
   CHECK_EQUAL(CL_SUCCESS, clUnloadCompiler());
   clCreateProgramWithSource(0, 0, 0, 0, 0);
   clCreateProgramWithBinary(0, 0, 0, 0, 0, 0, 0);
