@@ -92,22 +92,22 @@ int main(int argc, const char **argv) {
 
 void acl_test_setup_generic_system() {
   acl_mutex_wrapper.lock();
-  acl_set_hal(acl_test_get_simple_hal());
-  acl_init(acl_test_get_complex_system_def());
+  assert(1 == acl_set_hal(acl_test_get_simple_hal()));
+  assert(1 == acl_init(acl_test_get_complex_system_def()));
   acl_mutex_wrapper.unlock();
 }
 
 void acl_test_setup_empty_system() {
   acl_mutex_wrapper.lock();
-  acl_set_hal(acl_test_get_simple_hal());
-  acl_init(acl_test_get_empty_system_def());
+  assert(1 == acl_set_hal(acl_test_get_simple_hal()));
+  assert(1 == acl_init(acl_test_get_empty_system_def()));
   acl_mutex_wrapper.unlock();
 }
 
 void acl_test_setup_sample_default_board_system(void) {
   acl_mutex_wrapper.lock();
-  acl_set_hal(acl_test_get_simple_hal());
-  acl_init(&acl_test_example_binary_sysdef);
+  assert(1 == acl_set_hal(acl_test_get_simple_hal()));
+  assert(1 == acl_init(&acl_test_example_binary_sysdef));
   acl_mutex_wrapper.unlock();
 }
 
