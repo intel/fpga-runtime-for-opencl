@@ -850,15 +850,15 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointer(
 cl_int set_kernel_arg_mem_pointer_without_checks(cl_kernel kernel,
                                                  cl_uint arg_index,
                                                  void *arg_value) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (!acl_kernel_is_valid(kernel)) {
-    UNLOCK_RETURN(CL_INVALID_KERNEL);
+    return(CL_INVALID_KERNEL);
   }
 
   cl_context context = kernel->program->context;
 
   if (arg_index >= kernel->accel_def->iface.args.size()) {
-    UNLOCK_ERR_RET(CL_INVALID_ARG_INDEX, context,
+    ERR_RET(CL_INVALID_ARG_INDEX, context,
                    "Argument index is too large");
   }
 
@@ -879,7 +879,7 @@ cl_int set_kernel_arg_mem_pointer_without_checks(cl_kernel kernel,
   }
   kernel->ptr_arg_vector[arg_index] = arg_value;
 
-  UNLOCK_RETURN(CL_SUCCESS);
+  return(CL_SUCCESS);
 }
 
 ACL_EXPORT
@@ -3244,7 +3244,7 @@ void acl_receive_kernel_update(int activation_id, cl_int status) {
   acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
 
   // This function can potentially be called by a HAL that does not use the
-  // ACL global lock, so we need to use acl_lock() instead of
+  // ACL global lock, so we need to use std::scoped_lock lock{acl_mutex_wrapper} instead of
   // acl_assert_locked(). However, the MMD HAL calls this function from a unix
   // signal handler, which can't lock mutexes, so we don't lock in that case.
   // All functions called from this one therefore have to use

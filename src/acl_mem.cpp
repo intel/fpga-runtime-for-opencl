@@ -635,10 +635,10 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
     return status;
   }
 
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   // If nothing's blocking, then complete right away
   acl_idle_update(command_queue->context);
-  acl_unlock();
+  // acl_unlock();
 
   if (blocking_write) {
     // If blocking, first wait for event to finish, then clean up the resources.
@@ -681,7 +681,7 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
 cl_int acl_extract_device_global_address(cl_kernel kernel,
                                          const char *dev_global_name,
                                          unsigned int *ret_addr) {
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   // In full system flow, the autodiscovery string is available through kernel's
   // dev_bin, however it is not in unit testing framework Thus, try to find
   // device global definition first on kernel's device bin, if not found then
@@ -692,7 +692,7 @@ cl_int acl_extract_device_global_address(cl_kernel kernel,
       dev_global = dev_global_map.find(dev_global_name);
   if (dev_global != dev_global_map.end()) {
     *ret_addr = dev_global->second.address;
-    UNLOCK_RETURN(CL_SUCCESS);
+    return(CL_SUCCESS);
   }
   // Device global name not found in kernel dev_bin, try to find in the sysdef
   // setup by unit tests
@@ -702,9 +702,9 @@ cl_int acl_extract_device_global_address(cl_kernel kernel,
   dev_global = dev_global_map.find(dev_global_name);
   if (dev_global != dev_global_map.end()) {
     *ret_addr = dev_global->second.address;
-    UNLOCK_RETURN(CL_SUCCESS);
+    return(CL_SUCCESS);
   }
-  UNLOCK_RETURN(CL_INVALID_VALUE);
+  return(CL_INVALID_VALUE);
 }
 
 /**
@@ -727,7 +727,7 @@ void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
   event_command_exec_status =
       event_command_exec_status; // Avoiding Windows warning.
   event = event;
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   if (callback_ptrs[0]) {
     // Free intermediate device usm pointers
     clMemFreeINTEL(event->context, callback_ptrs[0]);
@@ -741,7 +741,7 @@ void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
     clReleaseEvent(((cl_event)callback_ptrs[2]));
   }
   acl_free(callback_data);
-  acl_unlock();
+  // acl_unlock();
 }
 
 ACL_EXPORT

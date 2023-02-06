@@ -1282,10 +1282,10 @@ MT_TEST(acl_usm, read_device_global) {
   acltest_call_kernel_update_callback(write_activation_id, CL_COMPLETE);
 
   // Nudge the scheduler to take above finish into account
-  acl_lock();
+  std::scoped_lock lock{acl_mutex_wrapper};
   // If nothing's blocking, then complete right away
   acl_idle_update(m_cq->context);
-  acl_unlock();
+  // acl_unlock();
 
   // The event returned from read device global is not the copy kernel launch
   // event Therefore need to first get the event that it depend on, then

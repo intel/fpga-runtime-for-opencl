@@ -661,7 +661,7 @@ static void l_release_command_resources(acl_command_info_t &cmd) {
 // A later pass of the cooperative scheduler will take action.
 void acl_set_execution_status(cl_event event, int new_status) {
   // This function can potentially be called by a HAL that does not use the
-  // ACL global lock, so we need to use acl_lock() instead of
+  // ACL global lock, so we need to use std::scoped_lock lock{acl_mutex_wrapper} instead of
   // acl_assert_locked(). However, the MMD HAL calls this function from a unix
   // signal handler, which can't lock mutexes, so we don't lock in that case.
   // All functions called from this one therefore have to use
