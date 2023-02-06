@@ -359,7 +359,7 @@ TEST(acl_hal, debugging) {
   uint64_t temp_u64;
   // Return values in following six calls are defined by the test HAL as
   // 1-6, simply to verify ordering of the function pointers.
-  CHECK_EQUAL(1, hal->get_profile_data(0, 1, &temp_u64, 2));
+  CHECK_EQUAL(1, hal->get_profile_data(0, 1, &temp_u64, 1));
   CHECK_EQUAL(2, hal->reset_profile_counters(0, 1));
   CHECK_EQUAL(3, hal->disable_profile_counters(0, 1));
   CHECK_EQUAL(4, hal->enable_profile_counters(0, 1));
