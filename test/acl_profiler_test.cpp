@@ -795,6 +795,9 @@ MT_TEST(acl_no_profile, no_profiler) {
 
   if (threadNum() == 0) {
     FILE *fp = fopen(PROFILE_MON, "r");
+    if (fp != NULL) {
+      fclose(fp);
+    }
     CHECK(fp == NULL);
 
     // Check that the low level call checks event completion status.
