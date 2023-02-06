@@ -1666,15 +1666,15 @@ MT_TEST(acl_mem, read_write_buf_rect) {
   cl_event read_event_rect = 0;
   cl_event read_event_1 = 0;
   cl_event read_event_2 = 0;
-  int input[8 * 8 * 8];
-  int output[8 * 8 * 8];
-  int check_val_1[8 * 8 * 8];
-  int check_val_2[8 * 8 * 8];
+  int input[8 * 8 * 8] = {};
+  int output[8 * 8 * 8] = {};
+  int check_val_1[8 * 8 * 8] = {};
+  int check_val_2[8 * 8 * 8] = {};
   size_t row_pitch = 8 * sizeof(int);
   size_t slice_pitch = 8 * row_pitch;
-  size_t src_offset[3];
-  size_t dst_offset[3];
-  size_t region[3];
+  size_t src_offset[3] = {};
+  size_t dst_offset[3] = {};
+  size_t region[3] = {};
 
   for (int i = 0; i < 8; ++i) {
     for (int j = 0; j < 8; ++j) {
