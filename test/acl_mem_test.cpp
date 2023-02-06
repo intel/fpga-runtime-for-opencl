@@ -1608,8 +1608,8 @@ MT_TEST(acl_mem, read_write_buf) {
               trial, flagstrial1, flagstrial2, copy_event->id));
           this->check_event_perfcounters(copy_event);
           ACL_LOCKED(acl_print_debug_msg(
-              "trial %d flagstrial (%zu,%zu) read event %u perf check\n", trial,
-              flagstrial1, flagstrial2, read_event->id));
+              "trial %zu flagstrial (%zu,%zu) read event %u perf check\n",
+              trial, flagstrial1, flagstrial2, read_event->id));
           this->check_event_perfcounters(read_event);
           CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(write_event));
           CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(copy_event));
