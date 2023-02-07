@@ -612,8 +612,9 @@ static acl_system_def_t acltest_complex_system = {
           1,  // num_device_global
           {
               // device_global_mem_defs map
-              // {"dev_global_name", {"dev_global_name", 0x1024, 2048}},
-              {"dev_global_name", {0x1024, 2048, ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT, 0}},
+              {"dev_global_name", {0x1024, 2048, 
+              ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, 
+              ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT, 0}},
           },
       }},
      {nullptr,
@@ -647,8 +648,9 @@ static acl_system_def_t acltest_complex_system = {
           1,  // num_device_global
           {
               // device_global_mem_defs map
-              // {"dev_global_name", {"dev_global_name", 0x1024, 2048}},
-              {"dev_global_name", {0x1024, 2048, ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT, 0}},
+              {"dev_global_name", {0x1024, 2048, 
+              ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, 
+              ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT, 0}},
           },
       }},
      {nullptr,
