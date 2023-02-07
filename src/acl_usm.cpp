@@ -112,9 +112,7 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
       mem_id = (cl_uint) * (properties + 1);
     } break;
-    default: {
-      BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
-    }
+    default: { BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties"); }
     }
     properties += 2;
   }
@@ -265,9 +263,7 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
     case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
       mem_id = (cl_uint) * (properties + 1);
     } break;
-    default: {
-      BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
-    }
+    default: { BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties"); }
     }
     properties += 2;
   }
@@ -419,9 +415,7 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
       }
       mem_id = (cl_uint) * (properties + 1);
     } break;
-    default: {
-      BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties");
-    }
+    default: { BAIL_INFO(CL_INVALID_PROPERTY, context, "Invalid properties"); }
     }
     properties += 2;
   }

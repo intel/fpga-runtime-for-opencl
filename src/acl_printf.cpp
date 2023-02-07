@@ -911,11 +911,13 @@ static size_t l_dump_printf_buffer(cl_event event, cl_kernel kernel,
       length = get_length_specifier(data_elem._conversion_string);
 
 #ifdef DEBUG
-      printf("length specifier=%s\n", length == LS_HL   ? "LS_HL"
-                                      : length == LS_HH ? "LS_HH"
-                                      : length == LS_H  ? "LS_H"
-                                      : length == LS_L  ? "LS_L"
-                                                        : "NONE");
+      printf("length specifier=%s\n",
+             length == LS_HL
+                 ? "LS_HL"
+                 : length == LS_HH
+                       ? "LS_HH"
+                       : length == LS_H ? "LS_H"
+                                        : length == LS_L ? "LS_L" : "NONE");
 #endif
 
       // the size of the data we are converting right now
