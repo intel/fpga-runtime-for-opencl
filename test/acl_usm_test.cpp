@@ -1285,7 +1285,6 @@ MT_TEST(acl_usm, read_device_global) {
   std::scoped_lock lock{acl_mutex_wrapper};
   // If nothing's blocking, then complete right away
   acl_idle_update(m_cq->context);
-  // acl_unlock();
 
   // The event returned from read device global is not the copy kernel launch
   // event Therefore need to first get the event that it depend on, then

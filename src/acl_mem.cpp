@@ -638,7 +638,6 @@ CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
   std::scoped_lock lock{acl_mutex_wrapper};
   // If nothing's blocking, then complete right away
   acl_idle_update(command_queue->context);
-  // acl_unlock();
 
   if (blocking_write) {
     // If blocking, first wait for event to finish, then clean up the resources.
@@ -741,7 +740,6 @@ void CL_CALLBACK acl_dev_global_cleanup(cl_event event,
     clReleaseEvent(((cl_event)callback_ptrs[2]));
   }
   acl_free(callback_data);
-  // acl_unlock();
 }
 
 ACL_EXPORT

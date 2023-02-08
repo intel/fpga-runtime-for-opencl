@@ -728,7 +728,6 @@ static acl_system_def_t acltest_complex_system = {
                /* burst_interleaved */ 1,
            },
        }}
-
      }}};
 
 // For use by other tests

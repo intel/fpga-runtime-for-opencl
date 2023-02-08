@@ -532,11 +532,6 @@ struct acl_device_global_mem_def_t {
   acl_device_global_init_mode_t init_mode;
   bool implement_in_csr;
 };
-// typedef struct acl_device_global_mem_def_t {
-//   std::string name;
-//   unsigned int address;
-//   unsigned int size;
-// } acl_device_global_mem_def_t;
 
 // Part of acl_device_def_t where members are populated from the information
 // in the autodiscovery string. This will get updated every time the device
