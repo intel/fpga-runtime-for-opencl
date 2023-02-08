@@ -1628,6 +1628,14 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
       break;
     }
 
+    // Make sure info.name_length bytes fit into our name buffer
+    if (info.name_length > NAME_LEN) {
+      fprintf(stderr, "%s: File name too long: %u\n", routine_name,
+              info.name_length);
+      inflateEnd(&z_info.strm);
+      return 0;
+    }
+
     // Read the filename.
     if (!read_data(name, info.name_length, &z_info, input)) {
       fprintf(stderr, "%s: Error reading file name from buffer\n",
