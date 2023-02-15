@@ -528,25 +528,29 @@ static bool read_device_global_mem_defs(
           static_cast<unsigned>(ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT))
         result = false;
     }
-    auto init_mode =
-        static_cast<unsigned>(ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM);
+    bool can_skip_programming = false;
     if (result && counters.back() > 0) {
-      result = read_uint_counters(config_str, curr_pos, init_mode, counters);
-      if (init_mode >=
-          static_cast<unsigned>(ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT))
-        result = false;
+      result = read_bool_counters(config_str, curr_pos, can_skip_programming,
+                                  counters);
     }
     bool implement_in_csr = false;
     if (result && counters.back() > 0) {
       result =
           read_bool_counters(config_str, curr_pos, implement_in_csr, counters);
     }
+    bool reset_on_reuse = false;
+    if (result && counters.back() > 0) {
+      result =
+          read_bool_counters(config_str, curr_pos, reset_on_reuse, counters);
+    }
 
     acl_device_global_mem_def_t dev_global_def = {
-        dev_global_addr, dev_global_size,
+        dev_global_addr,
+        dev_global_size,
         static_cast<acl_device_global_host_access_t>(host_access),
-        static_cast<acl_device_global_init_mode_t>(init_mode),
-        implement_in_csr};
+        can_skip_programming,
+        implement_in_csr,
+        reset_on_reuse};
     bool ok =
         device_global_mem_defs.insert({device_global_name, dev_global_def})
             .second;

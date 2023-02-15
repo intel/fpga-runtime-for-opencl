@@ -512,25 +512,16 @@ typedef enum {
   ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT
 } acl_device_global_host_access_t;
 
-// Enum values here also need to match the SPIRV spec for device
-// global in the above link for acl_device_global_host_access_t.
-// ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT is used for validation in
-// autodiscovery string parsing and should remain the last constant
-// in the enum.
-typedef enum {
-  ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM,
-  ACL_DEVICE_GLOBAL_INIT_MODE_RESET,
-
-  ACL_DEVICE_GLOBAL_INIT_MODE_TYPE_COUNT
-} acl_device_global_init_mode_t;
-
 // Definition of device global.
 struct acl_device_global_mem_def_t {
   uint64_t address;
   uint32_t size;
   acl_device_global_host_access_t host_access;
-  acl_device_global_init_mode_t init_mode;
+  // every device global has the same value for can_skip_programming
+  bool can_skip_programming;
   bool implement_in_csr;
+  // every device global has the same value for reset_on_reuse
+  bool reset_on_reuse;
 };
 
 // Part of acl_device_def_t where members are populated from the information
