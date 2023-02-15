@@ -4350,8 +4350,9 @@ TEST(acl_kernel_reprogram_scheduler, device_global_reprogram) {
        {/* address */ 1024,
         /* size */ 1024,
         /* host_access */ ACL_DEVICE_GLOBAL_HOST_ACCESS_READ_WRITE,
-        /* init_mode */ ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM,
-        /* implement_in_csr */ false}});
+        /* can_skip_programming */ false,
+        /* implement_in_csr */ false,
+        /* reset_on_reuse */ false}});
 
   // Initial eager reprogram
   int offset = m_devlog.num_ops;

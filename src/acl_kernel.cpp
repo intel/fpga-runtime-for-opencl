@@ -3016,8 +3016,7 @@ bool acl_device_has_reprogram_device_globals(cl_device_id device) {
          std::find_if(device_global_mem_defs.begin(),
                       device_global_mem_defs.end(),
                       [](const auto &name_and_def) {
-                        return name_and_def.second.init_mode ==
-                               ACL_DEVICE_GLOBAL_INIT_MODE_REPROGRAM;
+                        return !name_and_def.second.can_skip_programming;
                       });
 }
 
