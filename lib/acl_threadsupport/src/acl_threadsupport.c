@@ -293,11 +293,6 @@ void acl_reset_condvar(struct acl_condvar_s *C) {
 #else
   {
     int ret = 0;
-    // Try to unlock then unlock. This is done just in case it is already
-    // locked, because if the mutex is locked we can't destroy it. This may
-    // happen in cases where an asssert causes an exit, etc.
-    pthread_mutex_trylock(&(C->waiter_mutex));
-    pthread_mutex_unlock(&(C->waiter_mutex));
     ret |= pthread_mutex_destroy(&(C->waiter_mutex));
     ret |= sem_destroy(&(C->signal_sem));
     ret |= sem_destroy(&(C->passive_sem[0]));
