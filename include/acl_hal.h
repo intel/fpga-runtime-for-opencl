@@ -241,7 +241,8 @@ typedef struct {
                         mem_properties_t *properties, int *error);
 
   void (*simulation_streaming_kernel_start)(unsigned int physical_device_id,
-                                            const std::string &signal_name);
+                                            const std::string &signal_name,
+                                            const int accel_id);
   void (*simulation_streaming_kernel_done)(unsigned int physical_device_id,
                                            const std::string &signal_name,
                                            unsigned int &finish_counter);
