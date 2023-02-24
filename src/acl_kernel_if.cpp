@@ -1308,7 +1308,7 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   if (kern->streaming_control_signal_names[accel_id]) {
     acl_get_hal()->simulation_streaming_kernel_start(
         kern->physical_device_id,
-        kern->streaming_control_signal_names[accel_id]->start);
+        kern->streaming_control_signal_names[accel_id]->start, accel_id);
     return;
   }
 

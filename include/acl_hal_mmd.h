@@ -139,7 +139,7 @@ typedef struct {
 
   // Submits streaming kernel control start signal to simulator.
   void (*aocl_mmd_simulation_streaming_kernel_start)(
-      int handle, const std::string &signal_name);
+      int handle, const std::string &signal_name, const int accel_id);
 
   // Queries streaming kernel control done signal from simulator.
   // Returns non-negative number of finished kernels invocations.

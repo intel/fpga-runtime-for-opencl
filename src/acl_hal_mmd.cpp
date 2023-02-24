@@ -155,7 +155,8 @@ int acl_hal_mmd_set_profile_stop_count(unsigned int physical_device_id,
                                        unsigned int accel_id, uint64_t value);
 
 void acl_hal_mmd_simulation_streaming_kernel_start(
-    unsigned int physical_device_id, const std::string &kernel_name);
+    unsigned int physical_device_id, const std::string &kernel_name,
+    const int accel_id);
 void acl_hal_mmd_simulation_streaming_kernel_done(
     unsigned int physical_device_id, const std::string &kernel_name,
     unsigned int &finish_counter);
@@ -2810,10 +2811,11 @@ unsigned acl_convert_mmd_capabilities(unsigned mmd_capabilities) {
 }
 
 void acl_hal_mmd_simulation_streaming_kernel_start(
-    unsigned int physical_device_id, const std::string &kernel_name) {
+    unsigned int physical_device_id, const std::string &kernel_name,
+    const int accel_id) {
   device_info[physical_device_id]
       .mmd_dispatch->aocl_mmd_simulation_streaming_kernel_start(
-          device_info[physical_device_id].handle, kernel_name);
+          device_info[physical_device_id].handle, kernel_name, accel_id);
 }
 
 void acl_hal_mmd_simulation_streaming_kernel_done(
