@@ -12,9 +12,17 @@
 #pragma warning(pop)
 #endif
 
+// Replace this library with <filesystem> once we move to GCC 8 or newer
+// versions
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING 1
+#include <experimental/filesystem>
+
+#include <climits>
+#include <random>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #include "pkg_editor/pkg_editor.h"
 #include <assert.h>
@@ -39,6 +47,11 @@
 #define SAMPLE_FILE ".sample_file.elf"
 #define PACK_UNPACK_FILE ".pack_unpack"
 #define PACK_UNPACK_DIR ".pack_unpack_dir"
+
+using random_bytes_engine =
+    std::independent_bits_engine<std::default_random_engine, CHAR_BIT,
+                                 unsigned int>;
+namespace fs = std::experimental::filesystem::v1;
 
 static void l_remove_file(const char *filename) {
 #ifdef _WIN32
@@ -379,7 +392,7 @@ TEST(package, pack) {
   CHECK_EQUAL(1, result);
 }
 
-static bool files_same(const char *f1, const char *f2) {
+static bool files_same(const fs::path f1, const fs::path f2) {
   std::ifstream file1(f1, std::ifstream::ate | std::ifstream::binary);
   std::ifstream file2(f2, std::ifstream::ate | std::ifstream::binary);
   file1.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -398,11 +411,59 @@ static bool files_same(const char *f1, const char *f2) {
   return std::equal(begin1, std::istreambuf_iterator<char>(), begin2);
 }
 
+static void generate_random_file(const fs::path &name, size_t size) {
+  random_bytes_engine rbe;
+  std::ofstream file(name);
+  file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  std::generate_n(std::ostreambuf_iterator<char>(file), size,
+                  [&] { return (char)rbe(); });
+}
+
+// Creates a folder consisting of a certain number of files with random contents
+// and random sizes
+static std::vector<fs::path> generate_tmp_folder(const fs::path &tmpdir) {
+  std::vector<fs::path> files;
+
+  std::mt19937 gen{};
+  std::uniform_int_distribution dis{0, 100000};
+
+  int system_result = 0;
+  std::string remove_command = "rm -rf " + tmpdir.string();
+  const char *command_c_str = remove_command.c_str();
+  system_result = system(command_c_str);
+  assert(system_result != -1);
+  fs::create_directory(tmpdir);
+
+  // Guarantee we always have one large and one empty file
+  generate_random_file(files.emplace_back(tmpdir / "empty_file"), 0);
+  generate_random_file(files.emplace_back(tmpdir / "large_file"), 10000000);
+
+  const int num_random_files = 8;
+  for (int i = 0; i < num_random_files; i++) {
+    std::string filename = "file" + std::to_string(i);
+    generate_random_file(files.emplace_back(tmpdir / filename), dis(gen));
+  }
+
+  return files;
+}
+
+static bool is_same_tmpdir(const std::vector<fs::path> &files,
+                           const fs::path &unpack_dir) {
+  return std::all_of(files.begin(), files.end(), [&](const fs::path &path) {
+    fs::path unpacked_file_path = unpack_dir / path;
+    return files_same(path, unpacked_file_path);
+  });
+}
+
 TEST(package, unpack) {
   int result;
+  fs::path tmpdir = "tmp";
+  std::string tmpdir_string = tmpdir.string();
+  const char *tmpdir_c_str = tmpdir_string.c_str();
+  std::vector<fs::path> files = generate_tmp_folder(tmpdir);
 
   // Create a known good input.
-  const char *test_input[] = {"include", "src", "test", NULL};
+  const char *test_input[] = {tmpdir_c_str, NULL};
   result = acl_pkg_pack(PACK_UNPACK_FILE, test_input);
   CHECK_EQUAL(1, result);
 
@@ -411,17 +472,17 @@ TEST(package, unpack) {
   CHECK_EQUAL(1, result);
 
   // Compare some files to be sure that they are the same.
-  CHECK_EQUAL(true,
-              files_same("CMakeLists.txt", PACK_UNPACK_DIR "/CMakeLists.txt"));
-  CHECK_EQUAL(true, files_same("test/pkg_editor_test.cpp",
-                               PACK_UNPACK_DIR "/test/pkg_editor_test.cpp"));
+  CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
 }
 
 TEST(package, unpack_buffer) {
   int result;
-
+  fs::path tmpdir = "tmp";
+  std::string tmpdir_string = tmpdir.string();
+  const char *tmpdir_c_str = tmpdir_string.c_str();
+  std::vector<fs::path> files = generate_tmp_folder(tmpdir);
   // Create a known good input.
-  const char *test_input[] = {"include", "src", "test", NULL};
+  const char *test_input[] = {"include", "src", "test", tmpdir_c_str, NULL};
   result = acl_pkg_pack(PACK_UNPACK_FILE, test_input);
   CHECK_EQUAL(1, result);
 
@@ -447,13 +508,18 @@ TEST(package, unpack_buffer) {
                                PACK_UNPACK_DIR "/src/pkg_editor.c"));
   CHECK_EQUAL(true, files_same("test/pkg_editor_test.cpp",
                                PACK_UNPACK_DIR "/test/pkg_editor_test.cpp"));
+  CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
 }
 
 TEST(package, unpack_buffer_stdin) {
   int result;
+  fs::path tmpdir = "tmp";
+  std::string tmpdir_string = tmpdir.string();
+  const char *tmpdir_c_str = tmpdir_string.c_str();
+  std::vector<fs::path> files = generate_tmp_folder(tmpdir);
 
   // Create a known good input.
-  const char *test_input[] = {"include", "src", "test", NULL};
+  const char *test_input[] = {"include", "src", "test", tmpdir_c_str, NULL};
   result = acl_pkg_pack(PACK_UNPACK_FILE, test_input);
   CHECK_EQUAL(1, result);
 
@@ -496,5 +562,6 @@ TEST(package, unpack_buffer_stdin) {
                                PACK_UNPACK_DIR "/src/pkg_editor.c"));
   CHECK_EQUAL(true, files_same("test/pkg_editor_test.cpp",
                                PACK_UNPACK_DIR "/test/pkg_editor_test.cpp"));
+  CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
 }
 #endif
