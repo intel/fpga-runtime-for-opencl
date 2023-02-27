@@ -3,6 +3,12 @@
 
 add_executable(pkg_editor_test pkg_editor_test.cpp)
 target_link_libraries(pkg_editor_test PRIVATE CppUTest pkg_editor)
+
+# This section can be removed once the minimum required version of GCC has been raised to 9
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+       target_link_libraries(pkg_editor_test PRIVATE stdc++fs)
+endif()
+
 add_test(pkg_editor_test pkg_editor_test -v)
 
 if(ZLIB_FOUND)
