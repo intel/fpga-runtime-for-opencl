@@ -394,6 +394,8 @@ TEST(package, pack) {
 static bool files_same(const char *f1, const char *f2) {
   std::ifstream file1(f1, std::ifstream::ate | std::ifstream::binary);
   std::ifstream file2(f2, std::ifstream::ate | std::ifstream::binary);
+  file1.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+  file2.exceptions(std::ifstream::failbit | std::ifstream::badbit);
   const std::ifstream::pos_type fileSize = file1.tellg();
 
   if (fileSize != file2.tellg()) {
