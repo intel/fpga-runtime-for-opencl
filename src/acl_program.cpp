@@ -677,22 +677,17 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBuiltInKernelsIntelFPGA(
     program->dev_prog[idev] =
         l_create_dev_prog(program, device_list[idev], 0, NULL);
     if (program->dev_prog[idev]) {
-      if (context->programs_devices || context->uses_dynamic_sysdef) {
-        BAIL_INFO(CL_INVALID_VALUE, context, "No builtin kernels available\n");
-      } else {
+      // i put this here since dla flow makes call to clGetProgramInfo which
+      // requires CL_BUILD_SUCCESS
+      program->dev_prog[idev]->build_status = CL_BUILD_SUCCESS;
 
-        // i put this here since dla flow makes call to clGetProgramInfo which
-        // requires CL_BUILD_SUCCESS
-        program->dev_prog[idev]->build_status = CL_BUILD_SUCCESS;
-
-        // Copy memory definition from initial device def to program in
-        // CL_CONTEXT_COMPILER_MODE_INTELFPGA mode.
-        l_device_memory_definition_copy(
-            &(program->dev_prog[idev]
-                  ->device_binary.get_devdef()
-                  .autodiscovery_def),
-            &(program->device[idev]->def.autodiscovery_def));
-      }
+      // Copy memory definition from initial device def to program in
+      // CL_CONTEXT_COMPILER_MODE_INTELFPGA mode.
+      l_device_memory_definition_copy(
+          &(program->dev_prog[idev]
+                ->device_binary.get_devdef()
+                .autodiscovery_def),
+          &(program->device[idev]->def.autodiscovery_def));
     } else {
       // Release all the memory we've allocated.
       l_free_program(program);
