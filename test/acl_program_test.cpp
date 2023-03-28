@@ -606,25 +606,25 @@ MT_TEST(acl_program, program_info) {
   // built stat. to success even before calling clbuildprogram
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_NUM_KERNELS,
                                            sizeof(size_t), &num_kernels, 0));
-  CHECK_EQUAL(14, num_kernels);
+  CHECK_EQUAL(15, num_kernels);
 
   // This won't happen if program is built with binary since we set the program
   // built stat. to success even before calling clbuildprogram
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0,
                                            NULL, &size_ret));
-  CHECK_EQUAL(321, size_ret);
+  CHECK_EQUAL(340, size_ret);
 
   CHECK_EQUAL(CL_SUCCESS, clBuildProgram(program, 0, 0, "", 0, 0));
 
   // after building the program
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_NUM_KERNELS,
                                            sizeof(size_t), &num_kernels, 0));
-  CHECK_EQUAL(14, num_kernels);
+  CHECK_EQUAL(15, num_kernels);
 
   CHECK_EQUAL(CL_SUCCESS,
               clGetProgramInfo(program, CL_PROGRAM_NUM_KERNELS, sizeof(size_t),
                                &num_kernels, &size_ret));
-  CHECK_EQUAL(14, num_kernels);
+  CHECK_EQUAL(15, num_kernels);
   CHECK_EQUAL(sizeof(size_t), size_ret);
 
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_NUM_KERNELS, 0,
@@ -633,15 +633,18 @@ MT_TEST(acl_program, program_info) {
 
   CHECK_EQUAL(CL_SUCCESS, clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES, 0,
                                            NULL, &size_ret));
-  CHECK_EQUAL(321, size_ret);
+  CHECK_EQUAL(340, size_ret);
+  // CHECK_EQUAL(321, size_ret);
 
   names[size_ret] = 100; // making sure extra bytes of memory are not affected.
   CHECK_EQUAL(CL_SUCCESS,
               clGetProgramInfo(program, CL_PROGRAM_KERNEL_NAMES,
                                2000 * sizeof(char), names, &size_ret));
-  CHECK_EQUAL(321, size_ret); // only one kernel named: "foo"
+  CHECK_EQUAL(340, size_ret); // only one kernel named: "foo"
   CHECK_EQUAL(100, names[size_ret]);
-  CHECK_EQUAL(0, strcmp("kernel0_copy_vecin_vecout;"
+  CHECK_EQUAL(0, strcmp("copy_device_global;" // TODO: eventually we would want
+                                              // to hide it from users
+                        "kernel0_copy_vecin_vecout;"
                         "kernel11_task_double;"
                         "kernel12_task_double;"
                         "kernel13_multi_vec_lane;"

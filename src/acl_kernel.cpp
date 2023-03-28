@@ -831,6 +831,56 @@ CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgSVMPointer(
   return clSetKernelArgSVMPointerIntelFPGA(kernel, arg_index, arg_value);
 }
 
+/**
+ * Set any provided void pointer as kernel arguments
+ *
+ * It is assumed that the provided pointer is a valid device address,
+ * or device global address that kernel can use to point to right address space.
+ *
+ * It is the same as `clSetKernelArgMemPointerINTEL` except the validity checks
+ * are removed. This is because the user provided pointer may not always be usm
+ * pointer, therefore will not belong to the context (as they are checked in
+ * clSetKernelArgMemPointerINTEL)
+ *
+ * @param kernel the kernel that accept the pointer arg
+ * @param arg_index which kernel argument accept the value
+ * @param arg_value the pointer to desired address space
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
+cl_int set_kernel_arg_mem_pointer_without_checks(cl_kernel kernel,
+                                                 cl_uint arg_index,
+                                                 void *arg_value) {
+  std::scoped_lock lock{acl_mutex_wrapper};
+  if (!acl_kernel_is_valid(kernel)) {
+    return (CL_INVALID_KERNEL);
+  }
+
+  cl_context context = kernel->program->context;
+
+  if (arg_index >= kernel->accel_def->iface.args.size()) {
+    ERR_RET(CL_INVALID_ARG_INDEX, context, "Argument index is too large");
+  }
+
+  // Determine where to write the value.
+  size_t start_idx = 0;
+  size_t iface_arg_size = 0;
+  l_get_arg_offset_and_size(kernel, arg_index, &start_idx, &iface_arg_size);
+  safe_memcpy(&(kernel->arg_value[start_idx]), &arg_value, iface_arg_size,
+              kernel->arg_value_size - start_idx, iface_arg_size);
+  kernel->arg_is_svm[arg_index] = CL_FALSE;
+  kernel->arg_is_ptr[arg_index] = CL_TRUE;
+
+  kernel->arg_defined[arg_index] = 1;
+
+  // double vector size if size < arg_index
+  while (kernel->ptr_arg_vector.size() <= arg_index) {
+    kernel->ptr_arg_vector.resize(kernel->ptr_arg_vector.size() * 2);
+  }
+  kernel->ptr_arg_vector[arg_index] = arg_value;
+
+  return (CL_SUCCESS);
+}
+
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clSetKernelArgMemPointerINTEL(
     cl_kernel kernel, cl_uint arg_index, const void *arg_value) {
@@ -3192,10 +3242,10 @@ void acl_receive_kernel_update(int activation_id, cl_int status) {
   acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
 
   // This function can potentially be called by a HAL that does not use the
-  // ACL global lock, so we need to use acl_lock() instead of
-  // acl_assert_locked(). However, the MMD HAL calls this function from a unix
-  // signal handler, which can't lock mutexes, so we don't lock in that case.
-  // All functions called from this one therefore have to use
+  // ACL global lock, so we need to use std::scoped_lock lock{acl_mutex_wrapper}
+  // instead of acl_assert_locked(). However, the MMD HAL calls this function
+  // from a unix signal handler, which can't lock mutexes, so we don't lock in
+  // that case. All functions called from this one therefore have to use
   // acl_assert_locked_or_sig() instead of just acl_assert_locked().
   std::unique_lock lock{acl_mutex_wrapper, std::defer_lock};
   if (!acl_is_inside_sig()) {

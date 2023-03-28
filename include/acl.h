@@ -544,6 +544,7 @@ typedef struct acl_device_def_autodiscovery_t {
   std::vector<acl_hostpipe_info_t> acl_hostpipe_info;
 
   // Device global definition.
+  unsigned int num_device_global;
   std::unordered_map<std::string, acl_device_global_mem_def_t>
       device_global_mem_defs;
   bool cra_ring_root_exist =
