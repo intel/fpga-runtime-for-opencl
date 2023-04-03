@@ -921,15 +921,21 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
     // The Kernel CSR registers
     // The new and improved config ROM give us the address *offsets* from
     // the first kernel CSR, and the range of each kernel CSR.
+    std::vector<uintptr_t> kernel_csr_address_map;
     for (unsigned ii = 0; ii < devdef.accel.size(); ++ii) {
       kern->accel_csr[ii].address =
           OFFSET_KERNEL_CRA + devdef.hal_info[ii].csr.address;
       kern->accel_csr[ii].bytes = devdef.hal_info[ii].csr.num_bytes;
+      kernel_csr_address_map.push_back(kern->accel_csr[ii].address);
 
       ACL_KERNEL_IF_DEBUG_MSG(
           kern, "Kernel_%s CSR { 0x%08" PRIxPTR ", 0x%08" PRIxPTR " }\n",
           devdef.accel[ii].iface.name.c_str(), kern->accel_csr[ii].address,
           kern->accel_csr[ii].bytes);
+    }
+    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+      acl_get_hal()->simulation_set_kernel_cra_address_map(
+          kern->physical_device_id, kernel_csr_address_map);
     }
 
     // The Kernel performance monitor registers

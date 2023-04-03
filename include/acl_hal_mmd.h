@@ -149,6 +149,12 @@ typedef struct {
   // accounted and returned in a subsequent invocation of this function.
   void (*aocl_mmd_simulation_streaming_kernel_done)(
       int handle, const std::string &signal_name, unsigned int &finish_counter);
+
+  // Pass kernel-id to csr-address mapping read from the current binary
+  // to the simulation runtime, so that it can detect which start register
+  // has been written by the runtime.
+  void (*aocl_mmd_simulation_set_kernel_cra_address_map)(
+      int handle, const std::vector<uintptr_t> &kernel_csr_address_map);
 } acl_mmd_dispatch_t;
 
 typedef struct {

@@ -161,6 +161,10 @@ void acl_hal_mmd_simulation_streaming_kernel_done(
     unsigned int physical_device_id, const std::string &kernel_name,
     unsigned int &finish_counter);
 
+void acl_hal_mmd_simulation_set_kernel_cra_address_map(
+    unsigned int physical_device_id,
+    const std::vector<uintptr_t> &kernel_csr_address_map);
+
 size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
                             void *ptr, size_t size);
 
@@ -360,8 +364,9 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_shared_alloc,                     // shared_alloc
     acl_hal_mmd_simulation_streaming_kernel_start, // simulation_streaming_kernel_start
     acl_hal_mmd_simulation_streaming_kernel_done, // simulation_streaming_kernel_done
-    acl_hal_mmd_read_csr,                         // read_csr
-    acl_hal_mmd_write_csr,                        // write_csr
+    acl_hal_mmd_simulation_set_kernel_cra_address_map, // simulation_set_kernel_cra_address_map
+    acl_hal_mmd_read_csr,                              // read_csr
+    acl_hal_mmd_write_csr,                             // write_csr
 };
 
 // This will contain the device physical id to tell us which device across all
@@ -2863,6 +2868,14 @@ void acl_hal_mmd_simulation_streaming_kernel_done(
   device_info[physical_device_id]
       .mmd_dispatch->aocl_mmd_simulation_streaming_kernel_done(
           device_info[physical_device_id].handle, kernel_name, finish_counter);
+}
+
+void acl_hal_mmd_simulation_set_kernel_cra_address_map(
+    unsigned int physical_device_id,
+    const std::vector<uintptr_t> &kernel_csr_address_map) {
+  device_info[physical_device_id]
+      .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
+          device_info[physical_device_id].handle, kernel_csr_address_map);
 }
 
 size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
