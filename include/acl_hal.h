@@ -247,6 +247,10 @@ typedef struct {
                                            const std::string &signal_name,
                                            unsigned int &finish_counter);
 
+  void (*simulation_set_kernel_cra_address_map)(
+      unsigned int physical_device_id,
+      const std::vector<uintptr_t> &kernel_csr_address_map);
+
   size_t (*read_csr)(unsigned int physical_device_id, uintptr_t offset,
                      void *ptr, size_t size);
 
