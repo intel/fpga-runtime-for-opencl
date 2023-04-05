@@ -16,6 +16,7 @@
 #include <acl_event.h>
 #include <acl_globals.h>
 #include <acl_hal.h>
+#include <acl_hostch.h>
 #include <acl_kernel.h>
 #include <acl_mem.h>
 #include <acl_program.h>
@@ -369,6 +370,14 @@ int acl_submit_command(cl_event event) {
 
     case CL_COMMAND_MIGRATE_MEM_OBJECTS:
       result = acl_submit_migrate_mem_device_op(event);
+      break;
+
+    case CL_COMMAND_READ_HOST_PIPE_INTEL:
+      result = acl_submit_read_program_hostpipe_device_op(event);
+      break;
+
+    case CL_COMMAND_WRITE_HOST_PIPE_INTEL:
+      result = acl_submit_write_program_hostpipe_device_op(event);
       break;
 
     default:

@@ -15,6 +15,7 @@
 #include <acl_event.h>
 #include <acl_globals.h>
 #include <acl_hal.h>
+#include <acl_hostch.h>
 #include <acl_kernel.h>
 #include <acl_mem.h>
 #include <acl_printf.h>
@@ -108,47 +109,55 @@ static unsigned char conflict_matrix_half_duplex
     [ACL_NUM_CONFLICT_TYPES][ACL_NUM_CONFLICT_TYPES] = {
 
         //                      NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
-        //                      PROGRAM
+        //                      PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE
         // NONE vs.
-        {0, 0, 0, 0, 0, 1}
+        {0, 0, 0, 0, 0, 1, 0, 0}
         // MEM_READ  vs.
         ,
-        {0, 1, 1, 1, 0, 1}
+        {0, 1, 1, 1, 0, 1, 1, 1}
         // MEM_WRITE  vs.
         ,
-        {0, 1, 1, 1, 0, 1}
+        {0, 1, 1, 1, 0, 1, 1, 1}
         // MEM_RW  vs.
         ,
-        {0, 1, 1, 1, 0, 1}
+        {0, 1, 1, 1, 0, 1, 1, 1}
         // KERNEL vs.
         ,
-        {0, 0, 0, 0, 0, 1}
+        {0, 0, 0, 0, 0, 1, 0, 0}
         // PROGRAM vs.
         ,
-        {1, 1, 1, 1, 1, 1}};
+        {1, 1, 1, 1, 1, 1, 1, 1},
+        // HOSTPIPE_READ vs.
+        {0, 1, 1, 1, 0, 1, 0, 0},
+        // HOSTPIPE_WRITE vs.
+        {0, 1, 1, 1, 0, 1, 0, 0}};
 
 static unsigned char conflict_matrix_full_duplex
     [ACL_NUM_CONFLICT_TYPES][ACL_NUM_CONFLICT_TYPES] = {
 
         //                      NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
-        //                      PROGRAM
+        //                      PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE
         // NONE vs.
-        {0, 0, 0, 0, 0, 1}
+        {0, 0, 0, 0, 0, 1, 0, 0}
         // MEM_READ  vs.
         ,
-        {0, 1, 0, 1, 0, 1}
+        {0, 1, 0, 1, 0, 1, 1, 1}
         // MEM_WRITE  vs.
         ,
-        {0, 0, 1, 1, 0, 1}
+        {0, 0, 1, 1, 0, 1, 1, 1}
         // MEM_RW  vs.
         ,
-        {0, 1, 1, 1, 0, 1}
+        {0, 1, 1, 1, 0, 1, 1, 1}
         // KERNEL vs.
         ,
-        {0, 0, 0, 0, 0, 1}
+        {0, 0, 0, 0, 0, 1, 0, 0}
         // PROGRAM vs.
         ,
-        {1, 1, 1, 1, 1, 1}};
+        {1, 1, 1, 1, 1, 1, 1, 1},
+        // HOSTPIPE_READ vs.
+        {0, 1, 1, 1, 0, 1, 0, 0},
+        // HOSTPIPE_WRITE vs.
+        {0, 1, 1, 1, 0, 1, 0, 0}};
 
 static const char *l_type_name(int op_type) {
   switch (op_type) {
@@ -175,6 +184,12 @@ static const char *l_type_name(int op_type) {
     break;
   case ACL_DEVICE_OP_USM_MEMCPY:
     return "USM_MEMCPY";
+    break;
+  case ACL_DEVICE_OP_HOSTPIPE_READ:
+    return "HOSTPIPE_READ";
+    break;
+  case ACL_DEVICE_OP_HOSTPIPE_WRITE:
+    return "HOSTPIPE_WRITE";
     break;
   default:
     return "<err>";
@@ -262,6 +277,8 @@ void acl_init_device_op_queue_limited(acl_device_op_queue_t *doq,
   doq->program_device = acl_program_device;
   doq->migrate_buffer = acl_mem_migrate_buffer;
   doq->usm_memcpy = acl_usm_memcpy;
+  doq->hostpipe_read = acl_read_program_hostpipe;
+  doq->hostpipe_write = acl_write_program_hostpipe;
   doq->log_update = 0;
 
   for (i = 0; i < ACL_MAX_DEVICE; i++) {
@@ -310,6 +327,12 @@ acl_device_op_conflict_type_t acl_device_op_conflict_type(acl_device_op_t *op) {
       break;
     case ACL_DEVICE_OP_REPROGRAM:
       result = ACL_CONFLICT_REPROGRAM;
+      break;
+    case ACL_DEVICE_OP_HOSTPIPE_READ:
+      result = ACL_CONFLICT_HOSTPIPE_READ;
+      break;
+    case ACL_DEVICE_OP_HOSTPIPE_WRITE:
+      result = ACL_CONFLICT_HOSTPIPE_WRITE;
       break;
     case ACL_DEVICE_OP_NONE:
     case ACL_NUM_DEVICE_OP_TYPES:
@@ -598,6 +621,15 @@ l_get_devices_affected_for_op(acl_device_op_t *op, unsigned int physical_ids[],
         num_devices_affected = 1;
       }
       break;
+    case ACL_DEVICE_OP_HOSTPIPE_READ:
+    case ACL_DEVICE_OP_HOSTPIPE_WRITE:
+      if (acl_event_is_valid(event) &&
+          acl_command_queue_is_valid(event->command_queue)) {
+        physical_ids[0] = event->command_queue->device->def.physical_device_id;
+        conflicts[0] = acl_device_op_conflict_type(op);
+        num_devices_affected = 1;
+      }
+      break;
     case ACL_DEVICE_OP_NONE:
     case ACL_NUM_DEVICE_OP_TYPES:
       break;
@@ -606,6 +638,7 @@ l_get_devices_affected_for_op(acl_device_op_t *op, unsigned int physical_ids[],
   if (num_devices_affected == 0) {
     // This case is only valid for unit tests
     // Make assumptions on which devices are affected
+    // Possible TODO to add for Hostpipe read and write
     if (event && event->context && op) {
       if (event->context->num_devices >= 2 &&
           op->info.type != ACL_DEVICE_OP_KERNEL &&
@@ -960,7 +993,9 @@ unsigned l_update_device_op_queue_once(acl_device_op_queue_t *doq) {
           } else if (op->info.event &&
                      (op->info.type == ACL_DEVICE_OP_MEM_TRANSFER_READ ||
                       op->info.type == ACL_DEVICE_OP_MEM_TRANSFER_WRITE ||
-                      op->info.type == ACL_DEVICE_OP_MEM_TRANSFER_COPY)) {
+                      op->info.type == ACL_DEVICE_OP_MEM_TRANSFER_COPY ||
+                      op->info.type == ACL_DEVICE_OP_HOSTPIPE_READ ||
+                      op->info.type == ACL_DEVICE_OP_HOSTPIPE_WRITE)) {
             if (!acl_mem_op_requires_transfer(op->info.event->cmd)) {
               is_conflicting = 0;
             }
@@ -1305,6 +1340,12 @@ void acl_submit_device_op(acl_device_op_queue_t *doq, acl_device_op_t *op) {
         break;
       case ACL_DEVICE_OP_USM_MEMCPY:
         DOIT(usm_memcpy, op);
+        break;
+      case ACL_DEVICE_OP_HOSTPIPE_READ:
+        DOIT(hostpipe_read, op);
+        break;
+      case ACL_DEVICE_OP_HOSTPIPE_WRITE:
+        DOIT(hostpipe_write, op);
         break;
       default:
         break;

@@ -650,6 +650,10 @@ static void l_release_command_resources(acl_command_info_t &cmd) {
     cmd.info.memory_migration.num_alloc = 0;
     break;
 
+  case CL_COMMAND_READ_HOST_PIPE_INTEL:
+  case CL_COMMAND_WRITE_HOST_PIPE_INTEL:
+    // Nothing to cleanup
+    break;
   default:
     break;
   }
@@ -1150,6 +1154,8 @@ void acl_dump_event(cl_event event) {
     NNN(CL_COMMAND_MAP_BUFFER)
     NNN(CL_COMMAND_WAIT_FOR_EVENTS_INTELFPGA)
     NNN(CL_COMMAND_PROGRAM_DEVICE_INTELFPGA)
+    NNN(CL_COMMAND_READ_HOST_PIPE_INTEL)
+    NNN(CL_COMMAND_WRITE_HOST_PIPE_INTEL)
   default:
     break;
   }

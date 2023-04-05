@@ -221,6 +221,8 @@ static bool read_uintptr_counters(const std::string &str,
   }
 
   val = static_cast<uintptr_t>(parsed);
+  // To make sure the cast work
+  // As `unsigned long long` might have difference size comparing to `uintptr_t
   if (val != parsed) {
     return false;
   }
@@ -644,14 +646,21 @@ static bool read_hostpipe_mappings(
     counters.emplace_back(num_fields_per_mapping);
 
     acl_hostpipe_mapping mapping{};
-    result = read_string_counters(config_str, curr_pos, mapping.logical_name,
-                                  counters) &&
-             read_string_counters(config_str, curr_pos, mapping.physical_name,
-                                  counters) &&
-             read_bool_counters(config_str, curr_pos, mapping.implement_in_csr,
-                                counters) &&
-             read_uintptr_counters(config_str, curr_pos, mapping.csr_address,
-                                   counters);
+    result =
+        read_string_counters(config_str, curr_pos, mapping.logical_name,
+                             counters) &&
+        read_string_counters(config_str, curr_pos, mapping.physical_name,
+                             counters) &&
+        read_bool_counters(config_str, curr_pos, mapping.implement_in_csr,
+                           counters) &&
+        read_string_counters(config_str, curr_pos, mapping.csr_address,
+                             counters) &&
+        read_bool_counters(config_str, curr_pos, mapping.is_read, counters) &&
+        read_bool_counters(config_str, curr_pos, mapping.is_write, counters) &&
+        read_uint_counters(config_str, curr_pos, mapping.pipe_width,
+                           counters) &&
+        read_uint_counters(config_str, curr_pos, mapping.pipe_depth, counters);
+
     hostpipe_mappings.emplace_back(mapping);
 
     while (result && counters.back() > 0) {
@@ -839,7 +848,6 @@ static bool read_accel_defs(const std::string &config_str,
     accel = std::vector<acl_accel_def_t>(num_accel);
     hal_info = std::vector<acl_hal_accel_def_t>(num_accel);
   }
-
   // Setup the accelerators
   for (auto i = 0U; result && (i < num_accel); i++) {
     accel[i].id = i;
@@ -931,6 +939,7 @@ static bool read_accel_defs(const std::string &config_str,
       result = read_int_counters(config_str, curr_pos, total_fields_printf,
                                  counters);
     }
+
     for (auto j = 0U; result && (j < accel[i].printf_format_info.size()); j++) {
       counters.emplace_back(total_fields_printf);
       result =
@@ -1197,6 +1206,7 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   if (result && counters.back() > 0) {
     result = read_bool_counters(config_str, curr_pos,
                                 devdef.cra_ring_root_exist, counters);
+  }
 
   // Read program scoped hostpipes mappings
   if (result && counters.back() > 0) {
