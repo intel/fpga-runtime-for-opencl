@@ -285,6 +285,54 @@ typedef void(CL_CALLBACK *acl_event_notify_fn_t)(
 typedef void(CL_CALLBACK *acl_mem_destructor_notify_fn_t)(cl_mem memobj,
                                                           void *user_data);
 
+enum host_op_type { MAP, PACKET };
+
+typedef struct host_op_struct {
+  enum host_op_type m_op;
+  void *m_mmd_buffer;
+  void *m_host_buffer;
+  size_t m_op_size;
+  size_t m_size_sent;
+} host_op_t;
+
+typedef struct host_pipe_struct {
+  // The handle to the device needed for mmd call
+  unsigned int m_physical_device_id;
+
+  // The channel handle returned by mmd create hostch call
+  int m_channel_handle;
+
+  // Operations on the host pipe are queued here. map/packet ops
+  std::deque<host_op_t> m_host_op_queue;
+  // host_op_t * m_host_op_queue;
+
+  // The total size of the operations we're queuing on the pinned mmd buffer
+  size_t size_buffered;
+
+  // The kernel that the host pipe is binded to
+  cl_kernel m_binded_kernel;
+
+  // Is host pipe binded to kernel device, only done at kernel enqueue time
+  bool binded;
+
+  // Channel ID name that the host pipe will use to do the binding
+  std::string host_pipe_channel_id;
+
+  // Pipe specific lock. Obtained every time we do an operation on the pipe
+  acl_mutex_t m_lock;
+
+  // The following are the new entries introduced by the program scoped
+  // hostpipes
+
+  // Whether this program hostpipe is implemented in the CSR
+  bool implement_in_csr;
+
+  // The CSR address of this hostpipe. Compiler passes a csr_address = '-' for
+  // non-CSR program hostpipe
+  std::string csr_address;
+
+} host_pipe_t;
+
 // The device-specific information about a program.
 //
 // This object is owned by the cl_program that creates it during
@@ -349,6 +397,9 @@ public:
 
   // Return all the names of the kernels in this device program.
   std::set<std::string> get_all_kernel_names() const;
+
+  // Map logical hostpipe name to the hostpipe struct
+  std::unordered_map<std::string, host_pipe_t> program_hostpipe_map;
 
 private:
   // This map is only used when split_kernel == 1 in the enclosing
@@ -551,6 +602,17 @@ typedef struct {
 
     } ndrange_kernel;
 
+    struct {
+      // Used for program scoped hostpipe
+      size_t size;
+      void *ptr;
+      const void *write_ptr;
+      bool blocking;
+      const char *logical_name; // Use char* instead string here due to a
+                                // compilation error from acl_command_info_t
+                                // constructor malloc related
+    } host_pipe_info;
+
     // Reprogram the device, without an associated kernel enqueue.
     // This is used to hide the latency of device programming on host
     // program startup.
@@ -683,43 +745,6 @@ typedef struct acl_mem_destructor_user_callback {
   acl_mem_destructor_notify_fn_t
       mem_destructor_notify_fn; // The callback function, provided by the user.
 } acl_mem_destructor_user_callback;
-
-enum host_op_type { MAP, PACKET };
-
-typedef struct host_op_struct {
-  enum host_op_type m_op;
-  void *m_mmd_buffer;
-  void *m_host_buffer;
-  size_t m_op_size;
-  size_t m_size_sent;
-} host_op_t;
-
-typedef struct host_pipe_struct {
-  // The handle to the device needed for mmd call
-  unsigned int m_physical_device_id;
-
-  // The channel handle returned by mmd create hostch call
-  int m_channel_handle;
-
-  // Operations on the host pipe are queued here. map/packet ops
-  std::deque<host_op_t> m_host_op_queue;
-  // host_op_t * m_host_op_queue;
-
-  // The total size of the operations we're queuing on the pinned mmd buffer
-  size_t size_buffered;
-
-  // The kernel that the host pipe is binded to
-  cl_kernel m_binded_kernel;
-
-  // Is host pipe binded to kernel device, only done at kernel enqueue time
-  bool binded;
-
-  // Channel ID name that the host pipe will use to do the binding
-  std::string host_pipe_channel_id;
-
-  // Pipe specific lock. Obtained every time we do an operation on the pipe
-  acl_mutex_t m_lock;
-} host_pipe_t;
 
 // The bookkeeping required to keep track of a block of allocated memory.
 // The storage for these structs is owned by the acl_platform object.
@@ -1298,10 +1323,12 @@ typedef enum {
   // USM Memcpy that should call HAL's copy API without any extra work.
   // Corresponds to acl_command_info_t.info.ptr_xfer
   ,
-  ACL_DEVICE_OP_USM_MEMCPY
-
-  ,
+  ACL_DEVICE_OP_USM_MEMCPY,
+  // Progrgam based hostpipe read or write
+  ACL_DEVICE_OP_HOSTPIPE_READ,
+  ACL_DEVICE_OP_HOSTPIPE_WRITE,
   ACL_NUM_DEVICE_OP_TYPES
+
 } acl_device_op_type_t;
 
 // These are device operation conflict types.
@@ -1326,6 +1353,11 @@ typedef enum {
   ACL_CONFLICT_KERNEL // Acts like a pure kernel execution
   ,
   ACL_CONFLICT_REPROGRAM // Acts like a device reprogram
+  ,
+  ACL_CONFLICT_HOSTPIPE_READ // Acts like a hostpipe read from the host channel
+  ,
+  ACL_CONFLICT_HOSTPIPE_WRITE // Acts like a hostpipe write from the host
+                              // channel
   ,
   ACL_NUM_CONFLICT_TYPES
 } acl_device_op_conflict_type_t;
@@ -1541,6 +1573,8 @@ typedef struct acl_device_op_queue_t {
   void (*usm_memcpy)(void *, acl_device_op_t *);
   // For test purposes, log transition to CL_RUNNING, CL_COMPLETE
   void (*log_update)(void *, acl_device_op_t *, int new_status);
+  void (*hostpipe_read)(void *, acl_device_op_t *);
+  void (*hostpipe_write)(void *, acl_device_op_t *);
   void *user_data; // The first argument provided to the callbacks.
 
 } acl_device_op_queue_t;

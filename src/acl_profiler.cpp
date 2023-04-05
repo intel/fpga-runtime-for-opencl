@@ -836,6 +836,10 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     snprintf(name, MAX_NAME_SIZE, ".mem_migration");
   } else if (op_type == ACL_DEVICE_OP_USM_MEMCPY) {
     snprintf(name, MAX_NAME_SIZE, ".usm_memcpy");
+  } else if (op_type == ACL_DEVICE_OP_HOSTPIPE_READ) {
+    snprintf(name, MAX_NAME_SIZE, ".hostpipe_read");
+  } else if (op_type == ACL_DEVICE_OP_HOSTPIPE_WRITE) {
+    snprintf(name, MAX_NAME_SIZE, ".hostpipe_write");
   } else {
     // Ignore unknown op_type (don't attempt to extract any profiling from it or
     // get timestamps)

@@ -277,6 +277,7 @@ TEST(device_op, conflict_type) {
 
   op = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, 0);
   CHECK(op);
+  assert(op != NULL);
 
   CHECK_EQUAL(ACL_CONFLICT_NONE, acl_device_op_conflict_type(op));
 
@@ -347,6 +348,7 @@ TEST(device_op, submit_action) {
   acl_device_op_t *op = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, 0);
   acl_commit_proposed_device_ops(&m_doq);
   CHECK(op);
+  assert(op != NULL);
 
   // Already submitted because committing nudges device opthe scheduler.
   CHECK_EQUAL(CL_SUBMITTED, op->status);
@@ -443,6 +445,7 @@ TEST(device_op, post_status) {
   CHECK(e);
 
   acl_device_op_t *op = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e);
+  assert(op != NULL);
   CHECK_EQUAL(e, op->info.event);
 
   e->execution_status = CL_COMPLETE;
@@ -470,6 +473,7 @@ TEST(device_op, post_status) {
 
   cl_event e2 = clCreateUserEvent(m_context, 0);
   acl_device_op_t *op2 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e2);
+  assert(op2 != NULL);
 
   op2->timestamp[CL_COMPLETE] = 13;
   op2->execution_status = -5;
@@ -496,6 +500,11 @@ TEST(device_op, err_status) {
   acl_device_op_t *op0 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e);
   acl_device_op_t *op1 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e);
   acl_device_op_t *op2 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e);
+
+  assert(op0 != NULL);
+  assert(op1 != NULL);
+  assert(op2 != NULL);
+
   CHECK_EQUAL(e, op0->info.event);
   CHECK_EQUAL(e, op1->info.event);
   CHECK_EQUAL(e, op2->info.event);
@@ -593,6 +602,7 @@ TEST(device_op, exhaust) {
                                                   (unsigned)i)
                   : acl_propose_device_op(&m_doq, ACL_DEVICE_OP_NONE, e);
       CHECK(op);
+      assert(op != NULL);
       ops[i] = op;
       CHECK(op);
       acl_print_debug_msg(
@@ -847,6 +857,8 @@ TEST(device_op, prune) {
 
   acl_device_op_t *op0 = acl_propose_device_op(doq, ACL_DEVICE_OP_NONE, e0);
   acl_device_op_t *op1 = acl_propose_device_op(doq, ACL_DEVICE_OP_NONE, e0);
+  assert(op0 != NULL);
+  assert(op1 != NULL);
   acl_commit_proposed_device_ops(doq);
 
   CHECK_EQUAL(0, doq->first_live);
@@ -938,6 +950,7 @@ TEST(device_op, inter_group_blocking) {
   acl_device_op_t *op0 =
       acl_propose_device_op(&m_doq, ACL_DEVICE_OP_MEM_TRANSFER_READ, 0);
   CHECK(op0);
+  assert(op0 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
 
   acl_device_op_t *op1 =
@@ -945,6 +958,8 @@ TEST(device_op, inter_group_blocking) {
   acl_device_op_t *op3 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
   CHECK(op1);
   CHECK(op3);
+  assert(op1 != NULL);
+  assert(op3 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
 
   acl_update_device_op_queue(&m_doq);
@@ -1002,6 +1017,7 @@ TEST(device_op, inter_group_all_conflict_types) {
   // where it belongs.
 
   acl_device_op_t *k00 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
+  assert(k00 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
   CHECK_EQUAL(CL_SUBMITTED, k00->status);
 
@@ -1011,7 +1027,9 @@ TEST(device_op, inter_group_all_conflict_types) {
 
   acl_device_op_t *p1 =
       acl_propose_device_op(&m_doq, ACL_DEVICE_OP_REPROGRAM, 0);
+  assert(p1 != NULL);
   acl_device_op_t *k10 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
+  assert(k10 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
 
   CHECK_EQUAL(CL_RUNNING, k00->status);
@@ -1019,6 +1037,7 @@ TEST(device_op, inter_group_all_conflict_types) {
   CHECK_EQUAL(CL_QUEUED, k10->status);
 
   acl_device_op_t *k11 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
+  assert(k11 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
 
   CHECK_EQUAL(CL_RUNNING, k00->status);
@@ -1053,10 +1072,13 @@ TEST(device_op, inter_group_concurrent_kernels) {
 
   acl_device_op_t *op0 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
   CHECK(op0);
+  assert(op0 != NULL);
   acl_commit_proposed_device_ops(&m_doq);
 
   acl_device_op_t *op1 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
   acl_device_op_t *op2 = acl_propose_device_op(&m_doq, ACL_DEVICE_OP_KERNEL, 0);
+  assert(op1 != NULL);
+  assert(op2 != NULL);
   CHECK(op1);
   CHECK(op2);
   acl_commit_proposed_device_ops(&m_doq);
@@ -1397,6 +1419,9 @@ TEST(device_op, full_duplex) {
   acl_commit_proposed_device_ops(&m_doq);
   acl_device_op_t *op_rw =
       acl_propose_device_op(&m_doq, ACL_DEVICE_OP_MEM_TRANSFER_COPY, event);
+  assert(op_read != NULL);
+  assert(op_write != NULL);
+  assert(op_rw != NULL);
   acl_commit_proposed_device_ops(&m_doq);
   acl_update_device_op_queue(&m_doq);
   CHECK_EQUAL(CL_SUBMITTED, op_read->status);
@@ -1426,9 +1451,11 @@ TEST(device_op, full_duplex) {
   acl_set_device_op_execution_status(op_rw, CL_RUNNING);
   op_read =
       acl_propose_device_op(&m_doq, ACL_DEVICE_OP_MEM_TRANSFER_READ, event);
+  assert(op_read != NULL);
   acl_commit_proposed_device_ops(&m_doq);
   op_write =
       acl_propose_device_op(&m_doq, ACL_DEVICE_OP_MEM_TRANSFER_WRITE, event);
+  assert(op_write != NULL);
   acl_commit_proposed_device_ops(&m_doq);
   acl_update_device_op_queue(&m_doq);
   CHECK_EQUAL(CL_RUNNING, op_rw->status);
@@ -1480,8 +1507,10 @@ TEST(device_op, multi_device_rw_conflict) {
         event = &myevents[k];
 
         acl_device_op_t *op1 = acl_propose_device_op(&m_doq, ops[i], event);
+        assert(op1 != NULL);
         acl_commit_proposed_device_ops(&m_doq);
         acl_device_op_t *op2 = acl_propose_device_op(&m_doq, ops[j], event);
+        assert(op2 != NULL);
         acl_commit_proposed_device_ops(&m_doq);
         acl_update_device_op_queue(&m_doq);
         CHECK_EQUAL(CL_SUBMITTED, op1->status);

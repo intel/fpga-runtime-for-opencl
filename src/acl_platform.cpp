@@ -282,7 +282,8 @@ const char *acl_platform_extensions() {
 #endif
          " cl_intel_create_buffer_with_properties"
          " cl_intel_mem_channel_property"
-         " cl_intel_mem_alloc_buffer_location";
+         " cl_intel_mem_alloc_buffer_location"
+         " cl_intel_program_scope_host_pipe";
 }
 
 // Initialize the internal bookkeeping based on the system definition

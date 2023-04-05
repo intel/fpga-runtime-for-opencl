@@ -107,6 +107,10 @@ static void l_try_to_eagerly_program_device(cl_program program);
 static void
 l_device_memory_definition_copy(acl_device_def_autodiscovery_t *dest_dev,
                                 acl_device_def_autodiscovery_t *src_dev);
+static cl_int
+l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
+                                unsigned int physical_device_id,
+                                cl_context context);
 //////////////////////////////
 // OpenCL API
 
@@ -427,6 +431,11 @@ CL_API_ENTRY cl_program CL_API_CALL clCreateProgramWithBinaryIntelFPGA(
   acl_track_object(ACL_OBJ_PROGRAM, program);
 
   l_try_to_eagerly_program_device(program);
+
+  // Register the program scoped hostpipe to each dev_prog
+  for (idev = 0; idev < num_devices; idev++) {
+    l_register_hostpipes_to_program(program->dev_prog[idev], idev, context);
+  }
 
   return program;
 }
@@ -1303,9 +1312,69 @@ l_create_dev_prog(cl_program program, cl_device_id device, size_t binary_len,
   return result;
 }
 
+// Loop through auto-discovery string and store program scope hostpipe
+// information in the device program info
+static cl_int
+l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
+                                unsigned int physical_device_id,
+                                cl_context context) {
+
+  host_pipe_t host_pipe_info;
+
+  for (const auto &hostpipe : dev_prog->device_binary.get_devdef()
+                                  .autodiscovery_def.hostpipe_mappings) {
+    // Skip if the hostpipe is already registered in the program
+    auto search = dev_prog->program_hostpipe_map.find(hostpipe.logical_name);
+    if (search != dev_prog->program_hostpipe_map.end()) {
+      continue;
+    }
+    host_pipe_t host_pipe_info;
+    host_pipe_info.m_physical_device_id = physical_device_id;
+    if (hostpipe.is_read && hostpipe.is_write) {
+      ERR_RET(CL_INVALID_OPERATION, context,
+              "Hostpipes don't allow both read and write operations from the "
+              "host.");
+    }
+    if (!hostpipe.is_read && !hostpipe.is_write) {
+      ERR_RET(CL_INVALID_OPERATION, context,
+              "The hostpipe direction is not set.");
+    }
+
+    if (hostpipe.implement_in_csr) {
+      // CSR hostpipe read and write from the given CSR address directly
+      host_pipe_info.implement_in_csr = true;
+      host_pipe_info.csr_address = hostpipe.csr_address;
+      // CSR pipe doesn't use m_channel_handle but we want to have it
+      // initialized.
+      host_pipe_info.m_channel_handle = -1;
+    } else {
+      host_pipe_info.implement_in_csr = false;
+      host_pipe_info.m_channel_handle = acl_get_hal()->hostchannel_create(
+          physical_device_id, (char *)hostpipe.physical_name.c_str(),
+          hostpipe.pipe_depth, hostpipe.pipe_width,
+          hostpipe.is_read); // If it's a read pipe, pass 1 to the
+                             // hostchannel_create, which is HOST_TO_DEVICE
+      if (host_pipe_info.m_channel_handle <= 0) {
+        return CL_INVALID_VALUE;
+      }
+    }
+    acl_mutex_init(&(host_pipe_info.m_lock), NULL);
+    // The following property is not used by the program scoped hostpipe but we
+    // don't want to leave it uninitialized
+    host_pipe_info.binded = false;
+    host_pipe_info.m_binded_kernel = NULL;
+    host_pipe_info.size_buffered = 0;
+
+    dev_prog->program_hostpipe_map[hostpipe.logical_name] = host_pipe_info;
+  }
+
+  return CL_SUCCESS;
+}
+
 static cl_int l_build_program_for_device(cl_program program,
                                          unsigned int dev_idx,
                                          const char *options) {
+
   acl_device_program_info_t *dev_prog = 0;
   cl_context context;
   int build_status; // CL_BUILD_IN_PROGRESS, CL_BUILD_ERROR, or
@@ -1318,7 +1387,6 @@ static cl_int l_build_program_for_device(cl_program program,
   if (!program->source_text) {
     // Program was created from binary.
     dev_prog = program->dev_prog[dev_idx];
-
     // User might have provided a bad binary (e.g. random bytes).
     // Need to check that once we can.
     // So we can only do a NULL check, but
