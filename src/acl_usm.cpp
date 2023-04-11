@@ -238,6 +238,14 @@ clDeviceMemAllocINTEL(cl_context context, cl_device_id device,
               "Memory buffer size is larger than max size supported by device");
   }
 
+  if (!acl_usm_has_access_capability(device,
+                                     CL_DEVICE_DEVICE_MEM_CAPABILITIES_INTEL)) {
+    BAIL_INFO(
+        CL_INVALID_OPERATION, context,
+        "Device does not support device Unified Shared Memory allocations: " +
+            device->def.autodiscovery_def.name);
+  }
+
   // Spec allows for power of 2 allignment.
   // For now, we only allow alignment to ACL_MEM_ALIGN.
   // Over align all allocations to ACL_MEM_ALIGN.

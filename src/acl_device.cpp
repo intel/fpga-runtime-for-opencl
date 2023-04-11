@@ -533,9 +533,16 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     if (param_name == CL_DEVICE_HOST_MEM_CAPABILITIES_INTEL) {
       capabilities = device->def.host_capabilities;
     } else if (param_name == CL_DEVICE_DEVICE_MEM_CAPABILITIES_INTEL) {
-      // Device allocations are supported for all legacy devices
-      // Device allocations managed by runtime in legacy devices
-      capabilities = ACL_MEM_CAPABILITY_SUPPORTED;
+      if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+        // Device allocations are not supported in IPA flow which
+        // currently runs in simulation only. Return true device
+        // allocation capabilities in this case.
+        capabilities = device->def.device_capabilities;
+      } else {
+        // IPA is not supported with hardware flow currently, and
+        // device allocations are supported for all legacy devices
+        capabilities = ACL_MEM_CAPABILITY_SUPPORTED;
+      }
     } else {
       capabilities = device->def.shared_capabilities;
     }
