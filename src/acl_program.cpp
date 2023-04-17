@@ -1323,6 +1323,11 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
 
   for (const auto &hostpipe : dev_prog->device_binary.get_devdef()
                                   .autodiscovery_def.hostpipe_mappings) {
+    // Skip if the hostpipe doesn't have a logical name.
+    // It's not the program scoped hostpipe.
+    if (hostpipe.logical_name == "-") {
+      continue;
+    }
     // Skip if the hostpipe is already registered in the program
     auto search = dev_prog->program_hostpipe_map.find(hostpipe.logical_name);
     if (search != dev_prog->program_hostpipe_map.end()) {
