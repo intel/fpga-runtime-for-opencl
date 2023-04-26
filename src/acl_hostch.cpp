@@ -736,17 +736,30 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
 
     // start the CSR read
 
-    // Checking if the data is valid, blocking
+    // If Blocking, wait until the data is valid.
+    // If Non-blocking, just read once and report failure if not valid.
     do {
       acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
                               (void *)valid_value_pointer,
                               (size_t)sizeof(uintptr_t));
-    } while (valid_value != 1);
+    } while (blocking && valid_value != 1);
 
-    pulled_data =
+    // If non-blocking and valid bit is not set, set the op to fail.
+    if (!blocking && valid_value == 0) {
+      acl_mutex_unlock(&(host_pipe_info.m_lock));
+      acl_set_device_op_execution_status(op, -1);
+      return;
+    }
+
+    auto status =
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, data_reg,
                                 event->cmd.info.host_pipe_info.ptr,
                                 event->cmd.info.host_pipe_info.size);
+    if (status != 0) {
+      acl_mutex_unlock(&(host_pipe_info.m_lock));
+      acl_set_device_op_execution_status(op, -1);
+      return;
+    }
     // Tell CSR it's ready
     acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, ready_reg,
                              (void *)&ready, (size_t)sizeof(uintptr_t));
@@ -807,7 +820,6 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
     // Get CSR address
     unsigned long long parsed;
     uintptr_t data_reg, valid_reg;
-    size_t pushed_data;
     try {
       parsed = std::stoull(host_pipe_info.csr_address, nullptr);
     } catch (const std::exception &) {
@@ -821,18 +833,32 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
                                  // this to the autodiscovery string maybe
     unsigned int valid = 1;
     // start the write
-    pushed_data =
+    auto status =
         acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, data_reg,
                                  event->cmd.info.host_pipe_info.write_ptr,
                                  event->cmd.info.host_pipe_info.size);
-    if (pushed_data != event->cmd.info.host_pipe_info.size) {
+    if (status != 0) {
       acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
       return;
     }
-    // Tell CSR it's valid
-    acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, valid_reg,
-                             (void *)&valid, (size_t)sizeof(uintptr_t));
+
+    // In non-blocking case, there is no need to write into valid register.
+    if (blocking) {
+      // Tell CSR it's valid
+      acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, valid_reg,
+                               (void *)&valid, (size_t)sizeof(uintptr_t));
+
+      // Wait until the valid reg is 0
+      unsigned valid_value = 1;
+      unsigned *valid_value_pointer = &valid_value;
+
+      while (valid_value != 0) {
+        acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
+                                (void *)valid_value_pointer,
+                                (size_t)sizeof(uintptr_t));
+      }
+    }
   } else {
     // Regular hostpipe
     // Attempt to write once
