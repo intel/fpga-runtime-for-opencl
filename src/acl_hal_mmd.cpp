@@ -623,12 +623,14 @@ cl_bool l_load_single_board_library(const char *library_name,
       if (result == CL_FALSE) {
         std::cout << "Error: Could not load board library " << library_name
                   << " due to failure to load symbols\n";
+        my_dlclose(mmd_library);
         return result;
       }
     }
     ++num_boards_found;
   }
 
+  my_dlclose(mmd_library);
   return CL_TRUE;
 }
 
@@ -1184,6 +1186,7 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
     return nullptr;
   }
   auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
+  my_dlclose(mmd_lib);
   if (!sym) {
     std::cout << "Error: Symbol " << sym_name
               << " not found in simulation MMD library ";
