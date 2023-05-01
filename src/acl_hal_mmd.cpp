@@ -464,6 +464,24 @@ static void my_dlclose(void *library) {
 #endif
 }
 
+static void my_dlclose_no_assert(void *library) {
+#ifdef _WIN32
+  FreeLibrary((HMODULE)library);
+#else
+  dlclose(library);
+#endif
+}
+
+typedef struct my_dl_wrapper {
+  void *handle;
+  my_dl_wrapper(void *handle) { this->handle = handle; }
+  ~my_dl_wrapper() { my_dlclose_no_assert(this->handle); }
+  // prohibit copying to avoid double-close of handle
+  my_dl_wrapper(const my_dl_wrapper &) = delete;
+  my_dl_wrapper &operator=(const my_dl_wrapper &) = delete;
+} my_dl_wrapper;
+std::vector<std::unique_ptr<my_dl_wrapper>> mmd_libs;
+
 cl_bool l_load_board_functions(acl_mmd_dispatch_t *mmd_dispatch,
                                const char *library_name, void *mmd_library,
                                char *error_msg) {
@@ -632,12 +650,14 @@ cl_bool l_load_single_board_library(const char *library_name,
       if (result == CL_FALSE) {
         std::cout << "Error: Could not load board library " << library_name
                   << " due to failure to load symbols\n";
+        my_dlclose(mmd_library);
         return result;
       }
     }
     ++num_boards_found;
   }
 
+  mmd_libs.push_back(std::make_unique<my_dl_wrapper>(mmd_library));
   return CL_TRUE;
 }
 
@@ -1193,6 +1213,7 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
     return nullptr;
   }
   auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
+  mmd_libs.push_back(std::make_unique<my_dl_wrapper>(mmd_lib));
   if (!sym) {
     std::cout << "Error: Symbol " << sym_name
               << " not found in simulation MMD library ";
