@@ -73,25 +73,37 @@ TEST_GROUP(create){};
 
 TEST(create, bad_flags) {
   char temp[] = "\177ELF";
-  CHECK_EQUAL(
-      0, acl_pkg_open_file(0, ACL_PKG_CREATE |
-                                  ACL_PKG_READ_WRITE)); // require a filename
-  CHECK_EQUAL(0, acl_pkg_open_file("blah", 0)); // need one of read, read_write
-  CHECK_EQUAL(
-      0, acl_pkg_open_file("blah", ACL_PKG_READ |
-                                       ACL_PKG_READ_WRITE)); // can't have both
-  CHECK_EQUAL(
-      0, acl_pkg_open_file(
-             "blah", ACL_PKG_READ | ACL_PKG_CREATE)); // CREATE only compatible
-                                                      // with ACL_PKG_READ_WRITE
+  acl_pkg_file *result;
+  result = acl_pkg_open_file(0, ACL_PKG_CREATE |
+                                    ACL_PKG_READ_WRITE); // require a filename
+  CHECK_EQUAL(0, result);
+  assert(!result);
+  result = acl_pkg_open_file("blah", 0); // need one of read, read_write
+  CHECK_EQUAL(0, result);
+  assert(!result);
+  result = acl_pkg_open_file("blah", ACL_PKG_READ |
+                                         ACL_PKG_READ_WRITE); // can't have both
+  CHECK_EQUAL(0, result);
+  assert(!result);
+  result = acl_pkg_open_file(
+      "blah", ACL_PKG_READ | ACL_PKG_CREATE); // CREATE only compatible
+                                              // with ACL_PKG_READ_WRITE
+  CHECK_EQUAL(0, result);
+  assert(!result);
 
   // Check opening from memory.
-  CHECK_EQUAL(0, acl_pkg_open_file_from_memory(0, 12, 0)); // require a pointer
-  CHECK_EQUAL(0, acl_pkg_open_file_from_memory(temp, 0, 0)); // require a size
+  result = acl_pkg_open_file_from_memory(0, 12, 0); // require a pointer
+  CHECK_EQUAL(0, result);
+  assert(!result);
+  result = acl_pkg_open_file_from_memory(temp, 0, 0); // require a size
+  CHECK_EQUAL(0, result);
+  assert(!result);
 
   // Invalid bits.
   int bad_flags = 1 | ((ACL_PKG_SHOW_INFO | ACL_PKG_SHOW_ERROR) << 1);
-  CHECK_EQUAL(0, acl_pkg_open_file_from_memory(temp, sizeof(temp), bad_flags));
+  result = acl_pkg_open_file_from_memory(temp, sizeof(temp), bad_flags);
+  CHECK_EQUAL(0, result);
+  assert(!result);
 }
 
 TEST_GROUP(sample_file){
@@ -333,7 +345,7 @@ TEST(sample_file, update_same_size) {
   CHECK_EQUAL(strlen(file1), data_size);
   CHECK(acl_pkg_read_section(pkg, ACL_PKG_SECTION_HASH, buf, data_size + 1));
   // printf(" expected '%s' got '%s'\n", file1, buf );
-  CHECK_EQUAL(0, strncmp(buf, file1, strlen(file0)));
+  CHECK_EQUAL(0, strncmp(buf, file1, strlen(file1)));
   close_file(pkg);
 
   l_remove_file(file0);
@@ -459,6 +471,7 @@ TEST(package, unpack_buffer_stdin) {
   // Open new input;
   int fd = _open(PACK_UNPACK_FILE, _O_RDONLY | _O_BINARY);
   CHECK(fd > 0);
+  assert(fd > 0);
   // Save stdin.
   int old_stdin = _dup(0);
 
@@ -467,12 +480,14 @@ TEST(package, unpack_buffer_stdin) {
   _close(fd);
   result = acl_pkg_unpack(ACL_PKG_UNPACKAGE_STDIN, PACK_UNPACK_DIR);
   // Put stdin back again.
+  assert(old_stdin > 0);
   _dup2(old_stdin, 0);
   _close(old_stdin);
 #else
   // Open new input;
   int fd = open(PACK_UNPACK_FILE, O_RDONLY);
   CHECK(fd > 0);
+  assert(fd > 0);
   // Save stdin.
   int old_stdin = dup(0);
 
@@ -481,6 +496,7 @@ TEST(package, unpack_buffer_stdin) {
   close(fd);
   result = acl_pkg_unpack(ACL_PKG_UNPACKAGE_STDIN, PACK_UNPACK_DIR);
   // Put stdin back again.
+  assert(old_stdin > 0);
   dup2(old_stdin, 0);
   close(old_stdin);
 #endif
