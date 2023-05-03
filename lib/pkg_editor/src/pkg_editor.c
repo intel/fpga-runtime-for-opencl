@@ -1668,50 +1668,41 @@ static int acl_pkg_unpack_buffer_or_file(const char *buffer, size_t buffer_size,
         inflateEnd(&z_info.strm);
         return 0;
       }
-      if (info.file_length > 0) {
-        char buf[64 * 1024];
-        if (info.file_length < sizeof(buf)) {
-          if (!read_data(buf, info.file_length, &z_info, input)) {
+      fclose(out_file);
+      out_file = fopen(full_name, "ab");
+      if (out_file == NULL) {
+        fprintf(stderr, "%s: Unable to open %s for appending: %s\n",
+                routine_name, full_name, strerror(errno));
+        inflateEnd(&z_info.strm);
+        return 0;
+      }
+      char buf[64 * 1024];
+      size_t left_to_read = info.file_length;
+      // If left_to_read == 0 then read_data() will error out with Z_BUF_ERROR
+      // since we'd be giving it '0' bytes of output space to put the
+      // decompressed data
+      if (left_to_read > 0) {
+        for (;;) {
+          const size_t num_to_read =
+              (left_to_read > sizeof(buf)) ? sizeof(buf) : left_to_read;
+          if (!read_data(buf, num_to_read, &z_info, input)) {
             fprintf(stderr, "%s: Error reading file data for %s from buffer\n",
                     routine_name, full_name);
             fclose(out_file);
             inflateEnd(&z_info.strm);
             return 0;
           }
-          if (fwrite(buf, info.file_length, 1, out_file) != 1) {
+          if (fwrite(buf, num_to_read, 1, out_file) != 1) {
             fprintf(stderr, "%s: Failed to write to %s: %s\n", routine_name,
                     full_name, strerror(errno));
             fclose(out_file);
             inflateEnd(&z_info.strm);
             return 0;
           }
-        } else {
-          char *buf2 = malloc(info.file_length);
-          if (buf2 == NULL) {
-            fprintf(stderr, "%s: Failed to allocate buffer to write %s: %s\n",
-                    routine_name, full_name, strerror(errno));
-            fclose(out_file);
-            free(buf2);
-            inflateEnd(&z_info.strm);
-            return PACK_END;
+          if (left_to_read <= sizeof(buf)) {
+            break;
           }
-          if (!read_data(buf2, info.file_length, &z_info, input)) {
-            fprintf(stderr, "%s: Error reading file data for %s from buffer\n",
-                    routine_name, full_name);
-            fclose(out_file);
-            free(buf2);
-            inflateEnd(&z_info.strm);
-            return 0;
-          }
-          if (fwrite(buf2, info.file_length, 1, out_file) != 1) {
-            fprintf(stderr, "%s: Failed to write to %s: %s\n", routine_name,
-                    full_name, strerror(errno));
-            fclose(out_file);
-            free(buf2);
-            inflateEnd(&z_info.strm);
-            return 0;
-          }
-          free(buf2);
+          left_to_read -= sizeof(buf);
         }
       }
       fclose(out_file);
