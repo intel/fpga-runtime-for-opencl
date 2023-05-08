@@ -464,13 +464,12 @@ static void my_dlclose_no_assert(void *library) {
 }
 
 typedef struct my_dl_wrapper {
-  void* handle;
-  my_dl_wrapper(void* handle) { 
-    this->handle = handle; 
-  }
-  ~my_dl_wrapper() { 
-    my_dlclose_no_assert(this->handle); 
-  }
+  void *handle;
+  my_dl_wrapper(void *handle) { this->handle = handle; }
+  ~my_dl_wrapper() { my_dlclose_no_assert(this->handle); }
+  // prohibit copying to avoid double-close of handle
+  my_dl_wrapper(const my_dl_wrapper &) = delete;
+  my_dl_wrapper &operator=(const my_dl_wrapper &) = delete;
 } my_dl_wrapper;
 std::vector<std::unique_ptr<my_dl_wrapper>> mmd_libs;
 
