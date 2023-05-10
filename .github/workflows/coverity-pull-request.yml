@@ -1,0 +1,113 @@
+# Copyright (C) 2021 Intel Corporation
+# SPDX-License-Identifier: BSD-3-Clause
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions
+
+name: Coverity Pull Request Scan
+
+permissions:
+  # Grant read permissions to private container images.
+  packages: read
+
+on:
+  pull_request:
+    paths:
+      - '**'
+      - '!**.md'
+      - '!**/.clang-format'
+      - '!**/COPYING'
+      - '!**/LICENSE'
+      - '!.github/**'
+      - '.github/workflows/coverity-pull-request.yml'
+      - '!.gitignore'
+      - '!cmake/manifests/**'
+      - '!container/**'
+      - '!docs/**'
+      - '!scripts/**'
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
+
+jobs:
+  build:
+    name: Coverity Validation
+    if: ${{ ! contains( github.event.pull_request.labels.*.name, 'coverity-override') }}
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    container:
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-22.04-dev:main
+      volumes:
+        - /opt/coverity:/opt/coverity
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v3
+      - run: echo /opt/coverity/latest/bin >> "$GITHUB_PATH"
+      - name: Build current
+        run: |
+          cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
+          # The --compiler names must match those used by CMake.
+          # https://community.synopsys.com/s/article/cov-build-returns-WARNING-No-files-were-emitted-This-may-be-due-to-a-problem-with-your-configuration
+          # https://community.synopsys.com/s/article/Configuring-Your-Compilers-for-Coverity-Analysis
+          cov-configure --config config.xml --template --comptype gcc --compiler cc
+          cov-configure --config config.xml --template --comptype g++ --compiler c++
+          cov-build --config config.xml --dir results ninja -C build -v -k0
+          cov-manage-emit --dir results --tu-pattern "file('/lib/CppUTest/')" delete
+          cov-analyze --config config.xml --dir results --concurrency --security --rule --enable-constraint-fpp --enable-fnptr --enable-virtual
+          cov-format-errors --text-output-style multiline --dir results --filesort --file "$PWD" --strip-path "$PWD" > cov-errors.txt
+          cat cov-errors.txt
+      - name: Build base
+        run: |
+          git fetch origin
+          git reset --hard origin/$GITHUB_BASE_REF
+          rm -rf build_base
+          mkdir -p build_base
+          cd build_base
+          CC=gcc CXX=g++ cmake -G Ninja .. -DCMAKE_BUILD_TYPE=Release 
+          cov-configure --config config.xml --template --comptype gcc --compiler gcc
+          cov-configure --config config.xml --template --comptype g++ --compiler g++
+          cov-build --config config.xml --dir results ninja -v && cov-manage-emit --dir results --tu-pattern "file('/lib/CppUTest/')" delete && cov-analyze --config config.xml --dir results --concurrency --security --rule --enable-constraint-fpp --enable-fnptr --enable-virtual
+          cov-format-errors --text-output-style multiline --dir results --filesort --file "$(realpath ..)" --strip-path "$(realpath ..)" > ../cov-errors-base.txt 
+          cd ..
+          readlink -f cov-errors-base.txt
+      - name: Upload current cov-errors.txt
+        uses: actions/upload-artifact@v3
+        with:
+          name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
+          path: cov-errors.txt
+          if-no-files-found: error
+      - name: Upload base cov-errors.txt
+        uses: actions/upload-artifact@v3
+        with:
+          name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
+          path: cov-errors-base.txt
+          if-no-files-found: error
+      - name: Verify no new Coverity Issues
+        run: |
+          set +e
+          # Diffing the coverity issues exist in the current repo, and the coverity issues exist in the current repo + current PR
+          diff cov-errors-base.txt cov-errors.txt | grep -E "^>|<" > diff.txt
+          set -e
+          export countLeft=$(grep -c '^<' diff.txt) 
+          if [ $countLeft -gt 0 ]; then
+            echo "I can not determine if there is a new Coverity issue introduced by this PR"
+            echo "This might be because you are modifying a file that has coverity issues"
+            echo "Please check cov-errors.txt and cov-errors-base.txt manually to see if there are new coverity issues"
+            echo "After checking manually, please add a <coverity-override> tag on this PR to disable this check for this PR"
+            cat cov-errors.txt
+            exit 1
+          fi
+          export count=$(grep -c '^> $' diff.txt) 
+          if [ $count -gt 0 ]; then
+            echo "There are $(( $count / 2 )) new coverity issues introduced by this PR"
+            echo "You should fix these issues before mergin them in"
+            cat cov-errors.txt
+            exit 1
+          fi
