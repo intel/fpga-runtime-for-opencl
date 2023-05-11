@@ -53,6 +53,8 @@ using random_bytes_engine =
                                  unsigned int>;
 namespace fs = std::experimental::filesystem::v1;
 
+int tmpCount = 0;
+
 static void l_remove_file(const char *filename) {
 #ifdef _WIN32
   _unlink(filename);
@@ -457,8 +459,9 @@ static bool is_same_tmpdir(const std::vector<fs::path> &files,
 
 TEST(package, unpack) {
   int result;
-  fs::path tmpdir = "tmp";
-  std::string tmpdir_string = tmpdir.string();
+  std::string tmpdir_string = "tmp" + std::to_string(tmpCount);
+  tmpCount++;
+  fs::path tmpdir = tmpdir_string;
   const char *tmpdir_c_str = tmpdir_string.c_str();
   std::vector<fs::path> files = generate_tmp_folder(tmpdir);
 
@@ -473,12 +476,14 @@ TEST(package, unpack) {
 
   // Compare some files to be sure that they are the same.
   CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
+  system(("rm -rf " + tmpdir_string).c_str());
 }
 
 TEST(package, unpack_buffer) {
   int result;
-  fs::path tmpdir = "tmp";
-  std::string tmpdir_string = tmpdir.string();
+  std::string tmpdir_string = "tmp" + std::to_string(tmpCount);
+  tmpCount++;
+  fs::path tmpdir = tmpdir_string;
   const char *tmpdir_c_str = tmpdir_string.c_str();
   std::vector<fs::path> files = generate_tmp_folder(tmpdir);
   // Create a known good input.
@@ -509,12 +514,14 @@ TEST(package, unpack_buffer) {
   CHECK_EQUAL(true, files_same("test/pkg_editor_test.cpp",
                                PACK_UNPACK_DIR "/test/pkg_editor_test.cpp"));
   CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
+  system(("rm -rf " + tmpdir_string).c_str());
 }
 
 TEST(package, unpack_buffer_stdin) {
   int result;
-  fs::path tmpdir = "tmp";
-  std::string tmpdir_string = tmpdir.string();
+  std::string tmpdir_string = "tmp" + std::to_string(tmpCount);
+  tmpCount++;
+  fs::path tmpdir = tmpdir_string;
   const char *tmpdir_c_str = tmpdir_string.c_str();
   std::vector<fs::path> files = generate_tmp_folder(tmpdir);
 
@@ -563,5 +570,6 @@ TEST(package, unpack_buffer_stdin) {
   CHECK_EQUAL(true, files_same("test/pkg_editor_test.cpp",
                                PACK_UNPACK_DIR "/test/pkg_editor_test.cpp"));
   CHECK(is_same_tmpdir(files, PACK_UNPACK_DIR));
+  system(("rm -rf " + tmpdir_string).c_str());
 }
 #endif
