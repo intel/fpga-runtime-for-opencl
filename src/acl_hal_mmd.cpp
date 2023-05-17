@@ -1204,7 +1204,7 @@ static acl_mmd_dispatch_t *get_msim_mmd_layer() {
     return nullptr;
   }
   auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
-  my_dlclose(mmd_lib);
+  mmd_libs.push_back(std::make_unique<my_dl_wrapper>(mmd_lib));
   if (!sym) {
     std::cout << "Error: Symbol " << sym_name
               << " not found in simulation MMD library ";
