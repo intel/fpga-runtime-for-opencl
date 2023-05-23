@@ -2,15 +2,87 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2023.2] - 2023-07-06
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.1...HEAD
+### Added
+- Add `accel_id` parameter to `simulation_streaming_kernel_start()` function ([#282]).
+- Support program scope hostpipe and CSR pipe ([#284], [#288], [#289]).
+
+### Changed
+- Parse device global address in base 16 ([#249]).
+- Declare dlopen() wrappers as static functions in `acl_hal_mmd` ([#280]).
+- Auto discovery change for Device Global ([#278]).
+- Modify USM device allocation information returned by `clGetDeviceInfo` ([#286]).
+
+### Removed
+- Remove CL_CONTEXT_COMPILER_MODE_SIMULATION_INTELFPGA mode ([#244]).
+- Remove ACL_CONTEXT_MSIM mode ([#258]).
+- Remove trylock + unlock in `acl_reset_condvar()` ([#279]).
+
+### Fixed
+- Add copy constructor & assignment operator to `acl_device_binary_t` ([#236]).
+- Remove dead code in `acl_program.cpp` ([#237]).
+- Fix `size_t` printf statement to `%zu` in `acl_offline_hal.cpp` ([#238]).
+- Fix Unused value in `acl_auto_configure.cpp` ([#222]).
+- Fix Unchecked return value in `acl_globals.cpp` ([#231]).
+- Fix dead link to implementation reference in `acl_threadsupport`  ([#242]).
+- Remove code making lock acquisition order inconsistent in `acl_threadsupport.c` ([#243]).
+- Fix various coverity issue in `acl_program`,  `pkg_editor.c`, `acl_event_test.cpp`, `acl_device_op_test.cpp`, `acl_device_test.cpp`, `acl_context_test.cpp`, `acl_event_test.cpp` ([#228], [#247], [#254], [#255], [#256]).
+- Fix Reliance on integer endianness in `acl_kernel_if.cpp` ([#226]).
+- Prevent zlib from being dynamically loaded in `pkg_editor.c` ([#248], [#251]).
+- Fix Deadcode issue in `acl_context_test.cpp` ([#253]).
+- Fix various coverity issue in test files ([#259], [#260], [#261], [#262], [#263], [#265], [#267], [#271], [#272], [#273] [#274], [#275]).
+- Fix kernel id - csr address mapping issue in simulation runtime ([#285]).
+
+### Security
+- Fix Resource Leak issue in `acl_hal_mmd.cpp` ([#229]).
+- Fix Dereference before null check in `acl_hostch.cpp` ([#233]).
+- Fix function pointer conversion issue in `acl_support.cpp` ([#239]).
+
+[2023.2]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.1...v2023.2
+[#222]: https://github.com/intel/fpga-runtime-for-opencl/pull/222
+[#226]: https://github.com/intel/fpga-runtime-for-opencl/pull/226
+[#228]: https://github.com/intel/fpga-runtime-for-opencl/pull/228
+[#229]: https://github.com/intel/fpga-runtime-for-opencl/pull/229
+[#231]: https://github.com/intel/fpga-runtime-for-opencl/pull/231
+[#233]: https://github.com/intel/fpga-runtime-for-opencl/pull/233
+[#236]: https://github.com/intel/fpga-runtime-for-opencl/pull/236
+[#237]: https://github.com/intel/fpga-runtime-for-opencl/pull/237
+[#238]: https://github.com/intel/fpga-runtime-for-opencl/pull/238
+[#239]: https://github.com/intel/fpga-runtime-for-opencl/pull/239
+[#242]: https://github.com/intel/fpga-runtime-for-opencl/pull/242
+[#243]: https://github.com/intel/fpga-runtime-for-opencl/pull/243
+[#244]: https://github.com/intel/fpga-runtime-for-opencl/pull/244
+[#247]: https://github.com/intel/fpga-runtime-for-opencl/pull/247
+[#248]: https://github.com/intel/fpga-runtime-for-opencl/pull/248
+[#249]: https://github.com/intel/fpga-runtime-for-opencl/pull/249
+[#251]: https://github.com/intel/fpga-runtime-for-opencl/pull/251
+[#253]: https://github.com/intel/fpga-runtime-for-opencl/pull/253
+[#254]: https://github.com/intel/fpga-runtime-for-opencl/pull/254
+[#255]: https://github.com/intel/fpga-runtime-for-opencl/pull/255
+[#256]: https://github.com/intel/fpga-runtime-for-opencl/pull/256
+[#258]: https://github.com/intel/fpga-runtime-for-opencl/pull/258
+[#259]: https://github.com/intel/fpga-runtime-for-opencl/pull/259
+[#260]: https://github.com/intel/fpga-runtime-for-opencl/pull/260
+[#261]: https://github.com/intel/fpga-runtime-for-opencl/pull/261
+[#262]: https://github.com/intel/fpga-runtime-for-opencl/pull/262
+[#263]: https://github.com/intel/fpga-runtime-for-opencl/pull/263
+[#265]: https://github.com/intel/fpga-runtime-for-opencl/pull/265
+[#267]: https://github.com/intel/fpga-runtime-for-opencl/pull/267
+[#271]: https://github.com/intel/fpga-runtime-for-opencl/pull/271
+[#272]: https://github.com/intel/fpga-runtime-for-opencl/pull/272
+[#273]: https://github.com/intel/fpga-runtime-for-opencl/pull/273
+[#274]: https://github.com/intel/fpga-runtime-for-opencl/pull/274
+[#275]: https://github.com/intel/fpga-runtime-for-opencl/pull/275
+[#278]: https://github.com/intel/fpga-runtime-for-opencl/pull/278
+[#279]: https://github.com/intel/fpga-runtime-for-opencl/pull/279
+[#280]: https://github.com/intel/fpga-runtime-for-opencl/pull/280
+[#282]: https://github.com/intel/fpga-runtime-for-opencl/pull/282
+[#284]: https://github.com/intel/fpga-runtime-for-opencl/pull/284
+[#285]: https://github.com/intel/fpga-runtime-for-opencl/pull/285
+[#286]: https://github.com/intel/fpga-runtime-for-opencl/pull/286
+[#288]: https://github.com/intel/fpga-runtime-for-opencl/pull/288
+[#289]: https://github.com/intel/fpga-runtime-for-opencl/pull/289
 
 ## [2023.1] - 2023-03-23
 
