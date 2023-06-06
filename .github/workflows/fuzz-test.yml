@@ -1,0 +1,71 @@
+name: Runtime Fuzz Testing
+
+on:
+  workflow_dispatch:
+    inputs:
+      num_of_iterations:
+        description: Number of iterations per fuzzable variable
+        required: False
+        default: 5
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - linux
+      - x64
+      - container
+
+    container:
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-22.04-dev:main
+
+    name: Fuzz Testing
+    steps:
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    - name: Clone Radamsa
+      run: |
+        mkdir radamsa_repo
+        cd radamsa_repo
+        git clone https://gitlab.com/akihe/radamsa.git .
+    - name: Install Radamsa
+      run: |
+        cd radamsa_repo
+        make
+        sudo make install
+        cd ..
+    - name: Install PyYAML 
+      run: pip install pyyaml
+    - name: Checkout runtime
+      uses: actions/checkout@v3
+    - name: Build
+      run: | 
+        mkdir -p build/fuzz_testing
+        cd build/fuzz_testing
+        CC="${CC:-gcc}" CXX="${CXX:-g++}" cmake -G Ninja ../.. -DCMAKE_BUILD_TYPE=Debug -DACL_CODE_COVERAGE=ON -DACL_TSAN=OFF -DACL_WITH_ASAN=ON -DFUZZ_TESTING=ON "$@"
+        ninja -v
+    - name: Fuzz testing
+      run: |
+        cd build/fuzz_testing
+        ls
+        cd fuzz_testing/script
+        export AOCL_BOARD_PACKAGE_ROOT="$(git rev-parse --show-toplevel)/test/board/a10_ref"
+        NUM_OF_ITERATIONS=${{ github.event.inputs.num_of_iterations }}
+        # This if block is only used during testing, because if this workflow is triggered via pull_request, ${{ github.event.inputs.num_of_iterations }} would be empty
+        if [ -z "${NUM_OF_ITERATIONS}" ]; then
+          NUM_OF_ITERATIONS=1
+        fi
+        python3 fuzz_test.py --all -n $NUM_OF_ITERATIONS
+    - name: Peek results
+      run: |
+        cat build/fuzz_testing/fuzz_testing/results/results.yml
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: fpga-runtime-for-opencl-${{ github.sha }}-fuzz-test-results-${{ github.run_id }}
+        path: |
+          /__w/fpga-runtime-for-opencl/fpga-runtime-for-opencl/build/fuzz_testing/fuzz_testing/results/results.yml
+          /__w/fpga-runtime-for-opencl/fpga-runtime-for-opencl/build/fuzz_testing/fuzz_testing/test_outputs
+        if-no-files-found: error
