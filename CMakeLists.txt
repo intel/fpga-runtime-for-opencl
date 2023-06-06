@@ -404,3 +404,10 @@ install(FILES
 
 add_subdirectory(lib)
 add_subdirectory(test)
+
+# Flag for building fuzz tests
+option(FUZZ_TESTING "Build fuzz tests" OFF)
+message(STATUS "Build fuzz tests: ${FUZZ_TESTING}")
+if(FUZZ_TESTING)
+  add_subdirectory(fuzz_testing)
+endif()
