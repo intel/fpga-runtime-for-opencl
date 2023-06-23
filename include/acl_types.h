@@ -613,6 +613,17 @@ typedef struct {
                                 // constructor malloc related
     } host_pipe_info;
 
+    struct {
+      // Used for device global ops
+      size_t offset;
+      void *read_ptr;
+      const void *write_ptr;
+      uint64_t device_global_addr;
+      const char *name;
+      size_t size;
+      unsigned int physical_device_id;
+    } device_global_info;
+
     // Reprogram the device, without an associated kernel enqueue.
     // This is used to hide the latency of device programming on host
     // program startup.
@@ -1327,6 +1338,10 @@ typedef enum {
   // Progrgam based hostpipe read or write
   ACL_DEVICE_OP_HOSTPIPE_READ,
   ACL_DEVICE_OP_HOSTPIPE_WRITE,
+
+  // Device Global read or write
+  ACL_DEVICE_OP_DEVICE_GLOBAL_READ,
+  ACL_DEVICE_OP_DEVICE_GLOBAL_WRITE,
   ACL_NUM_DEVICE_OP_TYPES
 
 } acl_device_op_type_t;
@@ -1359,6 +1374,9 @@ typedef enum {
   ACL_CONFLICT_HOSTPIPE_WRITE // Acts like a hostpipe write from the host
                               // channel
   ,
+  ACL_CONFLICT_DEVICE_GLOBAL_READ,  // Acts like a Device Global Read
+  ACL_CONFLICT_DEVICE_GLOBAL_WRITE, // Acts likes a Device Global Write
+
   ACL_NUM_CONFLICT_TYPES
 } acl_device_op_conflict_type_t;
 
@@ -1575,6 +1593,8 @@ typedef struct acl_device_op_queue_t {
   void (*log_update)(void *, acl_device_op_t *, int new_status);
   void (*hostpipe_read)(void *, acl_device_op_t *);
   void (*hostpipe_write)(void *, acl_device_op_t *);
+  void (*device_global_read)(void *, acl_device_op_t *);
+  void (*device_global_write)(void *, acl_device_op_t *);
   void *user_data; // The first argument provided to the callbacks.
 
 } acl_device_op_queue_t;

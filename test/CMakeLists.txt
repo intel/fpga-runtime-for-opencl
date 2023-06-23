@@ -26,6 +26,7 @@ add_executable(acl_test
   acl_test.cpp
   acl_thread_test.cpp
   acl_usm_test.cpp
+  acl_mem_device_global_test.cpp
   )
 set_target_properties(acl_test PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_features(acl_test PRIVATE cxx_std_11)
