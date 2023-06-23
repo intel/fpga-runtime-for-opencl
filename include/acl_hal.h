@@ -256,6 +256,15 @@ typedef struct {
 
   size_t (*write_csr)(unsigned int physical_device_id, uintptr_t offset,
                       const void *ptr, size_t size);
+
+  /// device global read and write function pointers
+  int (*simulation_device_global_interface_read)(
+      unsigned int physical_device_id, const char *interface_name,
+      void *host_addr, size_t dev_addr, size_t size);
+  int (*simulation_device_global_interface_write)(
+      unsigned int physical_device_id, const char *interface_name,
+      const void *host_addr, size_t dev_addr, size_t size);
+
 } acl_hal_t;
 
 /// Linked list of MMD library names to load.

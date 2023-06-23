@@ -380,6 +380,14 @@ int acl_submit_command(cl_event event) {
       result = acl_submit_write_program_hostpipe_device_op(event);
       break;
 
+    case CL_COMMAND_READ_GLOBAL_VARIABLE_INTEL:
+      result = acl_submit_read_device_global_device_op(event);
+      break;
+
+    case CL_COMMAND_WRITE_GLOBAL_VARIABLE_INTEL:
+      result = acl_submit_write_device_global_device_op(event);
+      break;
+
     default:
       acl_print_debug_msg("    acl_submit_command: unknown cmd type %d\n",
                           event->cmd.type);

@@ -840,6 +840,10 @@ int acl_process_profiler_scan_chain(acl_device_op_t *op) {
     snprintf(name, MAX_NAME_SIZE, ".hostpipe_read");
   } else if (op_type == ACL_DEVICE_OP_HOSTPIPE_WRITE) {
     snprintf(name, MAX_NAME_SIZE, ".hostpipe_write");
+  } else if (op_type == ACL_DEVICE_OP_DEVICE_GLOBAL_READ) {
+    snprintf(name, MAX_NAME_SIZE, ".device_global_read");
+  } else if (op_type == ACL_DEVICE_OP_DEVICE_GLOBAL_WRITE) {
+    snprintf(name, MAX_NAME_SIZE, ".device_global_write");
   } else {
     // Ignore unknown op_type (don't attempt to extract any profiling from it or
     // get timestamps)

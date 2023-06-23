@@ -93,6 +93,17 @@ cl_bool acl_is_sub_or_parent_buffer(cl_mem mem);
 void CL_CALLBACK acl_free_allocation_after_event_completion(
     cl_event event, cl_int event_command_exec_status, void *callback_data);
 
+// Submit a device global read operation to the device op queue
+cl_int acl_submit_read_device_global_device_op(cl_event event);
+// Submit a device global write device operation to the device op queue
+cl_int acl_submit_write_device_global_device_op(cl_event event);
+
+// Read from a device global
+void acl_read_device_global(void *user_data, acl_device_op_t *op);
+
+// Write into a device global
+void acl_write_device_global(void *user_data, acl_device_op_t *op);
+
 #ifdef __GNUC__
 #pragma GCC visibility pop
 #endif

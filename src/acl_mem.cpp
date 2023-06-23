@@ -4212,6 +4212,269 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjects(
       num_events_in_wait_list, event_wait_list, event);
 }
 
+/**
+ * Read <size> bytes of data from device global
+ *
+ * @param command_queue the queue system this command will belong
+ * @param program contains the device global
+ * @param name name of device global, used to look up for device global address
+ * in autodiscovery string
+ * @param blocking_read whether the operation is blocking or not
+ * @param size number of bytes to read / write
+ * @param offset offset from the extracted address of device global
+ * @param ptr pointer that will hold the data copied from device global
+ * @param num_events_in_wait_list number of event that device global read depend
+ * on
+ * @param event_wait_list events that device global read depend on
+ * @param event the info about the execution of device global read will be
+ * stored in the event
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
+ACL_EXPORT
+CL_API_ENTRY cl_int clEnqueueReadGlobalVariableINTEL(
+    cl_command_queue command_queue, cl_program program, const char *name,
+    cl_bool blocking_read, size_t size, size_t offset, void *ptr,
+    cl_uint num_events_in_wait_list, const cl_event *event_wait_list,
+    cl_event *event) {
+
+  acl_print_debug_msg("Entering clEnqueueReadGlobalVariableINTEL function.\n");
+
+  std::scoped_lock lock{acl_mutex_wrapper};
+
+  if (!acl_command_queue_is_valid(command_queue)) {
+    return CL_INVALID_COMMAND_QUEUE; // There is no context yet.
+  }
+
+  cl_int status = 0;
+
+  // Get context from program, command_queue and event
+  cl_context context = program->context;
+  cl_device_id device = command_queue->device;
+  unsigned int physical_device_id = device->def.physical_device_id;
+
+  if (!acl_context_is_valid(context)) {
+    return CL_INVALID_CONTEXT;
+  }
+
+  if (!acl_program_is_valid(program)) {
+    ERR_RET(CL_INVALID_PROGRAM, context, "Invalid program was provided");
+  }
+
+  if (ptr == NULL) {
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid pointer was provided to host data");
+  }
+
+  if (name == NULL) {
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid Device Global Name");
+  }
+
+  if ((num_events_in_wait_list > 0 && !event_wait_list) ||
+      (!num_events_in_wait_list && event_wait_list)) {
+    ERR_RET(CL_INVALID_EVENT_WAIT_LIST, context,
+            "Invalid event_wait_list or num_events_in_wait_list");
+  }
+
+  uint64_t device_global_addr;
+
+  std::unordered_map<std::string, acl_device_global_mem_def_t> dev_global_map =
+      command_queue->device->loaded_bin->get_devdef()
+          .autodiscovery_def.device_global_mem_defs;
+
+  std::unordered_map<std::string, acl_device_global_mem_def_t>::const_iterator
+      dev_global = dev_global_map.find(std::string(name));
+
+  if (dev_global != dev_global_map.end()) {
+    device_global_addr = dev_global->second.address;
+  } else {
+    // For unit test purpose
+    // Device global name not found in kernel dev_bin, try to find in the sysdef
+    // setup by unit tests.
+    dev_global_map = acl_present_board_def()
+                         ->device[0]
+                         .autodiscovery_def.device_global_mem_defs;
+    dev_global = dev_global_map.find(std::string(name));
+    if (dev_global != dev_global_map.end()) {
+      device_global_addr = dev_global->second.address;
+      return CL_SUCCESS; // This is for unit test purpose. Unit test would stop
+                         // here.
+    } else {
+      acl_print_debug_msg("clEnqueueReadGlobalVariableINTEL Cannot find Device "
+                          "Global address from the name %s\n",
+                          name);
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "Cannot find Device Global address from the name");
+    }
+  }
+  cl_event local_event = 0; // used for blocking
+
+  // Create an event/command to actually move the data at the appropriate
+  // time.
+  status =
+      acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
+                       CL_COMMAND_READ_GLOBAL_VARIABLE_INTEL, &local_event);
+
+  if (status != CL_SUCCESS)
+    return status;
+
+  local_event->cmd.info.device_global_info.offset = offset;
+  local_event->cmd.info.device_global_info.read_ptr = ptr;
+  local_event->cmd.info.device_global_info.device_global_addr =
+      device_global_addr;
+  local_event->cmd.info.device_global_info.name = name;
+  local_event->cmd.info.device_global_info.size = size;
+  local_event->cmd.info.device_global_info.physical_device_id =
+      physical_device_id;
+  acl_idle_update(
+      command_queue
+          ->context); // If nothing's blocking, then complete right away
+  if (blocking_read) {
+    status = clWaitForEvents(1, &local_event);
+  }
+  if (event) {
+    *event = local_event;
+  } else {
+    // User didn't care, so forget about the event.
+    clReleaseEvent(local_event);
+    acl_idle_update(command_queue->context); // Clean up early
+  }
+  acl_print_debug_msg("Exiting clEnqueueReadGlobalVariableINTEL function\n");
+  return CL_SUCCESS;
+}
+
+/**
+ * Write <size> bytes of data from user provided host pointer into device global
+ *
+ * @param command_queue the queue system this command belongs
+ * @param program contains device global write
+ * @param name name of device global, used to look up for device global address
+ * in autodiscovery string
+ * @param blocking_write whether the operation is blocking or not
+ * @param size number of bytes to read / write
+ * @param offset offset from the extracted address of device global
+ * @param ptr pointer that will hold the data copied from device global
+ * @param num_events_in_wait_list number of event that device global write
+ * depend on
+ * @param event_wait_list events that device global read depend on
+ * @param event the info about the execution of device global write will be
+ * stored in the event
+ * @return status code, CL_SUCCESS if all operations are successful.
+ */
+ACL_EXPORT
+CL_API_ENTRY cl_int clEnqueueWriteGlobalVariableINTEL(
+    cl_command_queue command_queue, cl_program program, const char *name,
+    cl_bool blocking_write, size_t size, size_t offset, const void *ptr,
+    cl_uint num_events_in_wait_list, const cl_event *event_wait_list,
+    cl_event *event) {
+
+  acl_print_debug_msg("Entering clEnqueueWriteGlobalVariableINTEL function\n");
+
+  std::scoped_lock lock{acl_mutex_wrapper};
+
+  if (!acl_command_queue_is_valid(command_queue)) {
+    return CL_INVALID_COMMAND_QUEUE; // There is no context yet.
+  }
+
+  cl_int status = 0;
+  // Get context from program, command_queue and event
+  cl_context context = program->context;
+  cl_device_id device = command_queue->device;
+  unsigned int physical_device_id = device->def.physical_device_id;
+
+  if (!acl_context_is_valid(context)) {
+    return CL_INVALID_CONTEXT;
+  }
+
+  if (!acl_program_is_valid(program)) {
+    ERR_RET(CL_INVALID_PROGRAM, context, "Invalid program was provided");
+  }
+
+  if (ptr == NULL) {
+    ERR_RET(CL_INVALID_VALUE, context,
+            "Invalid pointer was provided to host data");
+  }
+
+  if (name == NULL) {
+    ERR_RET(CL_INVALID_VALUE, context, "Invalid Device Global Name");
+  }
+
+  if ((num_events_in_wait_list > 0 && !event_wait_list) ||
+      (!num_events_in_wait_list && event_wait_list)) {
+    ERR_RET(CL_INVALID_EVENT_WAIT_LIST, context,
+            "Invalid event_wait_list or num_events_in_wait_list");
+  }
+
+  uint64_t device_global_addr;
+
+  std::unordered_map<std::string, acl_device_global_mem_def_t> dev_global_map =
+      command_queue->device->loaded_bin->get_devdef()
+          .autodiscovery_def.device_global_mem_defs;
+
+  std::unordered_map<std::string, acl_device_global_mem_def_t>::const_iterator
+      dev_global = dev_global_map.find(std::string(name));
+
+  if (dev_global != dev_global_map.end()) {
+    device_global_addr = dev_global->second.address;
+  } else {
+    // For unit test purpose
+    // Device global name not found in kernel dev_bin, try to find in the sysdef
+    // setup by unit tests.
+    dev_global_map = acl_present_board_def()
+                         ->device[0]
+                         .autodiscovery_def.device_global_mem_defs;
+    dev_global = dev_global_map.find(std::string(name));
+    if (dev_global != dev_global_map.end()) {
+      device_global_addr = dev_global->second.address;
+      return CL_SUCCESS; // This is for unit test purpose. Unit test would stop
+                         // here.
+    } else {
+      acl_print_debug_msg("clEnqueueWriteGlobalVariableINTEL Cannot find "
+                          "Device Global address from the name %s\n",
+                          name);
+      ERR_RET(CL_INVALID_ARG_VALUE, context,
+              "Cannot find Device Global address from the name");
+    }
+  }
+
+  cl_event local_event = 0; // used for blocking
+
+  // Create an event/command to actually move the data at the appropriate
+  // time.
+  status =
+      acl_create_event(command_queue, num_events_in_wait_list, event_wait_list,
+                       CL_COMMAND_WRITE_GLOBAL_VARIABLE_INTEL, &local_event);
+
+  if (status != CL_SUCCESS)
+    return status;
+
+  local_event->cmd.info.device_global_info.offset = offset;
+  local_event->cmd.info.device_global_info.write_ptr = ptr;
+  local_event->cmd.info.device_global_info.device_global_addr =
+      device_global_addr;
+  local_event->cmd.info.device_global_info.name = name;
+  local_event->cmd.info.device_global_info.size = size;
+  local_event->cmd.info.device_global_info.physical_device_id =
+      physical_device_id;
+
+  acl_idle_update(
+      command_queue
+          ->context); // If nothing's blocking, then complete right away
+
+  if (blocking_write) {
+    status = clWaitForEvents(1, &local_event);
+  }
+
+  if (event) {
+    *event = local_event;
+  } else {
+    // User didn't care, so forget about the event.
+    clReleaseEvent(local_event);
+    acl_idle_update(command_queue->context); // Clean up early
+  }
+  acl_print_debug_msg("Exiting clEnqueueWriteGlobalVariableINTEL function\n");
+  return CL_SUCCESS;
+}
+
 //////////////////////////////
 // Internals
 
@@ -7525,6 +7788,160 @@ void *acl_get_physical_address(cl_mem mem, cl_device_id device) {
   assert(!mem->writable_copy_on_host && "Writable copy is not on device");
   return l_get_address_of_writable_copy(mem, device->def.physical_device_id,
                                         NULL, CL_FALSE);
+}
+
+// Submit an op to the device op queue to read device global.
+// Return 1 if we made forward progress, 0 otherwise.
+cl_int acl_submit_read_device_global_device_op(cl_event event) {
+  acl_print_debug_msg(
+      "Entering acl_submit_read_device_global_device_op function\n");
+  int result = 0;
+  acl_assert_locked();
+
+  // No user-level scheduling blocks this device global read
+  // So submit it to the device op queue.
+  // But only if it isn't already enqueued there.
+  if (!acl_event_is_valid(event)) {
+    return result;
+  }
+  // Already enqueued.
+  if (event->last_device_op) {
+    return result;
+  }
+
+  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_t *last_op = 0;
+
+  // Precautionary, but it also nudges the device scheduler to try
+  // to free up old operation slots.
+  acl_forget_proposed_device_ops(doq);
+
+  last_op = acl_propose_device_op(doq, ACL_DEVICE_OP_DEVICE_GLOBAL_READ, event);
+
+  if (last_op) {
+    // We managed to enqueue everything.
+    event->last_device_op = last_op;
+    acl_commit_proposed_device_ops(doq);
+    result = 1;
+  } else {
+    // Back off, and wait until later when we have more space in the
+    // device op queue.
+    acl_forget_proposed_device_ops(doq);
+  }
+  acl_print_debug_msg(
+      "Exiting acl_submit_read_device_global_device_op function\n");
+  return result;
+}
+
+// Submit a device global write device operation to the device op queue
+cl_int acl_submit_write_device_global_device_op(cl_event event) {
+  acl_print_debug_msg(
+      "Entering acl_submit_write_device_global_device_op function\n");
+  int result = 0;
+  acl_assert_locked();
+
+  // No user-level scheduling blocks this device global write
+  // So submit it to the device op queue.
+  // But only if it isn't already enqueued there.
+  if (!acl_event_is_valid(event)) {
+    return result;
+  }
+  // Already enqueued.
+  if (event->last_device_op) {
+    return result;
+  }
+
+  acl_device_op_queue_t *doq = &(acl_platform.device_op_queue);
+  acl_device_op_t *last_op = 0;
+
+  // Precautionary, but it also nudges the device scheduler to try
+  // to free up old operation slots.
+  acl_forget_proposed_device_ops(doq);
+
+  last_op =
+      acl_propose_device_op(doq, ACL_DEVICE_OP_DEVICE_GLOBAL_WRITE, event);
+
+  if (last_op) {
+    // We managed to enqueue everything.
+    event->last_device_op = last_op;
+    acl_commit_proposed_device_ops(doq);
+    result = 1;
+  } else {
+    // Back off, and wait until later when we have more space in the
+    // device op queue.
+    acl_forget_proposed_device_ops(doq);
+  }
+  acl_print_debug_msg(
+      "Exiting acl_submit_write_device_global_device_op function\n");
+  return result;
+}
+
+// Read from a device global
+void acl_read_device_global(void *user_data, acl_device_op_t *op) {
+  acl_print_debug_msg("Entering acl_read_device_global function\n");
+  cl_event event = op->info.event;
+  cl_int status = 0;
+  size_t pulled_data = 0;
+
+  acl_assert_locked();
+
+  if (!acl_event_is_valid(event) ||
+      !acl_command_queue_is_valid(event->command_queue)) {
+    acl_set_device_op_execution_status(op, -1);
+    return;
+  }
+
+  acl_set_device_op_execution_status(op, CL_SUBMITTED);
+  acl_set_device_op_execution_status(op, CL_RUNNING);
+
+  status = acl_get_hal()->simulation_device_global_interface_read(
+      event->cmd.info.device_global_info.physical_device_id,
+      event->cmd.info.device_global_info.name,
+      event->cmd.info.device_global_info.read_ptr,
+      (size_t)event->cmd.info.device_global_info.device_global_addr +
+          event->cmd.info.device_global_info.offset,
+      event->cmd.info.device_global_info.size);
+  if (status == 0) {
+    acl_set_device_op_execution_status(op, CL_COMPLETE);
+  } else {
+    acl_set_device_op_execution_status(op, -1);
+  }
+  acl_print_debug_msg("Exiting acl_read_device_global function\n");
+}
+
+// Write into a device global
+void acl_write_device_global(void *user_data, acl_device_op_t *op) {
+
+  acl_print_debug_msg("Entering acl_write_device_global function\n");
+  cl_event event = op->info.event;
+  cl_int status = 0;
+  size_t pulled_data = 0;
+
+  acl_assert_locked();
+
+  if (!acl_event_is_valid(event) ||
+      !acl_command_queue_is_valid(event->command_queue)) {
+    acl_set_device_op_execution_status(op, -1);
+    return;
+  }
+
+  acl_set_device_op_execution_status(op, CL_SUBMITTED);
+  acl_set_device_op_execution_status(op, CL_RUNNING);
+
+  status = acl_get_hal()->simulation_device_global_interface_write(
+      event->cmd.info.device_global_info.physical_device_id,
+      event->cmd.info.device_global_info.name,
+      event->cmd.info.device_global_info.write_ptr,
+      (size_t)event->cmd.info.device_global_info.device_global_addr +
+          event->cmd.info.device_global_info.offset,
+      event->cmd.info.device_global_info.size);
+
+  if (status == 0) {
+    acl_set_device_op_execution_status(op, CL_COMPLETE);
+  } else {
+    acl_set_device_op_execution_status(op, -1);
+  }
+  acl_print_debug_msg("Exiting acl_write_device_global function\n");
 }
 
 #ifdef __GNUC__

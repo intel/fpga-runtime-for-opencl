@@ -52,6 +52,8 @@ clGetExtensionFunctionAddressIntelFPGA(const char *func_name) {
   ADDFUNCTIONLOOKUP(clCreateBufferWithPropertiesINTEL);
   ADDFUNCTIONLOOKUP(clEnqueueReadHostPipeINTEL);
   ADDFUNCTIONLOOKUP(clEnqueueWriteHostPipeINTEL);
+  ADDFUNCTIONLOOKUP(clEnqueueReadGlobalVariableINTEL);
+  ADDFUNCTIONLOOKUP(clEnqueueWriteGlobalVariableINTEL);
 
 // USM APIs are not currently supported on 32bit devices
 #ifndef __arm__
