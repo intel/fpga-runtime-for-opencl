@@ -67,7 +67,7 @@ jobs:
       - run: cov-analyze --config config.xml --dir results --concurrency --security --rule --enable-constraint-fpp --enable-fnptr --enable-virtual
       - run: cov-format-errors --text-output-style multiline --dir results --filesort --file "$PWD" --strip-path "$PWD" > cov-errors.txt
       - run: cat cov-errors.txt
-      - run: count=$(grep -c '^$' cov-errors.txt) && echo "$(( $count / 2 ))"
+      - run: count=$(grep -c '^$' cov-errors.txt) || true && echo "$(( $count / 2 ))"
       - uses: actions/upload-artifact@v3
         with:
           name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
