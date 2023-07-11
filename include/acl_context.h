@@ -16,6 +16,22 @@ extern "C" {
 #pragma GCC visibility push(protected)
 #endif
 
+// Constants
+static constexpr const char *ENV_CL_CONTEXT_ALLOW_MULTIPROCESSING_INTELFPGA =
+    "CL_CONTEXT_ALLOW_MULTIPROCESSING_INTELFPGA";
+static constexpr const char *ENV_AOCL_EAGERLY_LOAD_FIRST_BINARY =
+    "AOCL_EAGERLY_LOAD_FIRST_BINARY";
+static constexpr const char *ENV_CL_CONTEXT_COMPILER_MODE_INTELFPGA =
+    "CL_CONTEXT_COMPILER_MODE_INTELFPGA";
+static constexpr const char *ENV_CL_CONTEXT_COMPILER_MODE_ALTERA =
+    "CL_CONTEXT_COMPILER_MODE_ALTERA";
+static constexpr const char *ENV_CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA =
+    "CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA";
+static constexpr const char *ENV_CL_CONTEXT_COMPILE_COMMAND_INTELFPGA =
+    "CL_CONTEXT_COMPILE_COMMAND_INTELFPGA";
+static constexpr const char *ENV_ACL_CONTEXT_CALLBACK_DEBUG =
+    "ACL_CONTEXT_CALLBACK_DEBUG";
+
 // Update data structures in response to async msgs from devices.
 // Do this as part of a waiting loop, along with acl_hal_yield().
 void acl_update_context(cl_context context);

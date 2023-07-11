@@ -474,7 +474,7 @@ static cl_context l_create_context(const cl_context_properties *properties,
     // Blocking multiple_processing
     const char *allow_mp = NULL;
     // Check if user wants to disable the check.
-    allow_mp = acl_getenv("CL_CONTEXT_ALLOW_MULTIPROCESSING_INTELFPGA");
+    allow_mp = acl_getenv(ENV_CL_CONTEXT_ALLOW_MULTIPROCESSING_INTELFPGA);
     if (!allow_mp && platform_owner_pid != 0 &&
         platform_owner_pid != acl_get_pid()) {
       if (pfn_notify) {
@@ -565,7 +565,7 @@ static cl_int l_load_properties(cl_context context,
 
   // This one is only overridden with an environment variable.
   {
-    const char *override = acl_getenv("AOCL_EAGERLY_LOAD_FIRST_BINARY");
+    const char *override = acl_getenv(ENV_AOCL_EAGERLY_LOAD_FIRST_BINARY);
     if (override) {
       // There was a string.
       char *endptr = 0;
@@ -580,13 +580,15 @@ static cl_int l_load_properties(cl_context context,
   {
     const char *override = 0;
     const char *override_deprecated = 0;
-    override = acl_getenv("CL_CONTEXT_COMPILER_MODE_INTELFPGA");
-    override_deprecated = acl_getenv("CL_CONTEXT_COMPILER_MODE_ALTERA");
+    override = acl_getenv(ENV_CL_CONTEXT_COMPILER_MODE_INTELFPGA);
+    override_deprecated = acl_getenv(ENV_CL_CONTEXT_COMPILER_MODE_ALTERA);
     if (!override && override_deprecated) {
       override = override_deprecated;
       fprintf(stderr,
-              "Warning: CL_CONTEXT_COMPILER_MODE_ALTERA has been deprecated. "
-              "Use CL_CONTEXT_COMPILER_MODE_INTELFPGA instead.\n");
+              "Warning: %s has been deprecated. "
+              "Use %s instead.\n",
+              ENV_CL_CONTEXT_COMPILER_MODE_ALTERA,
+              ENV_CL_CONTEXT_COMPILER_MODE_INTELFPGA);
     }
 
     if (override) {
@@ -619,8 +621,9 @@ static cl_int l_load_properties(cl_context context,
   // If the env var is not set, then use "aocl_program_library" in the
   // current directory.
   const auto *default_root = acl_getenv(
-      "CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA"); // this one is public,
-                                                        // in cl_ext_intelfpga.h
+      ENV_CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA); // this one is public,
+                                                          // in
+                                                          // cl_ext_intelfpga.h
   if (!default_root) {
     default_root = "aocl_program_library";
   }
@@ -632,7 +635,8 @@ static cl_int l_load_properties(cl_context context,
   // Get user-specified compile command.
   // The default command depends on effective compiler mode, so defer
   // until later.
-  const char *default_cmd = acl_getenv("CL_CONTEXT_COMPILE_COMMAND_INTELFPGA");
+  const char *default_cmd =
+      acl_getenv(ENV_CL_CONTEXT_COMPILE_COMMAND_INTELFPGA);
   if (default_cmd) {
     status = l_update_compile_command(context, default_cmd);
     if (status != CL_SUCCESS)
@@ -1313,6 +1317,10 @@ void acl_context_callback(cl_context context, const std::string errinfo) {
       acl_suspend_lock_guard lock{acl_mutex_wrapper};
       notify_fn(errinfo.c_str(), 0, 0, notify_user_data);
     }
+  }
+
+  if (context && acl_getenv(ENV_ACL_CONTEXT_CALLBACK_DEBUG)) {
+    std::cout << "[acl_context_callback] Error Info: " << errinfo << std::endl;
   }
 }
 
