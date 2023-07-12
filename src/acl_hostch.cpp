@@ -786,6 +786,7 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
             host_pipe_info.m_physical_device_id,
             host_pipe_info.m_channel_handle, event->cmd.info.host_pipe_info.ptr,
             event->cmd.info.host_pipe_info.size, &status);
+        acl_update_device_op_queue(&(acl_platform.device_op_queue));
       }
     }
   }
@@ -882,6 +883,7 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
                                host_pipe_info.m_channel_handle,
                                event->cmd.info.host_pipe_info.write_ptr,
                                event->cmd.info.host_pipe_info.size);
+        acl_update_device_op_queue(&(acl_platform.device_op_queue));
       }
     }
   }
