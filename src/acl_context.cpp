@@ -1308,7 +1308,7 @@ acl_get_unused_kernel_invocation_wrapper(cl_context context) {
 }
 
 void acl_context_callback(cl_context context, const std::string errinfo) {
-  // Call the notifcation function registered during context creation.
+  // Call the notification function registered during context creation.
   // We don't support the special info (middle two arguments).
   if (context && context->notify_fn) {
     acl_notify_fn_t notify_fn = context->notify_fn;
