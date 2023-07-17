@@ -236,6 +236,14 @@ or IntelⓇ FPGA RTE for OpenCL™ installed on your system:
 
 6.  Run your OpenCL host program.
 
+
+### Debug Environment Variables
+
+| Environment Variable Title  | Description |
+| ------------- | ------------- |
+| ACL_HAL_DEBUG  | Set this variable to a value of 1 to 5 to increase debug output from the hardware abstraction layer (HAL), which interfaces directly with the MMD layer.  |
+| ENV_ACL_CONTEXT_CALLBACK_DEBUG | Set this variable to a value of 1 to produce error text for errors that occur in the OpenCL context. This is error text that would be sent upstream through a callback function provided with [`clCreateContext`]. | 
+
 ### Notes
 
 -   When setting the environment variable [`OCL_ICD_FILENAMES`] for debugging,
@@ -245,3 +253,4 @@ or IntelⓇ FPGA RTE for OpenCL™ installed on your system:
     causing undefined behaviour.
 
 [`OCL_ICD_FILENAMES`]: https://github.com/KhronosGroup/OpenCL-ICD-Loader/blob/c5a6e013ad7c8b379fc94e3c849aa3396900a63c/README.md#table-of-debug-environment-variables
+[`clCreateContext`]: https://man.opencl.org/clCreateContext.html
