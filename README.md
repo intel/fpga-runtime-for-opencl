@@ -241,8 +241,10 @@ or IntelⓇ FPGA RTE for OpenCL™ installed on your system:
 
 | Environment Variable Title  | Description |
 | ------------- | ------------- |
+| ACL_DEBUG | Set this variable to a value of 1 to 4 to output general-purpose debug messages from the OpenCL Runtime.  |
 | ACL_HAL_DEBUG  | Set this variable to a value of 1 to 5 to increase debug output from the hardware abstraction layer (HAL), which interfaces directly with the MMD layer.  |
-| ENV_ACL_CONTEXT_CALLBACK_DEBUG | Set this variable to a value of 1 to produce error text for errors that occur in the OpenCL context. This is error text that would be sent upstream through a callback function provided with [`clCreateContext`]. | 
+| ACL_CONTEXT_CALLBACK_DEBUG | Set this variable to a value of 1 to produce error text for errors that occur in the OpenCL context. This is error text that would be sent upstream through a callback function provided with [`clCreateContext`]. | 
+
 
 ### Notes
 
