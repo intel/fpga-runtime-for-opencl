@@ -331,6 +331,12 @@ typedef struct host_pipe_struct {
   // non-CSR program hostpipe
   std::string csr_address;
 
+  // Matches the protocol_name enum in
+  // https://github.com/intel/llvm/blob/sycl/sycl/include/sycl/ext/intel/experimental/pipe_properties.hpp
+  // Set a default value in case it's missing.
+  int protocol = -1; // avalon_streaming = 0, avalon_streaming_uses_ready = 1
+                     // avalon_mm = 2, avalon_mm_uses_ready = 3
+
 } host_pipe_t;
 
 // The device-specific information about a program.
