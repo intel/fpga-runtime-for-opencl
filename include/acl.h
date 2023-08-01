@@ -535,6 +535,13 @@ struct acl_hostpipe_mapping {
   bool is_write;
   unsigned pipe_width;
   unsigned pipe_depth;
+
+  // Matches the protocol_name enum in
+  // https://github.com/intel/llvm/blob/sycl/sycl/include/sycl/ext/intel/experimental/pipe_properties.hpp
+  // Set a default value in case it's missing.
+
+  int protocol = -1; // avalon_streaming = 0, avalon_streaming_uses_ready = 1
+                     // avalon_mm = 2, avalon_mm_uses_ready = 3
 };
 
 // Part of acl_device_def_t where members are populated from the information

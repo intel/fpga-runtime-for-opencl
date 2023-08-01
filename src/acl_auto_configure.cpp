@@ -661,6 +661,13 @@ static bool read_hostpipe_mappings(
                            counters) &&
         read_uint_counters(config_str, curr_pos, mapping.pipe_depth, counters);
 
+    // Start from 2024.0, there is a new field called protocol in the
+    // auto-discovery string
+    if (result && counters.back() > 0) {
+      result = result && read_int_counters(config_str, curr_pos,
+                                           mapping.protocol, counters);
+    }
+
     hostpipe_mappings.emplace_back(mapping);
 
     while (result && counters.back() > 0) {
