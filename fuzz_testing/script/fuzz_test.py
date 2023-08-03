@@ -121,6 +121,7 @@ def fuzz_test_main(test_file_name, group, test, var, original_value, all_outputs
     if time_taken >= TIMEOUT:
         timeout = True
         all_outputs.append(TIMEOUT_MESSAGE)
+    run_result = ""
     
     # Update results
     # Total run
@@ -132,38 +133,49 @@ def fuzz_test_main(test_file_name, group, test, var, original_value, all_outputs
             # Test error + 1
             results_dictionary[test_file_name][TEST_ERRORS] = results_dictionary[test_file_name][TEST_ERRORS] + 1
             test_error = True
+            run_result = TEST_ERRORS
         # If failed test message not found
         else:
             # Successful test + 1
             results_dictionary[test_file_name][SUCCESSFUL_RUNS] = results_dictionary[test_file_name][SUCCESSFUL_RUNS] + 1
+            run_result = SUCCESSFUL_RUNS
     # If successful test message not found
     else:
         # If failed test message found 
         if re.search(encode_if_condition(FAILED_TEST_PATTERN, encoded), output):
             # Failed test + 1 
             results_dictionary[test_file_name][FAILED_RUNS] = results_dictionary[test_file_name][FAILED_RUNS] + 1
+            run_result = FAILED_RUNS
         # If failed test message not found
         else:
             # If timeout
             if timeout:
                 # Hang + 1
                 results_dictionary[test_file_name][HANGS] = results_dictionary[test_file_name][HANGS] + 1
+                run_result = HANGS
             # If not timeout
             else:
                 # If assertion message found
                 if re.search(encode_if_condition(ASSERTION_FAILURE_PATTERN, encoded), output):
                     # Assertion failures + 1
                     results_dictionary[test_file_name][ASSERTION_FAILURES] = results_dictionary[test_file_name][ASSERTION_FAILURES] + 1
+                    run_result = ASSERTION_FAILURES
                 # If assertion message not found
                 else:
                     # Aborted run + 1
                     results_dictionary[test_file_name][ABORTED_RUNS] = results_dictionary[test_file_name][ABORTED_RUNS] + 1
+                    run_result = ABORTED_RUNS
+    # Print run result to output
+    all_outputs.append(run_result + " + 1")
     # ASAN errors
     if re.search(encode_if_condition(ASAN_ERROR_PATTERN, encoded), output):
         results_dictionary[test_file_name][ASAN_ERRORS] = results_dictionary[test_file_name][ASAN_ERRORS] + 1
+        all_outputs.append(ASAN_ERRORS + " + 1")
     # Test errors
     if re.search(encode_if_condition(FUZZ_TEST_ERROR_PATTERN, encoded), output) and not test_error:
         results_dictionary[test_file_name][TEST_ERRORS] = results_dictionary[test_file_name][TEST_ERRORS] + 1
+        all_outputs.append(TEST_ERRORS + " + 1")
+    all_outputs.append("\n")
 
 def load_yaml(test_file_name):
     # Fetch data from original_inputs
