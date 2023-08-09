@@ -630,18 +630,20 @@ int acl_update_queue(cl_command_queue command_queue) {
   }
 }
 
-void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
+int acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
+  int num_updates = 0;
+
   if (!(parent->command_queue->properties &
         CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
-    return;
+    return 0;
   if (parent->depend_on_me.empty())
-    return;
+    return 0;
   if (parent->cmd.type != CL_COMMAND_TASK &&
       parent->cmd.type != CL_COMMAND_NDRANGE_KERNEL)
-    return;
+    return 0;
   if (parent->execution_status > CL_SUBMITTED ||
       parent->last_device_op->status > CL_SUBMITTED)
-    return;
+    return 0;
 
   // Check if fast kernel relaunch is safe to use, and we can ignore
   // the explicit dependency
@@ -677,12 +679,16 @@ void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
 
     // Fast Kernel Relaunch: submitting is safe even though has dependency
     // Prior to submitting remove dependency
-    dependent->depend_on.erase(parent);
-    dependent_it = parent->depend_on_me.erase(dependent_it);
-    dependent_it--; // decrement it other wise we will skip an element
-    dependent->command_queue->num_commands_submitted++;
-    acl_submit_command(dependent);
+    int local_updates = acl_submit_command(dependent);
+    if (local_updates) {
+      dependent->depend_on.erase(parent);
+      dependent_it = parent->depend_on_me.erase(dependent_it);
+      dependent_it--; // decrement it otherwise we will skip an element
+      dependent->command_queue->num_commands_submitted++;
+    }
+    num_updates += local_updates;
   }
+  return num_updates;
 }
 
 int acl_update_ooo_queue(cl_command_queue command_queue) {
@@ -691,19 +697,23 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
   // Directly submit the event if it has no dependencies
   // unless it is a user_event queue which never submits events
   while (!command_queue->new_commands.empty()) {
+    int local_updates = 0;
     cl_event event = command_queue->new_commands.front();
     if (command_queue->submits_commands &&
         event->execution_status == CL_QUEUED) {
       if (event->depend_on.empty()) {
         command_queue->num_commands_submitted++;
-        acl_submit_command(event);
+        local_updates = acl_submit_command(event);
       } else {
-        acl_try_FastKernelRelaunch_ooo_queue_event_dependents(
+        local_updates = acl_try_FastKernelRelaunch_ooo_queue_event_dependents(
             *(event->depend_on.begin()));
       }
     }
-    // safe to pop as there is a master copy in command_queue->commands
-    command_queue->new_commands.pop_front();
+    if (local_updates) {
+      // safe to pop as there is a master copy in command_queue->commands
+      command_queue->new_commands.pop_front();
+    }
+    num_updates += local_updates;
   }
 
   // Remove dependencies on completed events, and launch any events
@@ -731,9 +741,9 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
         if ((dependent->command_queue->properties &
              CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) &&
             dependent->cmd.type != CL_COMMAND_USER) {
-          dependent->command_queue
-              ->num_commands_submitted++; // dependent might be on another queue
-          num_updates += acl_submit_command(dependent);
+          int local_updates = acl_submit_command(dependent);
+          dependent->command_queue->num_commands_submitted += local_updates; // dependent might be on another queue
+          num_updates += local_updates;
         }
       }
     }
@@ -879,8 +889,9 @@ int acl_update_inorder_queue(cl_command_queue command_queue) {
         }
 
         if (command_queue->num_commands_submitted == 0) {
-          command_queue->num_commands_submitted++;
-          num_updates += acl_submit_command(event);
+          int local_updates = acl_submit_command(event);
+          command_queue->num_commands_submitted += local_updates;
+          num_updates += local_updates;
           continue; // there might be another kernel behind us that can be
                     // submitted aswell
         } else {
@@ -900,8 +911,9 @@ int acl_update_inorder_queue(cl_command_queue command_queue) {
             if (submitted_event->last_device_op->status <= CL_SUBMITTED) {
               // Assumption: last device_op of the submitted kernel event is a
               // kernel_op
-              command_queue->num_commands_submitted++;
-              num_updates += acl_submit_command(event);
+              int local_updates = acl_submit_command(event);
+              command_queue->num_commands_submitted += local_updates;
+              num_updates += local_updates;
               continue; // there might be another kernel behind us that can be
                         // submitted aswell
             }
@@ -915,8 +927,9 @@ int acl_update_inorder_queue(cl_command_queue command_queue) {
             event->depend_on.empty()) {
           // it is safe to submit: nothing else submitted AND all dependencies
           // are resolved
-          command_queue->num_commands_submitted++;
-          num_updates += acl_submit_command(event);
+          int local_updates = acl_submit_command(event);
+          command_queue->num_commands_submitted += local_updates;
+          num_updates += local_updates;
         }
         break; // no more events can be submitted
       }
