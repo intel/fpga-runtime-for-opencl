@@ -53,7 +53,7 @@ void acl_delete_command_queue(cl_command_queue command_queue);
  *  @param parent The event who's dependent are being assesed for fast-kernel-
  *  launch eligibility
  */
-void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent);
+int acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent);
 
 #ifdef __GNUC__
 #pragma GCC visibility pop
