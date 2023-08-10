@@ -36,9 +36,24 @@ static cl_int l_push_packet(unsigned int physical_device_id, int channel_handle,
   assert(status == 0);
   if (pushed_data == write_size) {
     return CL_SUCCESS;
+  }
+  // If data type is not byte aligned, such as AC_INT56
+  // Pushed data can be smaller than the request write_size due to compiler
+  // padding. Runtime needs to check if the trailing bytes are all 0s.
+  else if ((pushed_data > 0) && (pushed_data < write_size)) {
+    for (int i = pushed_data; i < write_size; i++) {
+      unsigned char c = ((char *)host_buffer)[i];
+      if (c != 0) {
+        // This shouldn't happen. Needs to send out a warning to user rather
+        // than a silent function failure.
+        std::cerr << "Error: Data is not fully written into the Hostpipe. "
+                     "None-0 bits have been cut off \n";
+        return CL_INVALID_VALUE;
+      }
+    }
+    return CL_SUCCESS;
   } else {
-    // The packet is the smallest unit of data you can send over.
-    // If it didn't send the packet, it shouldn't have sent over anything
+    // Pipe is full in this case. Nothing is pushed in this case.
     assert(pushed_data == 0);
     return CL_PIPE_FULL;
   }
@@ -778,7 +793,10 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
 
     if (!blocking) {
       // If it is non-blocking read, we return with the success code right away
-      if (status != 0 || pulled_data != event->cmd.info.host_pipe_info.size) {
+      // TODO: Change to pulled_data != pipe.width when sideband signals pipe
+      // are fully implemented. Right now we consider the result is good as long
+      // as pulled_data > 0.
+      if (status != 0 || pulled_data == 0) {
         acl_mutex_unlock(&(host_pipe_info.m_lock));
         acl_set_device_op_execution_status(op, -1);
         return;
@@ -786,8 +804,10 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     } else {
       // If it is a blocking read, this call won't return until the kernel
       // writes the data into the pipe.
-      while (status != 0 ||
-             pulled_data != event->cmd.info.host_pipe_info.size) {
+      // TODO: Change to pulled_data == pipe.width when sideband signals pipe
+      // are fully implemented. Right now we consider the result is good as long
+      // as pulled_data > 0.
+      while (status != 0 || pulled_data == 0) {
         pulled_data = acl_get_hal()->hostchannel_pull(
             host_pipe_info.m_physical_device_id,
             host_pipe_info.m_channel_handle, event->cmd.info.host_pipe_info.ptr,
