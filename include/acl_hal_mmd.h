@@ -10,7 +10,112 @@
 
 //////////////////////////////////////////////////////////////////////////
 //                                                                      //
-// Implementation of HAL that builds on top of aocl_mmd (board vendor    //
+// Versioning constants, address maps, and bit/byte positionings used   //
+// in acl_kernel_if and acl_pll                                         //
+//                                                                      //
+//////////////////////////////////////////////////////////////////////////
+
+//// acl_kernel_if
+// Versioning: This value must be read from addr 0
+// For unit tests to work, this defines must match the one in the unit test
+// header file
+#define KERNEL_VERSION_ID (0xa0c00001)
+#define KERNEL_ROM_VERSION_ID (0xa0c00002)
+// Version number in the top 16-bits of the 32-bit status register.  Used
+// to verify that the hardware and HAL have an identical view of the CSR
+// address map.
+#define CSR_VERSION_ID_18_1 (3)
+#define CSR_VERSION_ID_19_1 (4)
+#define CSR_VERSION_ID_23_1 (5)
+#define CSR_VERSION_ID CSR_VERSION_ID_23_1
+
+// Address map
+// For unit tests to work, these defines must match those in the unit test
+// header file
+#define OFFSET_KERNEL_VERSION_ID ((dev_addr_t)0x0000)
+#define OFFSET_KERNEL_CRA_SEGMENT ((dev_addr_t)0x0020)
+#define OFFSET_SW_RESET ((dev_addr_t)0x0030)
+#define OFFSET_KERNEL_CRA ((dev_addr_t)0x1000)
+#define OFFSET_CONFIGURATION_ROM ((dev_addr_t)0x2000)
+
+// Addressses for Kernel System ROM
+#define OFFSET_KERNEL_ROM_LOCATION_MSB (0x3ffffff8)
+#define OFFSET_KERNEL_ROM_LOCATION_LSB (0x3ffffffc)
+#define OFFSET_KERNEL_MAX_ADDRESS (0x3fffffff)
+
+#define KERNEL_CRA_SEGMENT_SIZE (0x1000)
+#define KERNEL_ROM_SIZE_BYTES_READ 4
+#define KERNEL_ROM_SIZE_BYTES 8
+
+// Byte offsets into the CRA:
+// For CSR version >= 5 byte offsets are pushed back with the proper
+// value except for the CSR later on in the runtime execution
+#define KERNEL_OFFSET_CSR 0
+#define KERNEL_OFFSET_PRINTF_BUFFER_SIZE 0x4
+#define KERNEL_OFFSET_CSR_PROFILE_CTRL 0xC
+#define KERNEL_OFFSET_CSR_PROFILE_DATA 0x10
+#define KERNEL_OFFSET_CSR_PROFILE_START_CYCLE 0x18
+#define KERNEL_OFFSET_CSR_PROFILE_STOP_CYCLE 0x20
+#define KERNEL_OFFSET_FINISH_COUNTER 0x28
+#define KERNEL_OFFSET_INVOCATION_IMAGE 0x30
+
+// CSR version >= 5 byte offsets
+#define KERNEL_OFFSET_START_REG 0x8
+
+// Backwards compatibility with CSR_VERSION_ID 3
+#define KERNEL_OFFSET_INVOCATION_IMAGE_181 0x28
+
+// Bit positions
+#define KERNEL_CSR_START 0
+#define KERNEL_CSR_DONE 1
+#define KERNEL_CSR_STALLED 3
+#define KERNEL_CSR_UNSTALL 4
+#define KERNEL_CSR_PROFILE_TEMPORAL_STATUS 5
+#define KERNEL_CSR_PROFILE_TEMPORAL_RESET 6
+#define KERNEL_CSR_LAST_STATUS_BIT KERNEL_CSR_PROFILE_TEMPORAL_RESET
+#define KERNEL_CSR_STATUS_BITS_MASK                                            \
+  ((unsigned)((1 << (KERNEL_CSR_LAST_STATUS_BIT + 1)) - 1))
+#define KERNEL_CSR_LMEM_INVALID_BANK 11
+#define KERNEL_CSR_LSU_ACTIVE 12
+#define KERNEL_CSR_WR_ACTIVE 13
+#define KERNEL_CSR_BUSY 14
+#define KERNEL_CSR_RUNNING 15
+#define KERNEL_CSR_FIRST_VERSION_BIT 16
+#define KERNEL_CSR_LAST_VERSION_BIT 31
+
+#define KERNEL_CSR_PROFILE_SHIFT64_BIT 0
+#define KERNEL_CSR_PROFILE_RESET_BIT 1
+#define KERNEL_CSR_PROFILE_ALLOW_PROFILING_BIT 2
+#define KERNEL_CSR_PROFILE_LOAD_BUFFER_BIT 3
+#define KERNEL_CSR_PROFILE_SHARED_CONTROL_BIT1 4
+#define KERNEL_CSR_PROFILE_SHARED_CONTROL_BIT2 5
+
+#define CONFIGURATION_ROM_BYTES 4096
+
+#define RESET_TIMEOUT (2 * 1000 * 1000 * 1000)
+
+//// acl_pll
+// Address map
+// For unit tests to work, these defines must match those in the unit test
+// header file
+#define OFFSET_PLL_VERSION_ID ((dev_addr_t)0x000)
+#define OFFSET_ROM ((dev_addr_t)0x400)
+#define OFFSET_RECONFIG_CTRL ((dev_addr_t)0x200)
+#define OFFSET_RECONFIG_CTRL_20NM ((dev_addr_t)0x800)
+#define OFFSET_COUNTER ((dev_addr_t)0x100)
+#define OFFSET_RESET ((dev_addr_t)0x110)
+#define OFFSET_LOCK ((dev_addr_t)0x120)
+
+// Constants
+#define MAX_KNOWN_SETTINGS 100
+#define MAX_POSSIBLE_FMAX 2000000
+#define MAX_RECONFIG_RETRIES 3
+#define RECONFIG_TIMEOUT (1000000000ll)
+#define CLK_MEASUREMENT_PERIOD (16 * 1024 * 1024)
+
+//////////////////////////////////////////////////////////////////////////
+//                                                                      //
+// Implementation of HAL that builds on top of aocl_mmd (board vendor   //
 // visible), acl_pll, and acl_kernel_if.                                //
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
