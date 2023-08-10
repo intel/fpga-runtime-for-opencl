@@ -41,14 +41,14 @@ static cl_int l_push_packet(unsigned int physical_device_id, int channel_handle,
   // Pushed data can be smaller than the request write_size due to compiler
   // padding. Runtime needs to check if the trailing bytes are all 0s.
   else if ((pushed_data > 0) && (pushed_data < write_size)) {
-    for (int i = pushed_data; i < write_size; i++) {
+    for (size_t i = pushed_data; i < write_size; i++) {
       unsigned char c = ((char *)host_buffer)[i];
       if (c != 0) {
         // This shouldn't happen. Needs to send out a warning to user rather
         // than a silent function failure.
         std::cerr << "Error: Data is not fully written into the Hostpipe. "
                      "None-0 bits have been cut off \n";
-        return CL_INVALID_VALUE;
+        assert(0);
       }
     }
     return CL_SUCCESS;
@@ -825,7 +825,6 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
 
   cl_int status;
   cl_event event = op->info.event;
-  cl_context context = event->context;
   bool blocking = event->cmd.info.host_pipe_info.blocking;
   acl_assert_locked();
 

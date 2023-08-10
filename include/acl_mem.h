@@ -32,10 +32,6 @@ int acl_submit_mem_transfer_device_op(cl_event event);
 
 int acl_submit_migrate_mem_device_op(cl_event event);
 
-int acl_realloc_buffer_for_simulator(cl_mem mem,
-                                     const unsigned int physical_device_id,
-                                     const unsigned int mem_id);
-
 // Actually execute the memory transfer device operation.
 // In the normal case source and destination are different, in which case
 // the HAL is called and the transfer is non-blocking.

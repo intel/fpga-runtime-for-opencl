@@ -224,7 +224,6 @@ MT_TEST(acl_mem_device_global, read_device_global) {
   ACL_LOCKED(acl_print_debug_msg("begin read_device_global\n"));
   char str[100];
   const size_t strsize = sizeof(str) / sizeof(char); // includes NUL (!)
-  char resultbuf[strsize];
   cl_int status;
   cl_event read_event = 0;
 
@@ -261,7 +260,6 @@ MT_TEST(acl_mem_device_global, write_device_global) {
   ACL_LOCKED(acl_print_debug_msg("begin write_device_global\n"));
   char str[100];
   const size_t strsize = sizeof(str) / sizeof(char); // includes NUL (!)
-  char resultbuf[strsize];
   cl_int status;
   cl_event write_event = 0;
 

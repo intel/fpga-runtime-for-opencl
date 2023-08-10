@@ -79,7 +79,6 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
   const char *setting_deprecated = 0;
   const char *result = 0;
   static char warn_depr1 = 0;
-  static char warn_depr3 = 0;
 
   setting = acl_getenv("CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA");
   setting_deprecated = acl_getenv("CL_CONTEXT_OFFLINE_DEVICE_ALTERA");
