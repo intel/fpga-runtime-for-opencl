@@ -25,21 +25,6 @@ on:
       - '!docs/**'
       - '!scripts/**'
 
-  pull_request:
-    paths:
-      - '**'
-      - '!**.md'
-      - '!**/.clang-format'
-      - '!**/COPYING'
-      - '!**/LICENSE'
-      - '!.github/**'
-      - '.github/workflows/coverity.yml'
-      - '!.gitignore'
-      - '!cmake/manifests/**'
-      - '!container/**'
-      - '!docs/**'
-      - '!scripts/**'
-
 jobs:
   build:
     runs-on:
