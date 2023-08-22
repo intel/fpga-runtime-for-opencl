@@ -631,7 +631,6 @@ int acl_update_queue(cl_command_queue command_queue) {
 }
 
 void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
-
   if (!(parent->command_queue->properties &
         CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
     return;
