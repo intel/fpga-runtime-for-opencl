@@ -630,20 +630,19 @@ int acl_update_queue(cl_command_queue command_queue) {
   }
 }
 
-int acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
-  int num_updates = 0;
+void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
 
   if (!(parent->command_queue->properties &
         CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
-    return 0;
+    return;
   if (parent->depend_on_me.empty())
-    return 0;
+    return;
   if (parent->cmd.type != CL_COMMAND_TASK &&
       parent->cmd.type != CL_COMMAND_NDRANGE_KERNEL)
-    return 0;
+    return;
   if (parent->execution_status > CL_SUBMITTED ||
       parent->last_device_op->status > CL_SUBMITTED)
-    return 0;
+    return;
 
   // Check if fast kernel relaunch is safe to use, and we can ignore
   // the explicit dependency
@@ -686,9 +685,7 @@ int acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
       dependent_it--; // decrement it otherwise we will skip an element
       dependent->command_queue->num_commands_submitted++;
     }
-    num_updates += local_updates;
   }
-  return num_updates;
 }
 
 int acl_update_ooo_queue(cl_command_queue command_queue) {
@@ -698,18 +695,23 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
   // unless it is a user_event queue which never submits events
   while (!command_queue->new_commands.empty()) {
     int local_updates = 0;
+    int acl_submit_command_failed = 0;
     cl_event event = command_queue->new_commands.front();
     if (command_queue->submits_commands &&
         event->execution_status == CL_QUEUED) {
       if (event->depend_on.empty()) {
         command_queue->num_commands_submitted++;
         local_updates = acl_submit_command(event);
+        acl_submit_command_failed = local_updates == 0;
       } else {
-        local_updates = acl_try_FastKernelRelaunch_ooo_queue_event_dependents(
-            *(event->depend_on.begin()));
+        // This is allowed to fail, so no need to check result before popping the event
+        // off command_queue->new_commands. Dependant events get submitted when their
+        // parent events complete anyway 
+        acl_try_FastKernelRelaunch_ooo_queue_event_dependents(*(event->depend_on.begin()));
       }
     }
-    if (local_updates) {
+    
+    if (!acl_submit_command_failed) {
       // safe to pop as there is a master copy in command_queue->commands
       command_queue->new_commands.pop_front();
     }
@@ -1012,6 +1014,7 @@ void acl_delete_command_queue(cl_command_queue command_queue) {
 
     acl_untrack_object(command_queue);
     acl_free_cl_command_queue(command_queue);
+    std::cout << "freed the command queue :)\n";
   }
 }
 
