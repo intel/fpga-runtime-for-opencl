@@ -2,15 +2,38 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2024.0] - 2023-10-24
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.2...HEAD
+### Added
+- Device global dedicated interface Runtime changes ([#295]).
+- Introduce `ACL_CONTEXT_CALLBACK_DEBUG` env variable to log `acl_context_callback` function ([#300]).
+- Added Fuzz Testing in the repo ([#298]).
+- Support AVALON_MM CSR hostpipe ([#304]).
+
+### Changed
+- Relax hostpipe assertion to allow non-byte aligned data type to pass ([#306]).
+- Clean up runtime code for simulation preprogram autodiscovery string load ([#308]).
+
+### Fixed
+
+- Coverity fixes for `pkg_editor_test.cpp` ([#291]).
+- Fix `TAINTED_SCALAR` Coverity issues for `pkg_editor.c` ([#277]).
+- Created a workaround for host pipe atomic hang issue ([#301]).
+
+### Security
+- Coverity fixes for `acl_hal_mmd.cpp` that cloes opened mmd lib properly. ([#290]).
+
+[2024.0]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2023.2...v2024.0
+[#277]: https://github.com/intel/fpga-runtime-for-opencl/pull/277
+[#290]: https://github.com/intel/fpga-runtime-for-opencl/pull/290
+[#291]: https://github.com/intel/fpga-runtime-for-opencl/pull/291
+[#295]: https://github.com/intel/fpga-runtime-for-opencl/pull/295
+[#298]: https://github.com/intel/fpga-runtime-for-opencl/pull/298
+[#300]: https://github.com/intel/fpga-runtime-for-opencl/pull/300
+[#301]: https://github.com/intel/fpga-runtime-for-opencl/pull/301
+[#304]: https://github.com/intel/fpga-runtime-for-opencl/pull/304
+[#306]: https://github.com/intel/fpga-runtime-for-opencl/pull/306
+[#308]: https://github.com/intel/fpga-runtime-for-opencl/pull/308
 
 ## [2023.2] - 2023-07-06
 
