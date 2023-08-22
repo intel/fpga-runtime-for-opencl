@@ -702,12 +702,13 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
         success = acl_submit_command(event);
       } else {
         // This is allowed to fail, so no need to mark success as false
-        // dependent events that fail to be FKRd will still be picked up when their 
-        // parent event finishes
-        acl_try_FastKernelRelaunch_ooo_queue_event_dependents(*(event->depend_on.begin()));
+        // dependent events that fail to be FKRd will still be picked up when
+        // their parent event finishes
+        acl_try_FastKernelRelaunch_ooo_queue_event_dependents(
+            *(event->depend_on.begin()));
       }
     }
-    
+
     if (success) {
       // safe to pop as there is a master copy in command_queue->commands
       command_queue->new_commands.pop_front();
@@ -740,7 +741,8 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
              CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) &&
             dependent->cmd.type != CL_COMMAND_USER) {
           int local_updates = acl_submit_command(dependent);
-          dependent->command_queue->num_commands_submitted += local_updates; // dependent might be on another queue
+          dependent->command_queue->num_commands_submitted +=
+              local_updates; // dependent might be on another queue
           num_updates += local_updates;
         }
       }
