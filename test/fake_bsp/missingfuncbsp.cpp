@@ -232,7 +232,7 @@ AOCL_MMD_CALL int aocl_mmd_read(int handle, aocl_mmd_op_t op, size_t len,
 
   UNREFERENCED_PARAMETER(op);
   switch (offset) {
-  case OFFSET_KERNEL_VERSION_ID:
+  case OFFSET_VERSION_ID:
     if (len == sizeof(unsigned int)) {
       unsigned int version_id = KERNEL_VERSION_ID;
       memcpy(dst, &version_id, len);
@@ -368,7 +368,7 @@ AOCL_MMD_CALL int aocl_mmd_write(int handle, aocl_mmd_op_t op, size_t len,
   size_t new_offset;
   UNREFERENCED_PARAMETER(op);
   switch (offset) {
-  case OFFSET_KERNEL_VERSION_ID:
+  case OFFSET_VERSION_ID:
     fprintf(stderr, "Error: Not handling write of 0x%x in unit test\n",
             (unsigned int)offset);
     return -1;
@@ -478,7 +478,7 @@ AOCL_MMD_CALL int aocl_mmd_copy(int handle, aocl_mmd_op_t op, size_t len,
   size_t new_dst_offset;
   UNREFERENCED_PARAMETER(op);
   switch (src_offset) {
-  case OFFSET_KERNEL_VERSION_ID:
+  case OFFSET_VERSION_ID:
     fprintf(stderr, "Error: Not handling copy from 0x%x in unit test\n",
             (unsigned int)src_offset);
     return -1;
@@ -524,7 +524,7 @@ AOCL_MMD_CALL int aocl_mmd_copy(int handle, aocl_mmd_op_t op, size_t len,
     return -1;
   }
   switch (dst_offset) {
-  case OFFSET_KERNEL_VERSION_ID:
+  case OFFSET_VERSION_ID:
     fprintf(stderr, "Error: Not handling copy to 0x%x in unit test\n",
             (unsigned int)dst_offset);
     return -1;

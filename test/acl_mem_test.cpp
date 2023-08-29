@@ -2906,6 +2906,125 @@ TEST(acl_mem, buffer_location_property) {
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(a));
 }
 
+TEST(acl_mem, simulation_copy_buffer) {
+  // Test mocks a simulation run where a predefined autodiscovery string
+  // is loaded at the beginning of the run with default global memory
+  // set-up that doesn't match actual. It checks whether the function
+  // acl_realloc_buffer_for_simulator moves buffer to the right global
+  // memory address range after a fake reprogram updates the global
+  // memory configuration.
+  cl_mem buffer;
+  cl_int status = CL_SUCCESS;
+  int input_data = 0xaaaaaaaa;
+  int output_data = 0x55555555;
+  size_t total_size = ACL_RANGE_SIZE(
+      m_device[0]->def.autodiscovery_def.global_mem_defs[0].range);
+  size_t global_mem_size = total_size / 2;
+
+  // save original autodiscovery def
+  acl_device_def_autodiscovery_t orig_def = m_device[0]->def.autodiscovery_def;
+  // create a fake multi global memory system where unit test global
+  // memory is split into 2 halves for the 2 global memories
+  acl_device_def_autodiscovery_t actual_def =
+      m_device[0]->def.autodiscovery_def;
+  actual_def.num_global_mem_systems = 2;
+  actual_def.global_mem_defs[1].range.next =
+      actual_def.global_mem_defs[0].range.next;
+  actual_def.global_mem_defs[0].range.next =
+      (char *)actual_def.global_mem_defs[0].range.begin + global_mem_size;
+  actual_def.global_mem_defs[1].range.begin =
+      actual_def.global_mem_defs[0].range.next;
+
+  // simulate loading from a predefined autodiscovery string in
+  // acl_shipped_board_cfgs.h
+  m_device[0]->def.autodiscovery_def.num_global_mem_systems =
+      ACL_MAX_GLOBAL_MEM;
+  for (int i = 0; i < ACL_MAX_GLOBAL_MEM; i++) {
+    m_device[0]->def.autodiscovery_def.global_mem_defs[i] =
+        actual_def.global_mem_defs[0];
+  }
+
+  // Create memory with buffer location property
+  cl_mem_properties_intel props[] = {CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, 1, 0};
+  buffer = clCreateBufferWithPropertiesINTEL(m_context, props, 0, sizeof(int),
+                                             0, &status);
+  ACL_LOCKED(CHECK(acl_mem_is_valid(buffer)));
+  CHECK_EQUAL(CL_SUCCESS, status);
+  assert(buffer);
+  CHECK_EQUAL(1, acl_ref_count(buffer));
+
+  // Check if the buffer has the right mem id
+  cl_uint read_mem_id = 4; // set to a dummy value
+  size_t size_ret;
+  CHECK_EQUAL(CL_SUCCESS,
+              clGetMemObjectInfo(buffer, CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                 sizeof(cl_uint), &read_mem_id, &size_ret));
+  CHECK_EQUAL(1, read_mem_id);
+
+  // Enqueue write binds buffer to wrong global memory address range
+  status = clEnqueueWriteBuffer(m_cq, buffer, CL_TRUE, 0, sizeof(int),
+                                &input_data, 0, NULL, NULL);
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK(ACL_STRIP_PHYSICAL_ID(buffer->block_allocation->range.begin) >=
+        m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[1]
+            .get_usable_range()
+            .begin);
+  CHECK(ACL_STRIP_PHYSICAL_ID(buffer->block_allocation->range.next) <
+        m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[1]
+            .get_usable_range()
+            .next);
+
+  // Pretend a reprogram happened for simulation, update global memory info
+  m_device[0]->def.autodiscovery_def = actual_def;
+  CHECK_EQUAL(2, m_device[0]->def.autodiscovery_def.num_global_mem_systems);
+  CHECK(m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[0]
+            .get_usable_range()
+            .begin != m_device[0]
+                          ->def.autodiscovery_def.global_mem_defs[1]
+                          .get_usable_range()
+                          .begin);
+  CHECK(m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[0]
+            .get_usable_range()
+            .next != m_device[0]
+                         ->def.autodiscovery_def.global_mem_defs[1]
+                         .get_usable_range()
+                         .next);
+  CHECK(ACL_STRIP_PHYSICAL_ID(buffer->block_allocation->range.begin) <
+        m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[1]
+            .get_usable_range()
+            .begin);
+
+  // Now call the migration function
+  ACL_LOCKED(CHECK_EQUAL(acl_realloc_buffer_for_simulator(buffer, 0, 1), 1));
+  CHECK(ACL_STRIP_PHYSICAL_ID(buffer->block_allocation->range.begin) >=
+        m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[1]
+            .get_usable_range()
+            .begin);
+  CHECK(ACL_STRIP_PHYSICAL_ID(buffer->block_allocation->range.next) <
+        m_device[0]
+            ->def.autodiscovery_def.global_mem_defs[1]
+            .get_usable_range()
+            .next);
+
+  // Enqueue a blocking read to the right location and check data
+  status = clEnqueueReadBuffer(m_cq, buffer, CL_TRUE, 0, sizeof(int),
+                               &output_data, 0, NULL, NULL);
+  CHECK_EQUAL(CL_SUCCESS, status);
+
+  // Check data preservation
+  CHECK_EQUAL(input_data, output_data);
+
+  // restore and clean up
+  m_device[0]->def.autodiscovery_def = orig_def;
+  CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(buffer));
+}
+
 MT_TEST(acl_mem, map_buf_bad_flags) {
   ACL_LOCKED(acl_print_debug_msg("begin buf_bad_flags\n"));
   cl_int status = CL_SUCCESS;

@@ -12,7 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - Relax hostpipe assertion to allow non-byte aligned data type to pass ([#306]).
-- Clean up runtime code for simulation preprogram autodiscovery string load ([#308]).
 
 ### Fixed
 
@@ -33,7 +32,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 [#301]: https://github.com/intel/fpga-runtime-for-opencl/pull/301
 [#304]: https://github.com/intel/fpga-runtime-for-opencl/pull/304
 [#306]: https://github.com/intel/fpga-runtime-for-opencl/pull/306
-[#308]: https://github.com/intel/fpga-runtime-for-opencl/pull/308
 
 ## [2023.2] - 2023-07-06
 

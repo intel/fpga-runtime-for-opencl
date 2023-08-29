@@ -86,10 +86,29 @@ typedef struct {
   void *status_user_data;
 } acl_hal_device_test;
 
+// This must match the define in acl_kernel_if.c
+#define KERNEL_VERSION_ID (0xa0c00001)
+
+// These must match the defines in acl_kernel_if.c
+#define OFFSET_VERSION_ID ((dev_addr_t)0x0000)
+#define OFFSET_KERNEL_CRA_SEGMENT ((dev_addr_t)0x0020)
+#define OFFSET_SW_RESET ((dev_addr_t)0x0030)
 // Default mem_org address.
 // Runtime is now using one loaded from autodiscovery,
 // rather than hard coded value.
 // For tests, autodiscovery will still have the default value.
 #define OFFSET_MEM_ORG ((dev_addr_t)0x0018)
+#define OFFSET_KERNEL_CRA ((dev_addr_t)0x1000)
+#define OFFSET_CONFIGURATION_ROM ((dev_addr_t)0x2000)
+
+// These must match the defines in acl_pll.c
+#define OFFSET_ROM ((dev_addr_t)0x400)
+#define OFFSET_RECONFIG_CTRL ((dev_addr_t)0x200)
+#define OFFSET_COUNTER ((dev_addr_t)0x100)
+#define OFFSET_RESET ((dev_addr_t)0x110)
+#define OFFSET_LOCK ((dev_addr_t)0x120)
+
+// This must match the define in acl_pll.c
+#define MAX_KNOWN_SETTINGS 100
 
 #endif

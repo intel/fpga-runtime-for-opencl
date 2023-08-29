@@ -4,7 +4,6 @@
 // System headers.
 #include <cassert>
 #include <cinttypes>
-#include <cmath>
 #include <cstdint>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +35,84 @@ extern int acl_process_profiler_scan_chain(acl_device_op_t *op);
 extern int
 acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
                                         unsigned int accel_id);
+
+// Versioning: This value must be read from addr 0
+// For unit tests to work, this defines must match the one in the unit test
+// header file
+#define KERNEL_VERSION_ID (0xa0c00001)
+#define KERNEL_ROM_VERSION_ID (0xa0c00002)
+// Version number in the top 16-bits of the 32-bit status register.  Used
+// to verify that the hardware and HAL have an identical view of the CSR
+// address map.
+#define CSR_VERSION_ID_18_1 (3)
+#define CSR_VERSION_ID_19_1 (4)
+#define CSR_VERSION_ID_23_1 (5)
+#define CSR_VERSION_ID CSR_VERSION_ID_23_1
+
+// Address map
+// For unit tests to work, these defines must match those in the unit test
+// header file
+#define OFFSET_VERSION_ID ((dev_addr_t)0x0000)
+#define OFFSET_KERNEL_CRA_SEGMENT ((dev_addr_t)0x0020)
+#define OFFSET_SW_RESET ((dev_addr_t)0x0030)
+#define OFFSET_KERNEL_CRA ((dev_addr_t)0x1000)
+#define OFFSET_CONFIGURATION_ROM ((dev_addr_t)0x2000)
+
+// Addressses for Kernel System ROM
+#define OFFSET_KERNEL_ROM_LOCATION_MSB (0x3ffffff8)
+#define OFFSET_KERNEL_ROM_LOCATION_LSB (0x3ffffffc)
+#define OFFSET_KERNEL_MAX_ADDRESS (0x3fffffff)
+
+#define KERNEL_CRA_SEGMENT_SIZE (0x1000)
+#define KERNEL_ROM_SIZE_BYTES_READ 4
+#define KERNEL_ROM_SIZE_BYTES 8
+
+// Byte offsets into the CRA:
+// For CSR version >= 5 byte offsets are pushed back with the proper
+// value except for the CSR later on in the runtime execution
+#define KERNEL_OFFSET_CSR 0
+#define KERNEL_OFFSET_PRINTF_BUFFER_SIZE 0x4
+#define KERNEL_OFFSET_CSR_PROFILE_CTRL 0xC
+#define KERNEL_OFFSET_CSR_PROFILE_DATA 0x10
+#define KERNEL_OFFSET_CSR_PROFILE_START_CYCLE 0x18
+#define KERNEL_OFFSET_CSR_PROFILE_STOP_CYCLE 0x20
+#define KERNEL_OFFSET_FINISH_COUNTER 0x28
+#define KERNEL_OFFSET_INVOCATION_IMAGE 0x30
+
+// CSR version >= 5 byte offsets
+#define KERNEL_OFFSET_START_REG 0x8
+
+// Backwards compatibility with CSR_VERSION_ID 3
+#define KERNEL_OFFSET_INVOCATION_IMAGE_181 0x28
+
+// Bit positions
+#define KERNEL_CSR_START 0
+#define KERNEL_CSR_DONE 1
+#define KERNEL_CSR_STALLED 3
+#define KERNEL_CSR_UNSTALL 4
+#define KERNEL_CSR_PROFILE_TEMPORAL_STATUS 5
+#define KERNEL_CSR_PROFILE_TEMPORAL_RESET 6
+#define KERNEL_CSR_LAST_STATUS_BIT KERNEL_CSR_PROFILE_TEMPORAL_RESET
+#define KERNEL_CSR_STATUS_BITS_MASK                                            \
+  ((unsigned)((1 << (KERNEL_CSR_LAST_STATUS_BIT + 1)) - 1))
+#define KERNEL_CSR_LMEM_INVALID_BANK 11
+#define KERNEL_CSR_LSU_ACTIVE 12
+#define KERNEL_CSR_WR_ACTIVE 13
+#define KERNEL_CSR_BUSY 14
+#define KERNEL_CSR_RUNNING 15
+#define KERNEL_CSR_FIRST_VERSION_BIT 16
+#define KERNEL_CSR_LAST_VERSION_BIT 31
+
+#define KERNEL_CSR_PROFILE_SHIFT64_BIT 0
+#define KERNEL_CSR_PROFILE_RESET_BIT 1
+#define KERNEL_CSR_PROFILE_ALLOW_PROFILING_BIT 2
+#define KERNEL_CSR_PROFILE_LOAD_BUFFER_BIT 3
+#define KERNEL_CSR_PROFILE_SHARED_CONTROL_BIT1 4
+#define KERNEL_CSR_PROFILE_SHARED_CONTROL_BIT2 5
+
+#define CONFIGURATION_ROM_BYTES 4096
+
+#define RESET_TIMEOUT (2 * 1000 * 1000 * 1000)
 
 #define ACL_KERNEL_READ_BIT(w, b) (((w) >> (b)) & 1)
 #define ACL_KERNEL_READ_BIT_RANGE(w, h, l)                                     \
@@ -101,7 +178,7 @@ static int check_version_id(acl_kernel_if *kern) {
   int r;
   acl_assert_locked();
 
-  r = acl_kernel_if_read_32b(kern, OFFSET_KERNEL_VERSION_ID, &version);
+  r = acl_kernel_if_read_32b(kern, OFFSET_VERSION_ID, &version);
   ACL_KERNEL_IF_DEBUG_MSG(kern, "Version ID check, read: %08x\n", version);
   if (r != 0 ||
       (version != KERNEL_VERSION_ID && version != KERNEL_ROM_VERSION_ID)) {
@@ -114,9 +191,12 @@ static int check_version_id(acl_kernel_if *kern) {
 }
 
 // Loads auto-discovery config string. Returns 0 if was successful.
-static int get_auto_discovery_string(acl_kernel_if *kern, char *config_str,
-                                     size_t config_str_len) {
-  unsigned int version, rom_address, rom_size;
+static int get_auto_discovery_string(acl_kernel_if *kern, char *config_str) {
+  unsigned int version, rom_address;
+  char description_size_msb[KERNEL_ROM_SIZE_BYTES_READ + 1];
+  char description_size_lsb[KERNEL_ROM_SIZE_BYTES_READ + 1];
+  unsigned int size_location;
+  unsigned int size, temp_size, rom_size;
   size_t r;
   int result;
   acl_assert_locked();
@@ -124,29 +204,46 @@ static int get_auto_discovery_string(acl_kernel_if *kern, char *config_str,
   kern->cur_segment = 0xffffffff;
 
   version = 0;
-  acl_kernel_if_read_32b(kern, OFFSET_KERNEL_VERSION_ID, &version);
+  acl_kernel_if_read_32b(kern, OFFSET_VERSION_ID, &version);
   if (version == KERNEL_ROM_VERSION_ID) {
+    // Read autodiscovery size
+    size_location = OFFSET_KERNEL_ROM_LOCATION_MSB;
+    acl_kernel_rom_cra_read_32b(kern, size_location,
+                                (unsigned int *)description_size_msb);
+    description_size_msb[KERNEL_ROM_SIZE_BYTES_READ] = '\0';
+    size = (unsigned int)strtol(description_size_msb, NULL, 16);
+    size = size << 16;
+
+    size_location = OFFSET_KERNEL_ROM_LOCATION_LSB;
+    acl_kernel_rom_cra_read_32b(kern, size_location,
+                                (unsigned int *)description_size_lsb);
+    description_size_lsb[KERNEL_ROM_SIZE_BYTES_READ] = '\0';
+    size += (unsigned int)strtol(description_size_lsb, NULL, 16);
+
     // Find beginning address of ROM
-    rom_size =
-        1 << ((unsigned)log2((double)config_str_len + KERNEL_ROM_SIZE_BYTES) +
-              1);
+    temp_size = size + KERNEL_ROM_SIZE_BYTES;
+    rom_size = 1;
+    while (temp_size > 0) {
+      temp_size = temp_size >> 1;
+      rom_size = rom_size << 1;
+    }
     rom_address = OFFSET_KERNEL_MAX_ADDRESS - rom_size + 1;
     config_str[0] = '\0';
     result = acl_kernel_rom_cra_read_block(kern, rom_address, config_str,
-                                           (size_t)config_str_len);
+                                           (size_t)size);
 
     if (result < 0)
       return -1;
     // Pad autodiscovery with NULL
-    *(config_str + (unsigned int)config_str_len) = '\0';
+    *(config_str + (unsigned int)size) = '\0';
     // Read is verified above
     // Set rom_size and r equal to support old flow and big-endian shuffle
-    rom_size = (unsigned int)config_str_len;
+    rom_size = size;
     r = rom_size;
   } else if (version == KERNEL_VERSION_ID) {
-    rom_size = (unsigned int)config_str_len;
+    rom_size = CONFIGURATION_ROM_BYTES;
     r = kern->io.read(&kern->io, (dev_addr_t)OFFSET_CONFIGURATION_ROM,
-                      config_str, config_str_len);
+                      config_str, (size_t)CONFIGURATION_ROM_BYTES);
   } else {
     kern->io.printf("  HAL Kern: Version ID incorrect\n");
     return -1;
@@ -619,6 +716,43 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
 
   kern->autorun_profiling_kernel_id = -1;
 
+  // The simulator doesn't have any kernel interface information until the aocx
+  // is loaded, which happens later.
+  if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+    std::string err_msg;
+    auto parse_result = acl_load_device_def_from_str(
+        acl_shipped_board_cfgs[0].cfg, sysdef->device[0].autodiscovery_def,
+        err_msg);
+    // Fill in definition for all device global memory
+    // Simulator does not have any global memory interface information until the
+    // actual aocx is loaded. (Note this is only a problem for simulator not
+    // hardware run, in hardware run, we can communicate with BSP to query
+    // memory interface information). In the flow today, the USM device
+    // allocation call happens before aocx is loaded. The aocx is loaded when
+    // clCreateProgram is called, which typically happen on first kernel launch
+    // in sycl runtime. In order to prevent the USM device allocation from
+    // failing on  mutli global memory system, initialize as much global memory
+    // system as possible for simulation flow. However there are a few downside:
+    // 1. The address range/size may not be exactly the same as the one that is
+    // in aocx, but this is not too large of a problem because runtime first fit
+    // allocation algorithm will fill the lowest address range first. Unless
+    // user requested more than what is availble.
+    // 2. it potentially occupied more space than required
+    // 3. will not error out when user requested a non-existing device global
+    // memory because we are using ACL_MAX_GLOBAL_MEM for num_global_mem_systems
+    sysdef->device[0].autodiscovery_def.num_global_mem_systems =
+        ACL_MAX_GLOBAL_MEM;
+    for (int i = 0; i < ACL_MAX_GLOBAL_MEM; i++) {
+      sysdef->device[0].autodiscovery_def.global_mem_defs[i] =
+          sysdef->device[0].autodiscovery_def.global_mem_defs[0];
+    }
+    if (parse_result)
+      sysdef->num_devices = 1;
+    // Override the device name to the simulator.
+    sysdef->device[0].autodiscovery_def.name = ACL_MPSIM_DEVICE_NAME;
+    return 0;
+  }
+
   if (check_version_id(kern) != 0) {
     kern->io.printf("Hardware version ID differs from version expected by "
                     "software.  Either:\n");
@@ -631,7 +765,7 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   }
 
   version = 0;
-  acl_kernel_if_read_32b(kern, OFFSET_KERNEL_VERSION_ID, &version);
+  acl_kernel_if_read_32b(kern, OFFSET_VERSION_ID, &version);
   ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(kern, 2, "::   Kernel version 0x%x\n",
                                   version);
   size_t config_str_len = 0;
@@ -675,16 +809,16 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
                                     description_size_msb, description_size_lsb,
                                     size);
 
-    config_str_len = size;
+    config_str_len = size + 1;
   } else if (version == KERNEL_VERSION_ID) {
-    config_str_len = CONFIGURATION_ROM_BYTES;
+    config_str_len = CONFIGURATION_ROM_BYTES + 1;
   } else {
     kern->io.printf("  HAL Kern: Version ID incorrect\n");
     return -1;
   }
 
-  std::vector<char> config_str(config_str_len + 1); // +1 for null byte padding
-  result |= get_auto_discovery_string(kern, config_str.data(), config_str_len);
+  std::vector<char> config_str(config_str_len);
+  result |= get_auto_discovery_string(kern, config_str.data());
   std::string config_string{config_str.data()};
 
   if (result != 0) {
@@ -699,15 +833,8 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   auto load_result = acl_load_device_def_from_str(
       config_string, sysdef->device[kern->physical_device_id].autodiscovery_def,
       auto_config_err_str);
-  if (load_result) {
-    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
-      sysdef->device[kern->physical_device_id].autodiscovery_def.name =
-          ACL_MPSIM_DEVICE_NAME;
-      sysdef->num_devices = 1;
-    } else {
-      ++sysdef->num_devices;
-    }
-  }
+  if (load_result)
+    ++sysdef->num_devices;
   result |= load_result ? 0 : -1;
 
   if (result != 0) {

@@ -2918,6 +2918,12 @@ static cl_int l_copy_and_adjust_arguments_for_device(
                                                   [needed_mem_id]);
 #endif
 
+        if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+          if (!acl_realloc_buffer_for_simulator(mem_obj, needed_physical_id,
+                                                needed_mem_id)) {
+            return CL_MEM_OBJECT_ALLOCATION_FAILURE;
+          }
+        }
         // copy the address of the reserved allocation into the invocation
         // image:
         const void *mem_addr =
