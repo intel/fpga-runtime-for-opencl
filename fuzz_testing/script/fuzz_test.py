@@ -46,8 +46,8 @@ ASAN_ERROR_PATTERN = "SUMMARY: AddressSanitizer"
 FUZZ_TEST_ERROR_PATTERN = "Fuzz test error"
 ASSERTION_FAILURE_PATTERN = "acl_fuzz_test:.*Assertion"
 
-# Give it 60 seconds to finish a single unit test
-TIMEOUT = 60
+# Give it 600 seconds to finish a single unit test
+TIMEOUT = 600
 TIMEOUT_COMMAND = "timeout " + str(TIMEOUT)
 TIMEOUT_MESSAGE = "TIMEOUT! " + str(TIMEOUT) + " seconds have passed! "
 

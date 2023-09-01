@@ -6843,99 +6843,6 @@ void acl_copy_device_buffers_from_host_after_programming(
   }
 }
 
-// Simulator does not have any global memory interface information before
-// reprogram, the runtime initializes device def to have the same global
-// memory address range obtained from a autodiscovery string predefined in
-// acl_shipped_board_cfgs.h
-// When a buffer is created with the buffer location property specifying a
-// global memory whose address range lies beyond the range defined in the
-// default autodiscovery string, and is written before the device reprogram,
-// the write will bind the buffer to the wrong address range, causing issues
-// when running the kernel
-// The following function do a memory copy for the buffers binded to the
-// wrong address range to the right one after the global memory information
-// becomes available and before the kernel launch
-// Returns 1 on success and 0 on failure
-int acl_realloc_buffer_for_simulator(cl_mem mem,
-                                     const unsigned int physical_device_id,
-                                     const unsigned int mem_id) {
-  // Only reallocate and migrate if mem resides in global memory
-  if (mem->block_allocation->region != &(acl_platform.global_mem)) {
-    return 1;
-  }
-
-  const acl_addr_range_t global_mem_range =
-      acl_platform.device[physical_device_id]
-          .def.autodiscovery_def.global_mem_defs[mem_id]
-          .get_usable_range();
-
-  // Save old address
-  int mem_on_host;
-  void *const old_mem_address = l_get_address_of_writable_copy(
-      mem, physical_device_id, &mem_on_host, CL_FALSE);
-
-  // The mem copy is only needed if the buffer is bound to the device
-  // before global memory range is confirmed (i.e., before reprogram), and
-  // assumed address range before reprogram is different from actual
-  // Therefore, check if:
-  //   1. allocation is deferred (if so auto migration will happen)
-  //   2. buffer is on host
-  //   3. buffer appears to be "at the destination"
-  //   4. block allocation is outside the global memory range
-  if (!mem->allocation_deferred &&
-      !(mem->mem_cpy_host_ptr_pending || mem_on_host) &&
-      (mem->block_allocation ==
-       mem->reserved_allocations[physical_device_id][mem_id]) &&
-      (ACL_STRIP_PHYSICAL_ID(mem->block_allocation->range.begin) >=
-           global_mem_range.next ||
-       ACL_STRIP_PHYSICAL_ID(mem->block_allocation->range.next) <
-           global_mem_range.begin)) {
-
-    // mem_id should align if block allocation is the same as reserved
-    // allocation
-    assert(mem->mem_id == mem_id);
-
-    // Okay to set this to NULL, memory tracked in mem->block_allocation
-    mem->reserved_allocations[physical_device_id][mem_id] = NULL;
-    // We will reallocate block, so remove it from linked list first
-    acl_block_allocation_t **block_ptr =
-        &(mem->block_allocation->region->first_block);
-    // try to find the mem->block_allocation in the linked list, error if
-    // the block is not found before reaching the end of list
-    while (true) {
-      acl_block_allocation_t *const block = *block_ptr;
-      assert(block != NULL);
-      if (block == mem->block_allocation) {
-        *block_ptr = block->next_block_in_region;
-        break;
-      }
-      // Advance to the next block in the region
-      block_ptr = &(block->next_block_in_region);
-    }
-    // Reallocate buffer range
-    if (!acl_do_physical_buffer_allocation(physical_device_id, mem)) {
-      return 0;
-    }
-
-    void *const new_mem_address =
-        mem->reserved_allocations[physical_device_id][mem_id]->range.begin;
-    const acl_hal_t *const hal = acl_get_hal();
-
-#ifdef MEM_DEBUG_MSG
-    printf("reallocating mem obj for simulation after getting global mem "
-           "info, device %u ([0]%zx -> [0]%zx) ",
-           physical_device_id, (size_t)(ACL_STRIP_PHYSICAL_ID(old_mem_address)),
-           (size_t)(ACL_STRIP_PHYSICAL_ID(new_mem_address)));
-#endif
-
-    // do blocking copy, this is for simulation only so performance is
-    // probably not a huge concern
-    hal->copy_globalmem_to_globalmem(0, old_mem_address, new_mem_address,
-                                     mem->size);
-  }
-  return 1;
-}
-
 static void acl_print_all_mem_in_region(acl_mem_region_t *region);
 void acl_print_all_mem(void) {
   acl_assert_locked();
@@ -7881,7 +7788,6 @@ void acl_read_device_global(void *user_data, acl_device_op_t *op) {
   acl_print_debug_msg("Entering acl_read_device_global function\n");
   cl_event event = op->info.event;
   cl_int status = 0;
-  size_t pulled_data = 0;
 
   acl_assert_locked();
 
@@ -7915,7 +7821,6 @@ void acl_write_device_global(void *user_data, acl_device_op_t *op) {
   acl_print_debug_msg("Entering acl_write_device_global function\n");
   cl_event event = op->info.event;
   cl_int status = 0;
-  size_t pulled_data = 0;
 
   acl_assert_locked();
 

@@ -11,24 +11,6 @@
 #define PLL_VERSION_ID (0xa0c00001)
 #define PLL_VERSION_ID_20NM (0xa0c00002)
 
-// Address map
-// For unit tests to work, these defines must match those in the unit test
-// header file
-#define OFFSET_VERSION_ID ((dev_addr_t)0x000)
-#define OFFSET_ROM ((dev_addr_t)0x400)
-#define OFFSET_RECONFIG_CTRL ((dev_addr_t)0x200)
-#define OFFSET_RECONFIG_CTRL_20NM ((dev_addr_t)0x800)
-#define OFFSET_COUNTER ((dev_addr_t)0x100)
-#define OFFSET_RESET ((dev_addr_t)0x110)
-#define OFFSET_LOCK ((dev_addr_t)0x120)
-
-// Constants
-#define MAX_KNOWN_SETTINGS 100
-#define MAX_POSSIBLE_FMAX 2000000
-#define MAX_RECONFIG_RETRIES 3
-#define RECONFIG_TIMEOUT (1000000000ll)
-#define CLK_MEASUREMENT_PERIOD (16 * 1024 * 1024)
-
 #define ACL_PLL_DEBUG_MSG_VERBOSE(p, verbosity, m, ...)                        \
   if (p->io.printf && (p->io.debug_verbosity) >= verbosity)                    \
     do {                                                                       \
@@ -113,7 +95,7 @@ static int get_version_id(acl_pll *pll) {
   int r;
 
   ACL_PLL_DEBUG_MSG_VERBOSE(pll, 1, "PLL: Reading PLL version ID\n");
-  r = _acl_pll_read(pll, OFFSET_VERSION_ID, &version);
+  r = _acl_pll_read(pll, OFFSET_PLL_VERSION_ID, &version);
   if (r != 0 || (version != PLL_VERSION_ID && version != PLL_VERSION_ID_20NM)) {
     pll->io.printf(
         "  PLL: Version mismatch! Expected 0x%x or 0x%x but read 0x%x\n",
