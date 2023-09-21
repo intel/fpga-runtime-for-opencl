@@ -209,6 +209,8 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     RESULT_INT(0);
     break;
   case CL_DEVICE_GLOBAL_MEM_SIZE: {
+#ifdef __arm__
+    // TODO: legacy code here, need to verify correctness with ARM board
     auto gmem_id = acl_get_default_device_global_memory(device->def);
     if (gmem_id < 0) {
       RESULT_INT(0);
@@ -217,10 +219,20 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     cl_ulong size =
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range());
-#ifdef __arm__
     // on SoC board, two DDR systems are not equivalent
     // so only half can be accessed with a single alloc.
     size /= 2;
+#else
+    cl_ulong size = 0;
+    for (unsigned gmem_idx = 0;
+         gmem_idx < device->def.autodiscovery_def.num_global_mem_systems;
+         gmem_idx++) {
+      if (device->def.autodiscovery_def.global_mem_defs[gmem_idx].type ==
+          ACL_GLOBAL_MEM_DEVICE_PRIVATE) {
+        size += ACL_RANGE_SIZE(
+            device->def.autodiscovery_def.global_mem_defs[gmem_idx].range);
+      }
+    }
 #endif
     RESULT_ULONG(size);
     break;
@@ -251,13 +263,9 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     RESULT_UINT(acl_platform.max_constant_args);
     break;
 
-  // "desktop" profile says global memory must be at least 128MB
-  // "embedded" profile says global memory must be at least 1MB
   case CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE: {
-    // Constant memory is global memory.
-    // However conformance_test_api min_max_constant_buffer_size
-    // expects to allocate two buffers of the size we say here.
-    // So be a shade conservative and cut it down by 4.
+#ifdef __arm__
+    // TODO: legacy code here, need to verify correctness with ARM board
     auto gmem_id = acl_get_default_device_global_memory(device->def);
     if (gmem_id < 0) {
       RESULT_INT(0);
@@ -267,13 +275,44 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range()) /
         4;
-#ifdef __arm__
-    // see above
+    // Cut by 2 again, see comment for CL_DEVICE_GLOBAL_MEM_SIZE
     size /= 2;
+#else
+    // Return the maximum size of a single allocation to the constant memory
+    // (i.e., global memory)
+    cl_ulong size = 0;
+    for (unsigned gmem_idx = 0;
+         gmem_idx < device->def.autodiscovery_def.num_global_mem_systems;
+         gmem_idx++) {
+      if (device->def.autodiscovery_def.global_mem_defs[gmem_idx].type ==
+          ACL_GLOBAL_MEM_DEVICE_PRIVATE) {
+        cl_ulong curr_size = 0;
+        // TODO: investigate if ACL_MEM_ALIGN of 0x400 is still required to
+        //       perform device allocations to memory with 0 starting address
+        acl_system_global_mem_allocation_type_t alloc_type =
+            device->def.autodiscovery_def.global_mem_defs[gmem_idx]
+                .allocation_type;
+        if (!alloc_type || (alloc_type & ACL_GLOBAL_MEM_DEVICE_ALLOCATION)) {
+          curr_size = ACL_RANGE_SIZE(
+              device->def.autodiscovery_def.global_mem_defs[gmem_idx]
+                  .get_usable_range());
+        } else {
+          curr_size = ACL_RANGE_SIZE(
+              device->def.autodiscovery_def.global_mem_defs[gmem_idx].range);
+        }
+        if (curr_size > size) {
+          size = curr_size;
+        }
+      }
+    }
+    // Note: devices not of type CL_DEVICE_TYPE_CUSTOM and conformant
+    // to OpenCL 1.2 spec will return size at least of 64KB here
 #endif
     RESULT_ULONG(size);
   } break;
   case CL_DEVICE_MAX_MEM_ALLOC_SIZE: {
+#ifdef __arm__
+    // TODO: legacy code here, need to verify correctness with ARM board
     auto gmem_id = acl_get_default_device_global_memory(device->def);
     if (gmem_id < 0) {
       RESULT_INT(0);
@@ -282,7 +321,6 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     cl_ulong size =
         ACL_RANGE_SIZE(device->def.autodiscovery_def.global_mem_defs[gmem_id]
                            .get_usable_range());
-#ifdef __arm__
     // on SoC board, two DDR systems are not equivalent
     // so only half can be accessed with a single alloc.
 
@@ -294,6 +332,35 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     } else {
       size = size / 8;
     }
+#else
+    cl_ulong size = 0;
+    for (unsigned gmem_idx = 0;
+         gmem_idx < device->def.autodiscovery_def.num_global_mem_systems;
+         gmem_idx++) {
+      if (device->def.autodiscovery_def.global_mem_defs[gmem_idx].type ==
+          ACL_GLOBAL_MEM_DEVICE_PRIVATE) {
+        cl_ulong curr_size = 0;
+        // TODO: investigate if ACL_MEM_ALIGN of 0x400 is still required to
+        //       perform device allocations to memory with 0 starting address
+        acl_system_global_mem_allocation_type_t alloc_type =
+            device->def.autodiscovery_def.global_mem_defs[gmem_idx]
+                .allocation_type;
+        if (!alloc_type || (alloc_type & ACL_GLOBAL_MEM_DEVICE_ALLOCATION)) {
+          curr_size = ACL_RANGE_SIZE(
+              device->def.autodiscovery_def.global_mem_defs[gmem_idx]
+                  .get_usable_range());
+        } else {
+          curr_size = ACL_RANGE_SIZE(
+              device->def.autodiscovery_def.global_mem_defs[gmem_idx].range);
+        }
+        if (curr_size > size) {
+          size = curr_size;
+        }
+      }
+    }
+    // Note: devices not of type CL_DEVICE_TYPE_CUSTOM and
+    // conformant to OpenCL 1.2 spec will return size at least of
+    // max(CL_DEVICE_GLOBAL_MEM_SIZE/4, 1*1024*1024) here
 #endif
     RESULT_ULONG(size);
   } break;

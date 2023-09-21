@@ -5663,7 +5663,7 @@ void acl_mem_migrate_buffer(void *user_data, acl_device_op_t *op) {
         memory_migration.src_mem_list[index].destination_mem_id;
 
 #ifdef MEM_DEBUG_MSG
-    printf("object %d, mem %zx, count %d:", index, (size_t)src_mem,
+    printf("object %d, mem %zx, count %d:\n", index, (size_t)src_mem,
            src_mem->reserved_allocations_count[dest_device][dest_mem_id]);
 #endif
 
