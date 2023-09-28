@@ -1178,27 +1178,18 @@ void l_close_device(unsigned int physical_device_id,
 
 static acl_mmd_dispatch_t *get_msim_mmd_layer() {
 #ifdef _WIN32
-
   const char *acl_root_dir = acl_getenv("INTELFPGAOCLSDKROOT");
   info_assert(acl_root_dir,
               "INTELFPGAOCLSDKROOT environment variable is missing!");
-  const std::string mmd_lib_name_aoc_str =
+  const std::string mmd_lib_name_str =
       std::string(acl_root_dir) + "\\host\\windows64\\bin\\aoc_cosim_mmd.dll";
-  const std::string mmd_lib_name_ipa_str =
-      std::string(acl_root_dir) + "\\host\\windows64\\bin\\ipa_cosim_mmd.dll";
 
-  const char *mmd_lib_name_aoc = mmd_lib_name_aoc_str.c_str();
-  const char *mmd_lib_name_ipa = mmd_lib_name_ipa_str.c_str();
+  const char *mmd_lib_name = mmd_lib_name_str.c_str();
   const char *sym_name = "msim_mmd_layer";
 #else
-  const char *mmd_lib_name_aoc = "libaoc_cosim_mmd.so";
-  const char *mmd_lib_name_ipa = "libipa_cosim_mmd.so";
+  const char *mmd_lib_name = "libaoc_cosim_mmd.so";
   const char *sym_name = "msim_mmd_layer";
 #endif
-
-  const char *ipa_simulator = acl_getenv("ACL_IPA_SIM");
-  const char *mmd_lib_name =
-      ipa_simulator ? mmd_lib_name_ipa : mmd_lib_name_aoc;
 
   char *error_msg = nullptr;
   auto *mmd_lib = my_dlopen(mmd_lib_name, &error_msg);
