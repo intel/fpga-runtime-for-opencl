@@ -19,6 +19,7 @@
 #include <acl_shipped_board_cfgs.h>
 #include <acl_support.h>
 #include <acl_thread.h>
+#include <acl_util.h>
 
 #undef TEST_PROFILING_HARDWARE
 #ifdef TEST_PROFILING_HARDWARE
@@ -95,6 +96,26 @@ void acl_kernel_if_register_callbacks(
 // **************************************************************************
 // **************************** Utility Functions ***************************
 // **************************************************************************
+void print_invocation_image(acl_kernel_if *kern, char *image_ptr,
+                            size_t image_size, unsigned int offset,
+                            bool is_static) {
+  std::string image_type = is_static ? "stat" : "args";
+  for (uintptr_t p = 0; p < image_size; p += sizeof(int)) {
+    unsigned int pword = 0;
+    if (p + sizeof(int) > image_size) {
+      for (size_t i = 0; i < image_size - p; i += sizeof(char)) {
+        safe_memcpy(((char *)(&pword)) + i, image_ptr + p + i, sizeof(char),
+                    sizeof(int), image_size - p - i);
+      }
+    } else {
+      pword = *(unsigned int *)(image_ptr + p);
+    }
+    ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
+        kern, 2, "::   Writing inv image (%s) [%2d] @%8p := %4x\n",
+        image_type.c_str(), (int)(p), (void *)(offset + p), pword);
+  }
+}
+
 // Returns 0 on success, -1 on failure
 static int check_version_id(acl_kernel_if *kern) {
   unsigned int version = 0;
@@ -1140,22 +1161,14 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
     // We only write the static part of the invocation image if the kernel uses
     // CRA control.
     if (!kern->streaming_control_signal_names[accel_id]) {
-      for (uintptr_t p = 0; p < image_size_static; p += sizeof(int)) {
-        unsigned int pword = *(unsigned int *)(image_p + p);
-        ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
-            kern, 2, "::   Writing inv image [%2d] @%8p := %4x\n", (int)(p),
-            (void *)(offset + p), pword);
-      }
+      print_invocation_image(kern, (char *)image_p, image_size_static, offset,
+                             true);
     }
 
     if (kern->csr_version.has_value() &&
         (kern->csr_version != CSR_VERSION_ID_18_1)) {
-      for (uintptr_t p = 0; p < image->arg_value_size; p += sizeof(int)) {
-        unsigned int pword = *(unsigned int *)(image->arg_value + p);
-        ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
-            kern, 2, "::   Writing inv image [%2d] @%8p := %4x\n", (int)(p),
-            (void *)(offset + image_size_static + p), pword);
-      }
+      print_invocation_image(kern, image->arg_value, image->arg_value_size,
+                             (unsigned int)(offset + image_size_static), false);
     }
   }
 
