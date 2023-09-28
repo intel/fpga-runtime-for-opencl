@@ -115,7 +115,7 @@ const char *acl_get_offline_device_user_setting(int *use_offline_only_ret) {
     }
     if (setting) {
       use_offline_only = ACL_CONTEXT_MPSIM;
-      result = setting;
+      result = 0;
     }
   }
 
