@@ -1264,9 +1264,12 @@ typedef struct _cl_device_id {
   cl_uint vendor_id;
   const char *version;
   const char *driver_version;
-  acl_device_def_t def;
   size_t min_local_mem_size; // min size of all local mems for accelerators in
                              // this device.
+  unsigned int address_bits; // cache address bits to avoid GetDeviceInfo calls
+
+  // MMD and autodiscovery information
+  acl_device_def_t def;
 
   // Indicates the number of contexts in which the device is currently opened.
   int opened_count;
@@ -1279,8 +1282,6 @@ typedef struct _cl_device_id {
   // using this device to be of the same mode (unless all contexts created for
   // this device are released)
   context_mode_lock mode_lock;
-
-  unsigned int address_bits; // cache address bits to avoid GetDeviceInfo calls
 
   int present; // Is the device present in the host system?
 
@@ -1296,15 +1297,19 @@ typedef struct _cl_device_id {
   // In non-embedded mode, we can reprogram the device during runtime of
   // the host program.
   // A device can only be programmed with one cl_program at a time.
+  // Two operations that can trigger device reprogram are
+  //   1. Eager reprogram of the first binary to clCreateProgram*
+  //   2. Kernel launch that use a different binary than the one on device
   //
   // These two fields keep track of what is programmed on the device:
   //
   //    loaded_bin:   What acl_device_binary_t is loaded *right now*.
+  //                  (updated in acl_program_device)
   //
   //    last_bin:     What acl_device_binary_t will be loaded on the device
-  //    after
-  //                   after the last operation on the device op queue
-  //                   has completed?
+  //                  after the last operation on the device op queue has
+  //                  completed? (updated when submitting command for the
+  //                  above-mentioned reprogram operations)
   //
   const acl_device_binary_t *loaded_bin = nullptr;
   const acl_device_binary_t *last_bin = nullptr;

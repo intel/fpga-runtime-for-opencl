@@ -24,7 +24,6 @@ static std::string l_get_hashed_kernel_name(const std::string &kernel_name) {
 
 acl_device_program_info_t::acl_device_program_info_t() {
   device_binary.set_dev_prog(this);
-  device_binary.get_devdef().dev_prog = this;
 }
 
 acl_device_program_info_t::~acl_device_program_info_t() {
@@ -53,7 +52,6 @@ acl_device_program_info_t::add_split_binary(const std::string &hashed_name) {
 
   auto &dev_bin = m_split_device_binaries[hashed_name];
   dev_bin.set_dev_prog(this);
-  dev_bin.get_devdef().dev_prog = this;
   return dev_bin;
 }
 
