@@ -149,8 +149,7 @@ static acl_system_def_t acltest_simple_system = {
 
     // Device definitions.
     1,
-    {{nullptr,
-      0,
+    {{0,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -556,8 +555,7 @@ static acl_system_def_t acltest_complex_system = {
     /* num_devices */ 5,
     {// All of these have kernels 0 and 2 in common.  This is used for
      // testing clCreateKernels
-     {nullptr,
-      0,
+     {0,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -591,8 +589,7 @@ static acl_system_def_t acltest_complex_system = {
                 0}},
           },
       }},
-     {nullptr,
-      1,
+     {1,
       1,
       1,
       2, /* full duplex memory transfers */
@@ -626,8 +623,7 @@ static acl_system_def_t acltest_complex_system = {
                 0}},
           },
       }},
-     {nullptr,
-      2,
+     {2,
       1,
       1,
       2, /* full duplex memory transfers */
@@ -651,8 +647,7 @@ static acl_system_def_t acltest_complex_system = {
                /* burst_interleaved */ 1,
            },
        }}},
-     {nullptr,
-      3,
+     {3,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -676,8 +671,7 @@ static acl_system_def_t acltest_complex_system = {
                /* burst_interleaved */ 1,
            },
        }}},
-     {nullptr,
-      4,
+     {4,
       1,
       1,
       1, /* half duplex memory transfers */
