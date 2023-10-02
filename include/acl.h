@@ -593,20 +593,19 @@ typedef struct acl_device_def_autodiscovery_t {
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {
-  // Back pointer. This is only valid if this def is owned by a dev_prog. In
-  // tests, this is not the case.
-  acl_device_program_info dev_prog;
-  unsigned int physical_device_id; /* The ID of the physical device that the we
-                                      need to "talk" to */
+  // Information obtained from MMD when acl_hal_mmd tries the device
+  unsigned int physical_device_id; // The ID of the physical device that the we
+                                   // need to "talk" to
   unsigned int concurrent_reads;   // # of reads that can happen at one time
   unsigned int concurrent_writes;  // # of writes that can happen at one time
-  unsigned int
-      max_inflight_mem_ops; // max # of memory ops that can happen concurrently
+  unsigned int max_inflight_mem_ops; // max # of memory ops that can happen
+                                     // concurrently
   unsigned int host_capabilities;
   unsigned int shared_capabilities;
   unsigned int device_capabilities;
   size_t min_host_mem_alignment;
 
+  // autodiscovery information that changes every reprogram
   acl_device_def_autodiscovery_t autodiscovery_def;
 } acl_device_def_t;
 
