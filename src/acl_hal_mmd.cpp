@@ -56,10 +56,7 @@
 #include <MMD/aocl_mmd.h>
 #include <MMD/aocl_mmd_deprecated.h>
 
-#ifndef MAX_NAME_SIZE
-#define MAX_NAME_SIZE 1204
-#endif
-
+// ******************* Function Declarations *****************
 // User-callable parts of the HAL.
 void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
                                size_t alignment, mem_properties_t *properties,
@@ -195,129 +192,35 @@ static void *
 acl_hal_get_board_extension_function_address(const char *func_name,
                                              unsigned int physical_device_id);
 
-static int l_try_device(unsigned int physical_device_id, const char *name,
-                        acl_system_def_t *sys,
-                        acl_mmd_dispatch_t *mmd_dispatch_for_board);
 ACL_HAL_EXPORT const acl_hal_t *
 acl_mmd_get_system_definition(acl_system_def_t *sys,
                               acl_mmd_library_names_t *_libraries_to_load);
-unsigned acl_convert_mmd_capabilities(unsigned mmd_capabilities);
 
-const static size_t MIN_SOF_SIZE = 1;
-const static size_t MIN_PLL_CONFIG_SIZE = 1;
-
-std::vector<acl_mmd_dispatch_t> internal_mmd_dispatch;
-
-// Dynamically load board mmd & symbols
-static size_t num_board_pkgs;
-static double min_MMD_version = DBL_MAX;
-extern "C" {
-void *null_fn = NULL;
-}
-#define IS_VALID_FUNCTION(X) (&X == NULL) ? 0 : 1
-#ifdef _MSC_VER
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_get_offline_info=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_get_info=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_open=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_close=null_fn")
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_set_interrupt_handler=null_fn")
-#pragma comment(                                                               \
-    linker,                                                                    \
-    "/alternatename:__imp_aocl_mmd_set_device_interrupt_handler=null_fn")
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_set_status_handler=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_yield=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_read=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_write=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_copy=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_reprogram=null_fn")
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_shared_mem_alloc=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_shared_mem_free=null_fn")
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_hostchannel_create=null_fn")
-#pragma comment(linker,                                                        \
-                "/alternatename:__imp_aocl_mmd_hostchannel_destroy=null_fn")
-#pragma comment(                                                               \
-    linker, "/alternatename:__imp_aocl_mmd_hostchannel_get_buffer=null_fn")
-#pragma comment(                                                               \
-    linker, "/alternatename:__imp_aocl_mmd_hostchannel_ack_buffer=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_program=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_host_alloc=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_free=null_fn")
-#pragma comment(linker, "/alternatename:__imp_aocl_mmd_shared_alloc=null_fn")
+// ****************** Constants and Globals ******************
+#ifndef MAX_NAME_SIZE
+#define MAX_NAME_SIZE 1204
 #endif
-
-#ifdef _WIN32
-char *acl_strtok(char *str, const char *delim, char **saveptr) {
-  return strtok_s(str, delim, saveptr);
-}
-#else // Linux
-char *acl_strtok(char *str, const char *delim, char **saveptr) {
-  return strtok_r(str, delim, saveptr);
-}
-#endif
-
-#define ADD_STATIC_FN_TO_HAL(STRUCT, X, REQUIRED)                              \
-  if (!IS_VALID_FUNCTION(X)) {                                                 \
-    if (REQUIRED) {                                                            \
-      ACL_HAL_DEBUG_MSG_VERBOSE(                                               \
-          1, "Function X is not defined statically by board library\n");       \
-      return NULL;                                                             \
-    } else {                                                                   \
-      STRUCT.X = NULL;                                                         \
-    }                                                                          \
-  }                                                                            \
-  STRUCT.X = X;
-
-#define ADD_DYNAMIC_FN_TO_HAL(STRUCT, LIBRARY, X, REQUIRED, TYPE)              \
-  STRUCT->X = (TYPE)my_dlsym(LIBRARY, #X, &error_msg);                         \
-  if (!STRUCT->X && REQUIRED) {                                                \
-    printf("Error: Symbol %s not found in board library", #X);                 \
-    if (error_msg && error_msg[0] != '\0') {                                   \
-      printf("(message: %s)", error_msg);                                      \
-    }                                                                          \
-    printf("\n");                                                              \
-    return CL_FALSE;                                                           \
-  }
+#define MAX_BOARD_NAMES_LEN (ACL_MAX_DEVICE * 30 + 1)
 
 #ifdef _WIN32
 static cl_ulong m_ticks_per_second = 0;
 #endif
 
-#define info_assert(COND, ...)                                                 \
-  do {                                                                         \
-    if (!(COND)) {                                                             \
-      printf("%s:%d:assert failure: ", __FILE__, __LINE__);                    \
-      printf(__VA_ARGS__);                                                     \
-      fflush(stdout);                                                          \
-      assert(0);                                                               \
-    }                                                                          \
-  } while (0)
+std::vector<acl_mmd_dispatch_t> internal_mmd_dispatch;
 
-// Handle to the device
+static size_t num_board_pkgs;
+static unsigned num_physical_devices = 0;
+static double min_MMD_version = DBL_MAX;
 
 // Interfaces
 static int kernel_interface = -1;
 static int pll_interface = -1;
 static int memory_interface = -1;
-
-static int debug_verbosity = 0;
-#define ACL_HAL_DEBUG_MSG_VERBOSE(verbosity, m, ...)                           \
-  if (debug_verbosity >= verbosity)                                            \
-    do {                                                                       \
-      printf((m), ##__VA_ARGS__);                                              \
-  } while (0)
-
 static acl_bsp_io bsp_io_kern[ACL_MAX_DEVICE];
 static acl_bsp_io bsp_io_pll[ACL_MAX_DEVICE];
 static acl_kernel_if kern[ACL_MAX_DEVICE];
 static acl_pll pll[ACL_MAX_DEVICE];
 static acl_mmd_device_t device_info[ACL_MAX_DEVICE];
-
-static unsigned num_physical_devices = 0;
 
 static int uses_yield_ref = -1;
 
@@ -326,6 +229,19 @@ static acl_event_update_callback acl_event_update_fn = NULL;
 acl_kernel_update_callback acl_kernel_update_fn = NULL;
 acl_profile_callback acl_profile_fn = NULL;
 acl_device_update_callback acl_device_update_fn = NULL;
+
+// This will contain the device physical id to tell us which device across all
+// loaded BSPs (even with the same handle numbers) is calling the interrupt
+// handler.
+unsigned interrupt_user_data[ACL_MAX_DEVICE];
+
+// For device reprogram
+const static size_t MIN_SOF_SIZE = 1;
+const static size_t MIN_PLL_CONFIG_SIZE = 1;
+
+// For device-to-device memory copy
+static int src_dev_done;
+static int dst_dev_done;
 
 static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_init_device,   // init_device
@@ -378,14 +294,98 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_simulation_device_global_interface_write, // simulation_device_global_interface_write
 };
 
-// This will contain the device physical id to tell us which device across all
-// loaded BSPs (even with the same handle numbers) is calling the interrupt
-// handler.
-unsigned interrupt_user_data[ACL_MAX_DEVICE];
-
 // ********************* Helper functions ********************
-#define MAX_BOARD_NAMES_LEN (ACL_MAX_DEVICE * 30 + 1)
-#define MMD_VERSION_LEN 30
+#ifdef _WIN32
+char *acl_strtok(char *str, const char *delim, char **saveptr) {
+  return strtok_s(str, delim, saveptr);
+}
+#else // Linux
+char *acl_strtok(char *str, const char *delim, char **saveptr) {
+  return strtok_r(str, delim, saveptr);
+}
+#endif
+
+// Debug and printing information
+#define info_assert(COND, ...)                                                 \
+  do {                                                                         \
+    if (!(COND)) {                                                             \
+      printf("%s:%d:assert failure: ", __FILE__, __LINE__);                    \
+      printf(__VA_ARGS__);                                                     \
+      fflush(stdout);                                                          \
+      assert(0);                                                               \
+    }                                                                          \
+  } while (0)
+
+static int debug_verbosity = 0;
+#define ACL_HAL_DEBUG_MSG_VERBOSE(verbosity, m, ...)                           \
+  if (debug_verbosity >= verbosity)                                            \
+    do {                                                                       \
+      printf((m), ##__VA_ARGS__);                                              \
+  } while (0)
+
+// Dynamically load board mmd & symbols
+extern "C" {
+void *null_fn = NULL;
+}
+#define IS_VALID_FUNCTION(X) (&X == NULL) ? 0 : 1
+#ifdef _MSC_VER
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_get_offline_info=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_get_info=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_open=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_close=null_fn")
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_set_interrupt_handler=null_fn")
+#pragma comment(                                                               \
+    linker,                                                                    \
+    "/alternatename:__imp_aocl_mmd_set_device_interrupt_handler=null_fn")
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_set_status_handler=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_yield=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_read=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_write=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_copy=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_reprogram=null_fn")
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_shared_mem_alloc=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_shared_mem_free=null_fn")
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_hostchannel_create=null_fn")
+#pragma comment(linker,                                                        \
+                "/alternatename:__imp_aocl_mmd_hostchannel_destroy=null_fn")
+#pragma comment(                                                               \
+    linker, "/alternatename:__imp_aocl_mmd_hostchannel_get_buffer=null_fn")
+#pragma comment(                                                               \
+    linker, "/alternatename:__imp_aocl_mmd_hostchannel_ack_buffer=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_program=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_host_alloc=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_free=null_fn")
+#pragma comment(linker, "/alternatename:__imp_aocl_mmd_shared_alloc=null_fn")
+#endif
+
+#define ADD_STATIC_FN_TO_HAL(STRUCT, X, REQUIRED)                              \
+  if (!IS_VALID_FUNCTION(X)) {                                                 \
+    if (REQUIRED) {                                                            \
+      ACL_HAL_DEBUG_MSG_VERBOSE(                                               \
+          1, "Function X is not defined statically by board library\n");       \
+      return NULL;                                                             \
+    } else {                                                                   \
+      STRUCT.X = NULL;                                                         \
+    }                                                                          \
+  }                                                                            \
+  STRUCT.X = X;
+
+#define ADD_DYNAMIC_FN_TO_HAL(STRUCT, LIBRARY, X, REQUIRED, TYPE)              \
+  STRUCT->X = (TYPE)my_dlsym(LIBRARY, #X, &error_msg);                         \
+  if (!STRUCT->X && REQUIRED) {                                                \
+    printf("Error: Symbol %s not found in board library", #X);                 \
+    if (error_msg && error_msg[0] != '\0') {                                   \
+      printf("(message: %s)", error_msg);                                      \
+    }                                                                          \
+    printf("\n");                                                              \
+    return CL_FALSE;                                                           \
+  }
+
 static void *my_dlopen_flags(const char *library_name, int flag,
                              char **error_msg) {
   void *library;
@@ -422,6 +422,7 @@ static void *my_dlopen(const char *library_name, char **error_msg) {
   return my_dlopen_flags(library_name, RTLD_NOW, error_msg);
 #endif
 }
+
 void *my_dlopen_global(const char *library_name, char **error_msg) {
 #ifdef _WIN32
   return my_dlopen_flags(library_name, 0, error_msg);
@@ -566,7 +567,7 @@ static bool lib_already_loaded = false;
 // Check to see if the requested library matches any of the libraries that have
 // already been loaded.
 // Emits messages and sets the lib_already_loaded flag.
-static int lib_checker(struct dl_phdr_info *info, size_t size, void *data) {
+static int l_lib_checker(struct dl_phdr_info *info, size_t size, void *data) {
   const char *library_name = (char *)data;
 
   // Library name starts after last occurrance of '/', if any
@@ -607,7 +608,7 @@ cl_bool l_load_single_board_library(const char *library_name,
     // TODO: Add similar support for Windows?
     // Check to see if this lib or a similarly named lib is already opened.
     lib_already_loaded = false;
-    dl_iterate_phdr(lib_checker, (void *)library_name);
+    dl_iterate_phdr(l_lib_checker, (void *)library_name);
     if (lib_already_loaded)
       return CL_FALSE;
   }
@@ -927,7 +928,101 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
 }
 #endif
 
-void acl_hal_mmd_pll_override(unsigned int physical_device_id) {
+static acl_mmd_dispatch_t *l_get_msim_mmd_layer() {
+#ifdef _WIN32
+  const char *acl_root_dir = acl_getenv("INTELFPGAOCLSDKROOT");
+  info_assert(acl_root_dir,
+              "INTELFPGAOCLSDKROOT environment variable is missing!");
+  const std::string mmd_lib_name_str =
+      std::string(acl_root_dir) + "\\host\\windows64\\bin\\aoc_cosim_mmd.dll";
+
+  const char *mmd_lib_name = mmd_lib_name_str.c_str();
+  const char *sym_name = "msim_mmd_layer";
+#else
+  const char *mmd_lib_name = "libaoc_cosim_mmd.so";
+  const char *sym_name = "msim_mmd_layer";
+#endif
+
+  char *error_msg = nullptr;
+  auto *mmd_lib = my_dlopen(mmd_lib_name, &error_msg);
+  typedef acl_mmd_dispatch_t *(*fcn_type)();
+  if (!mmd_lib) {
+    std::cout << "Error: Could not load simulation MMD library "
+              << mmd_lib_name;
+    if (error_msg && error_msg[0] != '\0') {
+      std::cout << " (error_msg: " << error_msg << ")";
+    }
+    std::cout << "\n";
+    return nullptr;
+  }
+  auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
+  mmd_libs.push_back(std::make_unique<my_dl_wrapper>(mmd_lib));
+  if (!sym) {
+    std::cout << "Error: Symbol " << sym_name
+              << " not found in simulation MMD library ";
+    if (error_msg && error_msg[0] != '\0') {
+      std::cout << "(message: " << error_msg << ")";
+    }
+    std::cout << "\n";
+    return nullptr;
+  }
+
+  // Now call the function. Ignore the Windows cast to fcn pointer
+  // warning/error.
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4055)
+#endif
+  return ((fcn_type)sym)();
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+}
+
+// Simulator MMD helpers
+static bool l_is_simulator_dispatch(acl_mmd_dispatch_t *mmd_dispatch) {
+  return mmd_dispatch->aocl_mmd_simulation_device_info != NULL;
+}
+
+static void l_update_simulator(int handle, unsigned int physical_device_id,
+                               const acl_device_def_autodiscovery_t &dev) {
+  std::vector<aocl_mmd_memory_info_t> mem_info(dev.num_global_mem_systems);
+  for (unsigned i = 0; i < mem_info.size(); ++i) {
+    mem_info[i].start =
+        reinterpret_cast<uintptr_t>(dev.global_mem_defs[i].range.begin);
+    mem_info[i].size =
+        reinterpret_cast<uintptr_t>(dev.global_mem_defs[i].range.next);
+  }
+
+  device_info[physical_device_id].mmd_dispatch->aocl_mmd_simulation_device_info(
+      handle, static_cast<int>(mem_info.size()), mem_info.data());
+}
+
+// Other helpers
+/**
+ *  Converts MMD allocation capabilities to runtime allocation capabilities
+ *  @param mmd_capabilities the capabilities as defined by the MMD
+ *  @return the capabilities as defined by the runtime
+ */
+unsigned l_convert_mmd_capabilities(unsigned mmd_capabilities) {
+  unsigned capability = 0;
+
+  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_SUPPORTED) {
+    capability |= ACL_MEM_CAPABILITY_SUPPORTED;
+  }
+  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_ATOMIC) {
+    capability |= ACL_MEM_CAPABILITY_ATOMIC;
+  }
+  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_CONCURRENT) {
+    capability |= ACL_MEM_CAPABILITY_CONCURRENT;
+  }
+  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_P2P) {
+    capability |= ACL_MEM_CAPABILITY_P2P;
+  }
+  return capability;
+}
+
+void l_override_pll(unsigned int physical_device_id) {
   char *env_pllsettings_str = getenv("ACL_PLL_SETTINGS");
   acl_assert_locked();
 
@@ -937,51 +1032,6 @@ void acl_hal_mmd_pll_override(unsigned int physical_device_id) {
     assert(return_val == 0);
   }
 }
-
-int acl_hal_mmd_pll_reconfigure(unsigned int physical_device_id,
-                                const char *pll_settings_str) {
-  pll_setting_t pll_setting;
-  acl_pll *current_pll = &pll[physical_device_id];
-
-  // parse manually. sscanf doesn't link.
-  int filled = 0;
-  char *space_loc = (char *)pll_settings_str;
-  unsigned int *dest = (unsigned int *)&pll_setting;
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL: Parsing ACL_PLL_SETTINGS string: %s\n",
-                            space_loc);
-  *dest = (unsigned)atoi(space_loc);
-  filled++;
-  dest++;
-  while ((space_loc = strchr(space_loc + 1, ' ')) != NULL) {
-    *dest = (unsigned)atoi(space_loc + 1);
-    filled++;
-    dest++;
-  }
-
-  if (filled == 9) {
-    return acl_pll_reconfigure(current_pll, pll_setting);
-  } else {
-    printf("HAL Warning: Failed to parse pll settings from ACL_PLL_SETTINGS "
-           "environment variable, ignoring pll override\n");
-    return -1;
-  }
-}
-
-void acl_hal_mmd_get_device_status(cl_uint num_devices,
-                                   const cl_device_id *devices) {
-  unsigned physical_device_id;
-  for (unsigned idevice = 0; idevice < num_devices; idevice++) {
-    assert(devices[idevice]->opened_count > 0);
-
-    physical_device_id = devices[idevice]->def.physical_device_id;
-    acl_kernel_if_check_kernel_status(&kern[physical_device_id]);
-  }
-}
-
-int acl_hal_mmd_get_debug_verbosity() { return debug_verbosity; }
-
-// ********************* HAL functions ********************
 
 // Attempt to add a single device
 static int l_try_device(unsigned int physical_device_id, const char *name,
@@ -1060,7 +1110,7 @@ static int l_try_device(unsigned int physical_device_id, const char *name,
                 "Failed to read PLL config");
 
     // If environment override set use it, and disable m_freq_per_kernel
-    acl_hal_mmd_pll_override(physical_device_id);
+    l_override_pll(physical_device_id);
 
     // Sanity check that PLL is locked
     assert(acl_pll_is_locked(&pll[physical_device_id]));
@@ -1138,11 +1188,11 @@ static int l_try_device(unsigned int physical_device_id, const char *name,
     }
 
     sys->device[physical_device_id].host_capabilities =
-        acl_convert_mmd_capabilities(host_capabilities);
+        l_convert_mmd_capabilities(host_capabilities);
     sys->device[physical_device_id].shared_capabilities =
-        acl_convert_mmd_capabilities(shared_capabilities);
+        l_convert_mmd_capabilities(shared_capabilities);
     sys->device[physical_device_id].device_capabilities =
-        acl_convert_mmd_capabilities(device_capabilities);
+        l_convert_mmd_capabilities(device_capabilities);
   }
 
   {
@@ -1176,56 +1226,68 @@ void l_close_device(unsigned int physical_device_id,
   return;
 }
 
-static acl_mmd_dispatch_t *get_msim_mmd_layer() {
-#ifdef _WIN32
-  const char *acl_root_dir = acl_getenv("INTELFPGAOCLSDKROOT");
-  info_assert(acl_root_dir,
-              "INTELFPGAOCLSDKROOT environment variable is missing!");
-  const std::string mmd_lib_name_str =
-      std::string(acl_root_dir) + "\\host\\windows64\\bin\\aoc_cosim_mmd.dll";
+static void l_dev_to_dev_copy_handler(int handle, void *user_data,
+                                      aocl_mmd_op_t op, int status) {
+  acl_sig_started();
+  // NOTE: all exit points of this function must first call acl_sig_finished()
 
-  const char *mmd_lib_name = mmd_lib_name_str.c_str();
-  const char *sym_name = "msim_mmd_layer";
-#else
-  const char *mmd_lib_name = "libaoc_cosim_mmd.so";
-  const char *sym_name = "msim_mmd_layer";
-#endif
+  // Removing Windows warning
+  user_data = user_data;
+  handle = handle;
+  status = status;
+  if (op == (aocl_mmd_op_t)&src_dev_done) {
+    src_dev_done = 1;
+  } else if (op == (aocl_mmd_op_t)&dst_dev_done) {
+    dst_dev_done = 1;
+  } else
+    assert(0 && "dev_to_dev_copy got unexpected event");
 
-  char *error_msg = nullptr;
-  auto *mmd_lib = my_dlopen(mmd_lib_name, &error_msg);
-  typedef acl_mmd_dispatch_t *(*fcn_type)();
-  if (!mmd_lib) {
-    std::cout << "Error: Could not load simulation MMD library "
-              << mmd_lib_name;
-    if (error_msg && error_msg[0] != '\0') {
-      std::cout << " (error_msg: " << error_msg << ")";
-    }
-    std::cout << "\n";
-    return nullptr;
-  }
-  auto *sym = my_dlsym(mmd_lib, sym_name, &error_msg);
-  mmd_libs.push_back(std::make_unique<my_dl_wrapper>(mmd_lib));
-  if (!sym) {
-    std::cout << "Error: Symbol " << sym_name
-              << " not found in simulation MMD library ";
-    if (error_msg && error_msg[0] != '\0') {
-      std::cout << "(message: " << error_msg << ")";
-    }
-    std::cout << "\n";
-    return nullptr;
-  }
-
-  // Now call the function. Ignore the Windows cast to fcn pointer
-  // warning/error.
-#ifdef _MSC_VER
-#pragma warning(push)
-#pragma warning(disable : 4055)
-#endif
-  return ((fcn_type)sym)();
-#ifdef _MSC_VER
-#pragma warning(pop)
-#endif
+  acl_sig_finished();
 }
+
+// ******************** HAL MMD functions ********************
+int acl_hal_mmd_pll_reconfigure(unsigned int physical_device_id,
+                                const char *pll_settings_str) {
+  pll_setting_t pll_setting;
+  acl_pll *current_pll = &pll[physical_device_id];
+
+  // parse manually. sscanf doesn't link.
+  int filled = 0;
+  char *space_loc = (char *)pll_settings_str;
+  unsigned int *dest = (unsigned int *)&pll_setting;
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL: Parsing ACL_PLL_SETTINGS string: %s\n",
+                            space_loc);
+  *dest = (unsigned)atoi(space_loc);
+  filled++;
+  dest++;
+  while ((space_loc = strchr(space_loc + 1, ' ')) != NULL) {
+    *dest = (unsigned)atoi(space_loc + 1);
+    filled++;
+    dest++;
+  }
+
+  if (filled == 9) {
+    return acl_pll_reconfigure(current_pll, pll_setting);
+  } else {
+    printf("HAL Warning: Failed to parse pll settings from ACL_PLL_SETTINGS "
+           "environment variable, ignoring pll override\n");
+    return -1;
+  }
+}
+
+void acl_hal_mmd_get_device_status(cl_uint num_devices,
+                                   const cl_device_id *devices) {
+  unsigned physical_device_id;
+  for (unsigned idevice = 0; idevice < num_devices; idevice++) {
+    assert(devices[idevice]->opened_count > 0);
+
+    physical_device_id = devices[idevice]->def.physical_device_id;
+    acl_kernel_if_check_kernel_status(&kern[physical_device_id]);
+  }
+}
+
+int acl_hal_mmd_get_debug_verbosity() { return debug_verbosity; }
 
 ACL_HAL_EXPORT const acl_hal_t *
 acl_mmd_get_system_definition(acl_system_def_t *sys,
@@ -1289,7 +1351,7 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
   if (use_offline_only == ACL_CONTEXT_MPSIM) {
 
     // Substitute the simulator MMD layer.
-    auto *result = get_msim_mmd_layer();
+    auto *result = l_get_msim_mmd_layer();
     if (!result)
       return nullptr;
     else
@@ -1784,28 +1846,6 @@ void acl_hal_mmd_copy_globalmem_to_hostmem(cl_event event, const void *src,
   assert(s == 0 && "mmd read/write failed");
 }
 
-static int src_dev_done;
-static int dst_dev_done;
-
-static void l_dev_to_dev_copy_handler(int handle, void *user_data,
-                                      aocl_mmd_op_t op, int status) {
-  acl_sig_started();
-  // NOTE: all exit points of this function must first call acl_sig_finished()
-
-  // Removing Windows warning
-  user_data = user_data;
-  handle = handle;
-  status = status;
-  if (op == (aocl_mmd_op_t)&src_dev_done) {
-    src_dev_done = 1;
-  } else if (op == (aocl_mmd_op_t)&dst_dev_done) {
-    dst_dev_done = 1;
-  } else
-    assert(0 && "dev_to_dev_copy got unexpected event");
-
-  acl_sig_finished();
-}
-
 // Device-global to device-global
 void acl_hal_mmd_copy_globalmem_to_globalmem(cl_event event, const void *src,
                                              void *dest, size_t size) {
@@ -1939,20 +1979,6 @@ void acl_hal_mmd_unstall_kernel(unsigned int physical_device_id,
   acl_kernel_if_unstall_kernel(&kern[physical_device_id], activation_id);
 }
 
-static void update_simulator(int handle, unsigned int physical_device_id,
-                             const acl_device_def_autodiscovery_t &dev) {
-  std::vector<aocl_mmd_memory_info_t> mem_info(dev.num_global_mem_systems);
-  for (unsigned i = 0; i < mem_info.size(); ++i) {
-    mem_info[i].start =
-        reinterpret_cast<uintptr_t>(dev.global_mem_defs[i].range.begin);
-    mem_info[i].size =
-        reinterpret_cast<uintptr_t>(dev.global_mem_defs[i].range.next);
-  }
-
-  device_info[physical_device_id].mmd_dispatch->aocl_mmd_simulation_device_info(
-      handle, static_cast<int>(mem_info.size()), mem_info.data());
-}
-
 // Program the FPGA device with the given binary.
 // the status returned:
 // 0 : program succeeds
@@ -2051,8 +2077,8 @@ int acl_hal_mmd_program_device(unsigned int physical_device_id,
   // cases (e.g. features/printf/test), where there are multiple kernels and
   // resources are released between kernel runs.  For the simulator, only print
   // this message once. This is a horrible kludge.
-  is_simulator = device_info[physical_device_id]
-                     .mmd_dispatch->aocl_mmd_simulation_device_info != NULL;
+  is_simulator =
+      l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch);
   msg_printed = (cl_bool)CL_FALSE;
   if (!(is_simulator && msg_printed)) {
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "Reprogramming device [%d] with handle %d\n",
@@ -2146,8 +2172,8 @@ int acl_hal_mmd_program_device(unsigned int physical_device_id,
 
   // Tell the simulator (if present) about global memory sizes.
   if (is_simulator) {
-    update_simulator(device_info[physical_device_id].handle, physical_device_id,
-                     devdef->autodiscovery_def);
+    l_update_simulator(device_info[physical_device_id].handle,
+                       physical_device_id, devdef->autodiscovery_def);
   }
 
   device_info[physical_device_id].mmd_dispatch->aocl_mmd_set_status_handler(
@@ -2164,7 +2190,7 @@ int acl_hal_mmd_program_device(unsigned int physical_device_id,
       info_assert(acl_pll_init(&pll[physical_device_id],
                                bsp_io_pll[physical_device_id], "") == 0,
                   "Failed to read PLL config");
-      acl_hal_mmd_pll_override(physical_device_id);
+      l_override_pll(physical_device_id);
     }
   }
   acl_kernel_if_reset(&kern[physical_device_id]);
@@ -2345,6 +2371,27 @@ cl_bool acl_hal_mmd_query_temperature(unsigned int physical_device_id,
       sizeof(float), &f, NULL);
   *temp = (cl_int)f;
   return (cl_bool)1;
+}
+
+static void *
+acl_hal_get_board_extension_function_address(const char *func_name,
+                                             unsigned int physical_device_id) {
+  char *error_msg;
+  acl_assert_locked();
+
+  auto *fn_ptr =
+      my_dlsym(device_info[physical_device_id].mmd_dispatch->mmd_library,
+               func_name, &error_msg);
+
+  if (!fn_ptr) {
+    printf("Error: Unable to find function name %s in board library %s (%p)\n",
+           func_name,
+           device_info[physical_device_id].mmd_dispatch->library_name.c_str(),
+           device_info[physical_device_id].mmd_dispatch->mmd_library);
+    return nullptr;
+  }
+
+  return fn_ptr;
 }
 
 int acl_hal_mmd_get_device_official_name(unsigned int physical_device_id,
@@ -2538,7 +2585,96 @@ int acl_hal_mmd_set_profile_stop_count(unsigned int physical_device_id,
                                               accel_id, value);
 }
 
-// ********************* Wrapped functions ********************
+// Convert kernel and pll accessors to aocl_mmd
+size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
+                            void *ptr, size_t size) {
+  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_read(
+      device_info[physical_device_id].handle, NULL, size, (void *)ptr,
+      kernel_interface, (size_t)offset);
+}
+
+size_t acl_hal_mmd_write_csr(unsigned int physical_device_id, uintptr_t offset,
+                             const void *ptr, size_t size) {
+  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_write(
+      device_info[physical_device_id].handle, NULL, size, (const void *)ptr,
+      kernel_interface, (size_t)offset);
+}
+
+void acl_hal_mmd_reset_kernels(cl_device_id device) {
+  unsigned int physical_device_id = device->def.physical_device_id;
+  acl_kernel_if_reset(&kern[physical_device_id]);
+  for (unsigned int k = 0; k < kern[physical_device_id].num_accel; ++k) {
+    for (unsigned int i = 0;
+         i < kern[physical_device_id].accel_invoc_queue_depth[k] + 1; ++i) {
+      int activation_id = kern[physical_device_id].accel_job_ids[k][i];
+      if (kern[physical_device_id].accel_job_ids[k][i] >= 0) {
+        kern[physical_device_id].accel_job_ids[k][i] = -1;
+        acl_kernel_update_fn(activation_id,
+                             -1); // Signal that it finished with error, since
+                                  // we forced it to finish
+      }
+    }
+  }
+}
+
+static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
+                                 size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5,
+                            "HAL Reading from Kernel: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_read(
+             io->device_info->handle, NULL, size, (void *)dest,
+             kernel_interface, (size_t)src) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_kernel_if_write(acl_bsp_io *io, dev_addr_t dest,
+                                  const char *src, size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to Kernel: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_write(
+             io->device_info->handle, NULL, size, (const void *)src,
+             kernel_interface, (size_t)dest) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_pll_read(acl_bsp_io *io, dev_addr_t src, char *dest,
+                           size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Reading from PLL: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_read(
+             io->device_info->handle, NULL, size, (void *)dest, pll_interface,
+             (size_t)src) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_pll_write(acl_bsp_io *io, dev_addr_t dest, const char *src,
+                            size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to PLL: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_write(
+             io->device_info->handle, NULL, size, (const void *)src,
+             pll_interface, (size_t)dest) == 0
+             ? size
+             : 0;
+}
+
+static time_ns acl_bsp_get_timestamp() {
+  return (time_ns)acl_hal_mmd_get_timestamp();
+}
+
+// ********************* USM allocations *********************
 // Shared memory allocator
 void *acl_hal_mmd_legacy_shared_alloc(cl_context context, size_t size,
                                       unsigned long long *device_ptr_out) {
@@ -2650,102 +2786,6 @@ void acl_hal_mmd_legacy_shared_free(cl_context context, void *host_ptr,
   }
 }
 
-// Convert kernel and pll accessors to aocl_mmd
-
-static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
-                                 size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5,
-                            "HAL Reading from Kernel: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_read(
-             io->device_info->handle, NULL, size, (void *)dest,
-             kernel_interface, (size_t)src) == 0
-             ? size
-             : 0;
-}
-
-static size_t acl_kernel_if_write(acl_bsp_io *io, dev_addr_t dest,
-                                  const char *src, size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to Kernel: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_write(
-             io->device_info->handle, NULL, size, (const void *)src,
-             kernel_interface, (size_t)dest) == 0
-             ? size
-             : 0;
-}
-
-void acl_hal_mmd_reset_kernels(cl_device_id device) {
-  unsigned int physical_device_id = device->def.physical_device_id;
-  acl_kernel_if_reset(&kern[physical_device_id]);
-  for (unsigned int k = 0; k < kern[physical_device_id].num_accel; ++k) {
-    for (unsigned int i = 0;
-         i < kern[physical_device_id].accel_invoc_queue_depth[k] + 1; ++i) {
-      int activation_id = kern[physical_device_id].accel_job_ids[k][i];
-      if (kern[physical_device_id].accel_job_ids[k][i] >= 0) {
-        kern[physical_device_id].accel_job_ids[k][i] = -1;
-        acl_kernel_update_fn(activation_id,
-                             -1); // Signal that it finished with error, since
-                                  // we forced it to finish
-      }
-    }
-  }
-}
-
-static size_t acl_pll_read(acl_bsp_io *io, dev_addr_t src, char *dest,
-                           size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Reading from PLL: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_read(
-             io->device_info->handle, NULL, size, (void *)dest, pll_interface,
-             (size_t)src) == 0
-             ? size
-             : 0;
-}
-
-static size_t acl_pll_write(acl_bsp_io *io, dev_addr_t dest, const char *src,
-                            size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to PLL: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_write(
-             io->device_info->handle, NULL, size, (const void *)src,
-             pll_interface, (size_t)dest) == 0
-             ? size
-             : 0;
-}
-static time_ns acl_bsp_get_timestamp() {
-  return (time_ns)acl_hal_mmd_get_timestamp();
-}
-
-static void *
-acl_hal_get_board_extension_function_address(const char *func_name,
-                                             unsigned int physical_device_id) {
-  char *error_msg;
-  acl_assert_locked();
-
-  auto *fn_ptr =
-      my_dlsym(device_info[physical_device_id].mmd_dispatch->mmd_library,
-               func_name, &error_msg);
-
-  if (!fn_ptr) {
-    printf("Error: Unable to find function name %s in board library %s (%p)\n",
-           func_name,
-           device_info[physical_device_id].mmd_dispatch->library_name.c_str(),
-           device_info[physical_device_id].mmd_dispatch->mmd_library);
-    return nullptr;
-  }
-
-  return fn_ptr;
-}
-
 void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
                                size_t alignment, mem_properties_t *properties,
                                int *error) {
@@ -2852,29 +2892,7 @@ int acl_hal_mmd_free(cl_context context, void *mem) {
   }
 }
 
-/**
- *  Converts MMD allocation capabilities to runtime allocation capabilities
- *  @param mmd_capabilities the capabilities as defined by the MMD
- *  @return the capabilities as defined by the runtime
- */
-unsigned acl_convert_mmd_capabilities(unsigned mmd_capabilities) {
-  unsigned capability = 0;
-
-  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_SUPPORTED) {
-    capability |= ACL_MEM_CAPABILITY_SUPPORTED;
-  }
-  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_ATOMIC) {
-    capability |= ACL_MEM_CAPABILITY_ATOMIC;
-  }
-  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_CONCURRENT) {
-    capability |= ACL_MEM_CAPABILITY_CONCURRENT;
-  }
-  if (mmd_capabilities & AOCL_MMD_MEM_CAPABILITY_P2P) {
-    capability |= ACL_MEM_CAPABILITY_P2P;
-  }
-  return capability;
-}
-
+// ****************** Sim-only MMD functions *******************
 void acl_hal_mmd_simulation_streaming_kernel_start(
     unsigned int physical_device_id, const std::string &kernel_name,
     const int accel_id) {
@@ -2897,20 +2915,6 @@ void acl_hal_mmd_simulation_set_kernel_cra_address_map(
   device_info[physical_device_id]
       .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
           device_info[physical_device_id].handle, kernel_csr_address_map);
-}
-
-size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
-                            void *ptr, size_t size) {
-  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_read(
-      device_info[physical_device_id].handle, NULL, size, (void *)ptr,
-      kernel_interface, (size_t)offset);
-}
-
-size_t acl_hal_mmd_write_csr(unsigned int physical_device_id, uintptr_t offset,
-                             const void *ptr, size_t size) {
-  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_write(
-      device_info[physical_device_id].handle, NULL, size, (const void *)ptr,
-      kernel_interface, (size_t)offset);
 }
 
 int acl_hal_mmd_simulation_device_global_interface_read(
