@@ -2061,7 +2061,7 @@ static cl_int l_enqueue_kernel_with_type(
           // clSetKernelArg was called to store the info needed for the binding
           if (kernel == pipe->host_pipe_info->m_binded_kernel) {
             // Only bind and process pipe transactions if the program is loaded
-            // onto the device Otherwire, we do them after device programming
+            // onto the device. Otherwise, we do them after device programming
             if (device->loaded_bin &&
                 device->loaded_bin->get_dev_prog()->program ==
                     kernel->program) {
