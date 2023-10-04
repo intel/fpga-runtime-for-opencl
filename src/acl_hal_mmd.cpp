@@ -2912,9 +2912,11 @@ void acl_hal_mmd_simulation_streaming_kernel_done(
 void acl_hal_mmd_simulation_set_kernel_cra_address_map(
     unsigned int physical_device_id,
     const std::vector<uintptr_t> &kernel_csr_address_map) {
-  device_info[physical_device_id]
-      .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
-          device_info[physical_device_id].handle, kernel_csr_address_map);
+  if (l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch)) {
+    device_info[physical_device_id]
+        .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
+            device_info[physical_device_id].handle, kernel_csr_address_map);
+  }
 }
 
 int acl_hal_mmd_simulation_device_global_interface_read(

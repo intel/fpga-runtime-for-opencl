@@ -827,10 +827,8 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
           devdef.accel[ii].iface.name.c_str(), kern->accel_csr[ii].address,
           kern->accel_csr[ii].bytes);
     }
-    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
-      acl_get_hal()->simulation_set_kernel_cra_address_map(
-          kern->physical_device_id, kernel_csr_address_map);
-    }
+    acl_get_hal()->simulation_set_kernel_cra_address_map(
+        kern->physical_device_id, kernel_csr_address_map);
 
     // The Kernel performance monitor registers
     for (unsigned ii = 0; ii < devdef.accel.size(); ++ii) {
