@@ -52,6 +52,7 @@ static cl_device_id l_find_device_by_name(const std::string &name);
 static cl_int l_update_program_library_root(cl_context context,
                                             const char *new_root);
 static cl_int l_update_compile_command(cl_context context, const char *new_cmd);
+static std::set<cl_context>::iterator l_release_context(cl_context context);
 
 ACL_DEFINE_CL_OBJECT_ALLOC_FUNCTIONS(cl_context);
 
@@ -243,6 +244,8 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextFromTypeIntelFPGA(
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
   }
+  // the context is created successfully, add it to the set
+  acl_platform.contexts_set.insert(context);
   return context;
 }
 
@@ -275,6 +278,63 @@ CL_API_ENTRY cl_int CL_API_CALL clRetainContext(cl_context context) {
   return clRetainContextIntelFPGA(context);
 }
 
+static std::set<cl_context>::iterator l_release_context(cl_context context) {
+  // Make sure we clean up the elf files.  This should already be done by
+  // clReleaseProgram.
+  for (unsigned i = 0; i < context->num_devices; i++) {
+    if (context->device[i]->loaded_bin != nullptr)
+      context->device[i]->loaded_bin->unload_content();
+    if (context->device[i]->last_bin != nullptr)
+      context->device[i]->last_bin->unload_content();
+  }
+
+  // We have to close all devices associated with this context so they can be
+  // opened by other processes
+  acl_get_hal()->close_devices(context->num_devices, context->device);
+
+  // remove the context from the context set in the platform
+  auto cur_it = acl_platform.contexts_set.find(context);
+  assert(cur_it != acl_platform.contexts_set.end() &&
+         "Context to be erased is not in the contexts set!");
+  std::set<cl_context>::iterator it = acl_platform.contexts_set.erase(cur_it);
+
+  context->notify_fn = 0;
+  context->notify_user_data = 0;
+
+  if (context->auto_queue) {
+    // Really subtle.
+    // The command queue release needs to see the context as being valid.
+    // That's why we had to defer the acl_release call.
+    clReleaseCommandQueue(context->auto_queue);
+    context->auto_queue = 0; // for clarity
+  }
+
+  if (context->user_event_queue) {
+    clReleaseCommandQueue(context->user_event_queue);
+    context->user_event_queue = 0; // for clarity
+  }
+
+  if (context->command_queue) {
+    acl_free(context->command_queue);
+  }
+
+  clReleaseMemObject(context->unwrapped_host_mem);
+
+  l_forcibly_release_allocations(context);
+
+  acl_untrack_object(context);
+
+  // all that should be left now is the single implicit retain from when
+  // the cl_context was created
+  assert(acl_ref_count(context) == 1);
+  acl_free_cl_context(context);
+
+  // Close the profiler output file after the last context release
+  acl_close_profiler_file();
+
+  return it;
+}
+
 ACL_EXPORT
 CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
   std::scoped_lock lock{acl_mutex_wrapper};
@@ -290,6 +350,11 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
 
   if (acl_ref_count(context) > context->num_automatic_references) {
     acl_release(context);
+  } else if (context->is_being_updated) {
+    assert(context->is_being_freed == 0 &&
+           "Context is being released more than retained count!");
+    context->is_being_freed = 1; // Defer freeing context;
+    return CL_SUCCESS;
   } else {
     // num_automatic_references is the ref count the context had when it was
     // given to the user. So, if we have a ref count equal to that, the user
@@ -307,55 +372,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseContextIntelFPGA(cl_context context) {
     }
     context->is_being_freed = 1;
 
-    // Make sure we clean up the elf files.  This should already be done by
-    // clReleaseProgram.
-    for (unsigned i = 0; i < context->num_devices; i++) {
-      if (context->device[i]->loaded_bin != nullptr)
-        context->device[i]->loaded_bin->unload_content();
-      if (context->device[i]->last_bin != nullptr)
-        context->device[i]->last_bin->unload_content();
-    }
-
-    // We have to close all devices associated with this context so they can be
-    // opened by other processes
-    acl_get_hal()->close_devices(context->num_devices, context->device);
-
-    // remove the context from the context set in the platform
-    acl_platform.contexts_set.erase(context);
-
-    context->notify_fn = 0;
-    context->notify_user_data = 0;
-
-    if (context->auto_queue) {
-      // Really subtle.
-      // The command queue release needs to see the context as being valid.
-      // That's why we had to defer the acl_release call.
-      clReleaseCommandQueue(context->auto_queue);
-      context->auto_queue = 0; // for clarity
-    }
-
-    if (context->user_event_queue) {
-      clReleaseCommandQueue(context->user_event_queue);
-      context->user_event_queue = 0; // for clarity
-    }
-
-    if (context->command_queue) {
-      acl_free(context->command_queue);
-    }
-
-    clReleaseMemObject(context->unwrapped_host_mem);
-
-    l_forcibly_release_allocations(context);
-
-    acl_untrack_object(context);
-
-    // all that should be left now is the single implicit retain from when
-    // the cl_context was created
-    assert(acl_ref_count(context) == 1);
-    acl_free_cl_context(context);
-
-    // Close the profiler output file after the last context release
-    acl_close_profiler_file();
+    l_release_context(context);
   }
 
   return CL_SUCCESS;
@@ -561,6 +578,7 @@ static cl_int l_load_properties(cl_context context,
       CL_CONTEXT_COMPILER_MODE_OFFLINE_INTELFPGA);
   context->split_kernel = 0;
   context->is_being_freed = 0;
+  context->is_being_updated = 0;
   context->eagerly_program_device_with_first_binary = 1;
 
   // This one is only overridden with an environment variable.
@@ -1203,9 +1221,19 @@ void acl_idle_update(cl_context context) {
   // firstly update the current context
   acl_update_context(context);
   // update the other contexts from the platform
-  for (const cl_context _context : acl_platform.contexts_set) {
-    if (context != _context)
+  for (auto it = acl_platform.contexts_set.begin();
+       it != acl_platform.contexts_set.end();) {
+    auto _context = *it;
+    if (context != _context) {
+      _context->is_being_updated = 1;
       acl_update_context(_context);
+      _context->is_being_updated = 0;
+      if (_context->is_being_freed) {
+        it = l_release_context(_context);
+        continue;
+      }
+    }
+    ++it;
   }
   // if there are any new updates on the current contect done by updating the
   // other it will be handled in clflush/clfinish or acl_wait_for_event where

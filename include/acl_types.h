@@ -1027,6 +1027,10 @@ typedef struct _cl_context {
   // Fix re-entrancy of clReleaseContext.
   int is_being_freed;
 
+  // Is this context in the middle of an idle update?
+  // Fix erase while traverse of contexts_set
+  int is_being_updated;
+
   ////////////////////////////
   // Behaviour switches dependent on compiler mode
   //
