@@ -171,9 +171,9 @@ bool MemoryLeakDetectorList::hasLeaks(MemLeakPeriod period)
 
 /////////////////////////////////////////////////////////////
 
-int MemoryLeakDetectorTable::hash(char* memory)
+unsigned long MemoryLeakDetectorTable::hash(char* memory)
 {
-	return ((size_t) memory) % hash_prime;
+	return (unsigned long)((size_t)memory % hash_prime);
 }
 
 void MemoryLeakDetectorTable::clearAllAccounting(MemLeakPeriod period)
@@ -220,7 +220,7 @@ MemoryLeakDetectorNode* MemoryLeakDetectorTable::getFirstLeak(
 MemoryLeakDetectorNode* MemoryLeakDetectorTable::getNextLeak(
 		MemoryLeakDetectorNode* leak, MemLeakPeriod period)
 {
-	int i = hash(leak->memory);
+	unsigned long i = hash(leak->memory);
 	MemoryLeakDetectorNode* node = table[i].getNextLeak(leak, period);
 	if (node) return node;
 
@@ -295,7 +295,7 @@ void MemoryLeakDetector::reportFailure(const char* message,
 	reporter->fail(output_buffer.toString());
 }
 
-int calculateIntAlignedSize(size_t size)
+size_t calculateIntAlignedSize(size_t size)
 {
 	return (sizeof(int) - (size % sizeof(int))) + size;
 }
