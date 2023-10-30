@@ -295,6 +295,12 @@ typedef struct host_op_struct {
   size_t m_size_sent;
 } host_op_t;
 
+struct sideband_signal_t {
+  unsigned port_identifier; // matches enum signal_type in acl.h
+  unsigned port_offset;     // in bit
+  unsigned side_band_size;  // in bit
+};
+
 typedef struct host_pipe_struct {
   // The handle to the device needed for mmd call
   unsigned int m_physical_device_id;
@@ -336,6 +342,12 @@ typedef struct host_pipe_struct {
   // Set a default value in case it's missing.
   int protocol = -1; // avalon_streaming = 0, avalon_streaming_uses_ready = 1
                      // avalon_mm = 2, avalon_mm_uses_ready = 3
+
+  // Number of sideband signals. Exclude data port.
+  unsigned num_side_band_signals = 0;
+
+  // Sideband signals vector
+  std::vector<sideband_signal_t> side_band_signals_vector;
 
 } host_pipe_t;
 
@@ -617,7 +629,7 @@ typedef struct {
       const char *logical_name; // Use char* instead string here due to a
                                 // compilation error from acl_command_info_t
                                 // constructor malloc related
-    } host_pipe_info;
+    } host_pipe_dynamic_info;
 
     struct {
       // Used for device global ops

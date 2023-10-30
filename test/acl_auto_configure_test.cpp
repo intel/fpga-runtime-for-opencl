@@ -493,15 +493,21 @@ TEST(auto_configure, many_ok_forward_compatibility) {
   // sections and subsections to check forward compatibility
 
   std::string str(VERSIONIDTOSTR(
-      ACL_AUTO_CONFIGURE_VERSIONID) " 51 "
+      ACL_AUTO_CONFIGURE_VERSIONID) " 52 "
                                     "sample40byterandomhash000000000000000000 "
                                     "a10gx 0 1 17 DDR 2 1 6 0 2147483648 100 "
                                     "100 100 100 0 - 0 200 200 200 200 0 0 0 "
-                                    "2 10 ms_dev_global1 0x800 1024 3 0 0 0 "
+                                    "2 10 " // Two device global below each has
+                                            // 10 fields
+                                    "ms_dev_global1 0x800 1024 3 0 0 0 300 300 "
                                     "300 "
-                                    "300 300 ms_dev_global2 0x1000 1024 1 1 1 "
-                                    "0 "
-                                    "300 300 300 0 0 400 400 47 "
+                                    "ms_dev_global2 0x1000 1024 1 1 1 0 300 "
+                                    "300 300 "
+                                    "0 " // cra_ring_root_exist
+                                    "0 " // num of hostpipe mappings
+                                    "0 " // num of hostpipe mapping field
+                                    "0 " // Number of groups of sideband signals
+                                    "400 47 " // future fields
                                     "40 external_sort_stage_0 0 128 1 0 0 1 0 "
                                     "1 0 1 10 0 0 4 1 0 0 0 500 500 500 0 0 "
                                     "0 0 1 1 1 3 1 1 1 3 1 0 0 800 800 800 "
@@ -1572,4 +1578,92 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[4].pipe_width == 4);
   CHECK(devdef.hostpipe_mappings[4].pipe_depth == 10);
   CHECK(devdef.hostpipe_mappings[4].protocol == 3);
+}
+
+TEST(auto_configure, sideband_mappings) {
+  const std::string config_str{
+      "23 102 " RANDOM_HASH
+      " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
+      "0 0 0 0 0 1 5 9 " // 5 Hostpipes, 9 in each mapping
+      "pipe_logical_name1 pipe_physical_name1 1 12345 0 1 4 10 0 "
+      "pipe_logical_name2 pipe_physical_name2 0 12323 1 0 8 20 1 "
+      "pipe_logical_name3 pipe_physical_name1 1 12313 0 1 4 10 2 "
+      "pipe_logical_name5 pipe_physical_name1 0 12316 1 0 8 20 3 "
+      "pipe_logical_name4 pipe_physical_name3 0 12342 0 1 4 10 3 "
+      "2 " // 2 Sideband groups
+      "pipe_logical_name1 4 3 0 0 320 1 320 8 2 328 8 3 352 32 "
+      "pipe_logical_name2 4 3 0 0 320 1 320 8 2 328 8 3 352 32 "
+      // Kernel section starts below
+      "3 90 "
+      "_ZTS3CRCILi0EE 512 256 1 0 0 1 0 1 0 9 6 0 0 8 1 0 0 6 2 1 8 1024 0 3 6 "
+      "0 0 8 1 0 0 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 "
+      "6 0 0 8 1 0 0 6 0 0 8 1 0 0 0 0 1 2 64 4096 1 1 1 3 1 1 1 3 1 0 64 "
+      "_ZTS11LZReductionILi0EE 0 256 1 0 0 0 0 1 0 5 6 0 0 8 1 0 0 6 2 1 8 "
+      "1024 0 3 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 0 0 8 1 0 0 0 0 2 2 64 131072 65 "
+      "32768 1 1 1 3 1 1 1 3 1 0 125 _ZTS13StaticHuffmanILi0EE 256 256 1 0 0 1 "
+      "0 1 0 10 6 0 0 8 1 0 0 6 0 0 4 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 6 0 "
+      "0 8 1 0 0 6 0 0 8 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 "
+      "0 0 8 1 0 0 0 0 15 2 64 116 65 116 66 1152 67 512 68 256 69 120 70 120 "
+      "71 1152 72 116 73 1152 74 512 75 256 76 120 77 120 78 1152 1 1 1 3 1 1 "
+      "1 3 1 0"};
+
+  acl_device_def_autodiscovery_t devdef;
+  {
+    bool result;
+    std::string err_str;
+    ACL_LOCKED(result =
+                   acl_load_device_def_from_str(config_str, devdef, err_str));
+    std::cerr << err_str;
+    CHECK(result);
+  }
+
+  CHECK_EQUAL(8, devdef.sideband_signal_mappings.size());
+
+  CHECK(devdef.sideband_signal_mappings[0].logical_name ==
+        "pipe_logical_name1");
+  CHECK(devdef.sideband_signal_mappings[0].port_identifier == 0);
+  CHECK(devdef.sideband_signal_mappings[0].port_offset == 0);
+  CHECK(devdef.sideband_signal_mappings[0].sideband_size == 320);
+
+  CHECK(devdef.sideband_signal_mappings[1].logical_name ==
+        "pipe_logical_name1");
+  CHECK(devdef.sideband_signal_mappings[1].port_identifier == 1);
+  CHECK(devdef.sideband_signal_mappings[1].port_offset == 320);
+  CHECK(devdef.sideband_signal_mappings[1].sideband_size == 8);
+
+  CHECK(devdef.sideband_signal_mappings[2].logical_name ==
+        "pipe_logical_name1");
+  CHECK(devdef.sideband_signal_mappings[2].port_identifier == 2);
+  CHECK(devdef.sideband_signal_mappings[2].port_offset == 328);
+  CHECK(devdef.sideband_signal_mappings[2].sideband_size == 8);
+
+  CHECK(devdef.sideband_signal_mappings[3].logical_name ==
+        "pipe_logical_name1");
+  CHECK(devdef.sideband_signal_mappings[3].port_identifier == 3);
+  CHECK(devdef.sideband_signal_mappings[3].port_offset == 352);
+  CHECK(devdef.sideband_signal_mappings[3].sideband_size == 32);
+
+  CHECK(devdef.sideband_signal_mappings[4].logical_name ==
+        "pipe_logical_name2");
+  CHECK(devdef.sideband_signal_mappings[4].port_identifier == 0);
+  CHECK(devdef.sideband_signal_mappings[4].port_offset == 0);
+  CHECK(devdef.sideband_signal_mappings[4].sideband_size == 320);
+
+  CHECK(devdef.sideband_signal_mappings[5].logical_name ==
+        "pipe_logical_name2");
+  CHECK(devdef.sideband_signal_mappings[5].port_identifier == 1);
+  CHECK(devdef.sideband_signal_mappings[5].port_offset == 320);
+  CHECK(devdef.sideband_signal_mappings[5].sideband_size == 8);
+
+  CHECK(devdef.sideband_signal_mappings[6].logical_name ==
+        "pipe_logical_name2");
+  CHECK(devdef.sideband_signal_mappings[6].port_identifier == 2);
+  CHECK(devdef.sideband_signal_mappings[6].port_offset == 328);
+  CHECK(devdef.sideband_signal_mappings[6].sideband_size == 8);
+
+  CHECK(devdef.sideband_signal_mappings[7].logical_name ==
+        "pipe_logical_name2");
+  CHECK(devdef.sideband_signal_mappings[7].port_identifier == 3);
+  CHECK(devdef.sideband_signal_mappings[7].port_offset == 352);
+  CHECK(devdef.sideband_signal_mappings[7].sideband_size == 32);
 }

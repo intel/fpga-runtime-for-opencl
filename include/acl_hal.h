@@ -265,6 +265,42 @@ typedef struct {
       unsigned int physical_device_id, const char *interface_name,
       const void *host_addr, size_t dev_addr, size_t size);
 
+  /// Simulation only mmd call as of 2024.1
+  /// Return the sideband signal buffer corresponding to the side band signal
+  /// port identifier
+  void *(*hostchannel_get_sideband_buffer)(unsigned int physical_device_id,
+                                           unsigned int port_name,
+                                           int channel_handle,
+                                           size_t *buffer_size, int *status);
+
+  /// Pull read_size of sideband data from the device into host_buffer, WITHOUT
+  /// acknowledge
+  size_t (*hostchannel_sideband_pull_no_ack)(unsigned int physical_device_id,
+                                             unsigned int port_name,
+                                             int channel_handle,
+                                             void *host_buffer,
+                                             size_t read_size, int *status);
+
+  /// Push write_size of sideband data to the device from host_buffer, WITHOUT
+  /// acknowledge
+  size_t (*hostchannel_sideband_push_no_ack)(unsigned int physical_device_id,
+                                             unsigned int port_name,
+                                             int channel_handle,
+                                             const void *host_buffer,
+                                             size_t write_size, int *status);
+
+  /// Pull read_size of data from the device into host_buffer, WITHOUT
+  /// acknowledge
+  size_t (*hostchannel_pull_no_ack)(unsigned int physical_device_id,
+                                    int channel_handle, void *host_buffer,
+                                    size_t read_size, int *status);
+
+  /// Push write_size of data to the device from host_buffer, WITHOUT
+  /// acknowledge
+  size_t (*hostchannel_push_no_ack)(unsigned int physical_device_id,
+                                    int channel_handle, const void *host_buffer,
+                                    size_t write_size, int *status);
+
 } acl_hal_t;
 
 /// Linked list of MMD library names to load.
