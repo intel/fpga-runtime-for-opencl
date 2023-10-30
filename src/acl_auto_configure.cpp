@@ -681,6 +681,82 @@ static bool read_hostpipe_mappings(
   return result;
 }
 
+/*
+New section added in 2024.1
+- Number of group of sideband signals -> each group map to each hostpipe
+  For each sideband signal group
+   - pipe logical name
+   - number of sideband signals (including data field)
+   - number of fields for each sideband signal
+   - port identifier, like 0 for data, 1,2,3 for different sideband signals
+   - port offset (in bits)
+   - sideband size (in bits)
+
+If a hostpipe has no sideband signal (e.g, a pipe only has data field), it won't
+have a sideband signal group. If none of the hostpipe has any sideband signals,
+the whole section will just be 0, which represents the number of sideband signal
+group is 0.
+
+*/
+
+static bool read_sideband_mappings(
+    const std::string &config_str, std::string::size_type &curr_pos,
+    std::vector<acl_sideband_signal_mapping> &sideband_signal_mappings,
+    std::vector<int> &counters, std::string &err_str) noexcept {
+
+  // Get how many hostpipes have sideband signals
+  unsigned int num_of_sideband_groups = 0;
+  bool result = read_uint_counters(config_str, curr_pos, num_of_sideband_groups,
+                                   counters);
+
+  // If none of the hostpipes have sideband signals, this section ends here.
+  if (num_of_sideband_groups == 0) {
+    return result;
+  }
+
+  // Reaching here means we need to parse sideband signals.
+
+  for (unsigned int i = 0; result && (i < num_of_sideband_groups); i++) {
+
+    std::string logical_name;
+    unsigned num_sideband_signals = 0;
+    result =
+        read_string_counters(config_str, curr_pos, logical_name, counters) &&
+        read_uint_counters(config_str, curr_pos, num_sideband_signals,
+                           counters);
+    assert(num_sideband_signals >=
+           2); // If it has an entry, it must have 1 data signal + at least 1
+               // sideband signals
+
+    unsigned num_fields_per_sideband = 0;
+    if (result) {
+      result = read_uint_counters(config_str, curr_pos, num_fields_per_sideband,
+                                  counters);
+    }
+
+    for (unsigned int j = 0; result && (j < num_sideband_signals); j++) {
+      counters.emplace_back(num_fields_per_sideband);
+      acl_sideband_signal_mapping mapping{};
+      mapping.logical_name = logical_name;
+      result = read_uint_counters(config_str, curr_pos, mapping.port_identifier,
+                                  counters) &&
+               read_uint_counters(config_str, curr_pos, mapping.port_offset,
+                                  counters) &&
+               read_uint_counters(config_str, curr_pos, mapping.sideband_size,
+                                  counters);
+      sideband_signal_mappings.emplace_back(mapping);
+
+      while (result && counters.back() > 0) {
+        std::string tmp;
+        result = read_string_counters(config_str, curr_pos, tmp, counters);
+      }
+      check_section_counters(counters);
+      counters.pop_back();
+    }
+  }
+  return result;
+}
+
 static bool read_kernel_args(const std::string &config_str,
                              const bool kernel_arg_info_available,
                              std::string::size_type &curr_pos,
@@ -1219,6 +1295,17 @@ bool acl_load_device_def_from_str(const std::string &config_str,
   if (result && counters.back() > 0) {
     result = read_hostpipe_mappings(
         config_str, curr_pos, devdef.hostpipe_mappings, counters, err_str);
+  }
+
+  // Starting from 2024.1, there is a new section that adds sideband signal
+  // information.
+
+  // Read program scoped hostpipes sideband signals mapping
+
+  if (result && counters.back() > 0) {
+    result = read_sideband_mappings(config_str, curr_pos,
+                                    devdef.sideband_signal_mappings, counters,
+                                    err_str);
   }
 
   // forward compatibility: bypassing remaining fields at the end of device

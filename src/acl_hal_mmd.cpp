@@ -128,6 +128,14 @@ size_t acl_hal_mmd_hostchannel_pull(unsigned int physical_device_id,
 size_t acl_hal_mmd_hostchannel_push(unsigned int physical_device_id,
                                     int channel_handle, const void *host_buffer,
                                     size_t write_size, int *status);
+size_t acl_hal_mmd_hostchannel_pull_no_ack(unsigned int physical_device_id,
+                                           int channel_handle,
+                                           void *host_buffer, size_t read_size,
+                                           int *status);
+size_t acl_hal_mmd_hostchannel_push_no_ack(unsigned int physical_device_id,
+                                           int channel_handle,
+                                           const void *host_buffer,
+                                           size_t write_size, int *status);
 void *acl_hal_mmd_hostchannel_get_buffer(unsigned int physical_device_id,
                                          int channel_handle,
                                          size_t *buffer_size, int *status);
@@ -177,6 +185,18 @@ int acl_hal_mmd_simulation_device_global_interface_read(
 int acl_hal_mmd_simulation_device_global_interface_write(
     unsigned int physical_device_id, const char *interface_name,
     const void *host_addr, size_t dev_addr, size_t size);
+
+void *acl_hal_mmd_hostchannel_get_sideband_buffer(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    size_t *buffer_size, int *status);
+
+size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    void *host_buffer, size_t read_size, int *status);
+
+size_t acl_hal_mmd_hostchannel_sideband_push_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    const void *host_buffer, size_t write_size, int *status);
 
 static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
                                  size_t size);
@@ -376,6 +396,11 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_write_csr,                             // write_csr
     acl_hal_mmd_simulation_device_global_interface_read, // simulation_device_global_interface_read
     acl_hal_mmd_simulation_device_global_interface_write, // simulation_device_global_interface_write
+    acl_hal_mmd_hostchannel_get_sideband_buffer, // hostchannel_get_sideband_buffer
+    acl_hal_mmd_hostchannel_sideband_pull_no_ack, // hostchannel_sideband_push
+    acl_hal_mmd_hostchannel_sideband_push_no_ack, // hostchannel_sideband_push
+    acl_hal_mmd_hostchannel_pull_no_ack,          // hostchannel_pull_no_ack
+    acl_hal_mmd_hostchannel_push_no_ack,          // hostchannel_push_no_ack
 };
 
 // This will contain the device physical id to tell us which device across all
@@ -2303,6 +2328,74 @@ size_t acl_hal_mmd_hostchannel_push(unsigned int physical_device_id,
   return pushed;
 }
 
+size_t acl_hal_mmd_hostchannel_pull_no_ack(unsigned int physical_device_id,
+                                           int channel_handle,
+                                           void *host_buffer, size_t read_size,
+                                           int *status) {
+  size_t buffer_size = 0;
+  size_t pulled;
+  int pcie_dev_handle;
+  void *pull_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_buffer);
+  pull_buffer = device_info[physical_device_id]
+                    .mmd_dispatch->aocl_mmd_hostchannel_get_buffer(
+                        pcie_dev_handle, channel_handle, &buffer_size, status);
+
+  if ((NULL == pull_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pulled to user buffer
+  buffer_size = (read_size > buffer_size) ? buffer_size : read_size;
+
+  // Copy the data into the user buffer
+  safe_memcpy(host_buffer, pull_buffer, buffer_size, buffer_size, buffer_size);
+
+  pulled = buffer_size;
+
+  return pulled;
+}
+
+size_t acl_hal_mmd_hostchannel_push_no_ack(unsigned int physical_device_id,
+                                           int channel_handle,
+                                           const void *host_buffer,
+                                           size_t write_size, int *status) {
+  size_t buffer_size = 0;
+  size_t pushed;
+  int pcie_dev_handle;
+  void *push_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  // get the pointer to host channel push buffer
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_buffer);
+
+  push_buffer = device_info[physical_device_id]
+                    .mmd_dispatch->aocl_mmd_hostchannel_get_buffer(
+                        pcie_dev_handle, channel_handle, &buffer_size, status);
+
+  if ((NULL == push_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pushed to push buffer
+  buffer_size = (write_size > buffer_size) ? buffer_size : write_size;
+
+  // Copy the data into the push buffer
+
+  safe_memcpy(push_buffer, host_buffer, buffer_size, buffer_size, buffer_size);
+
+  pushed = buffer_size;
+  return pushed;
+}
+
 void *acl_hal_mmd_hostchannel_get_buffer(unsigned int physical_device_id,
                                          int channel_handle,
                                          size_t *buffer_size, int *status) {
@@ -2929,4 +3022,91 @@ int acl_hal_mmd_simulation_device_global_interface_write(
       .mmd_dispatch->aocl_mmd_simulation_device_global_interface_write(
           device_info[physical_device_id].handle, interface_name, host_addr,
           dev_addr, size);
+}
+
+void *acl_hal_mmd_hostchannel_get_sideband_buffer(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    size_t *buffer_size, int *status) {
+
+  int pcie_dev_handle;
+
+  pcie_dev_handle = device_info[physical_device_id].handle;
+  *status = 0;
+
+  // get the pointer to host channel mmd buffer
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+  return device_info[physical_device_id]
+      .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+          pcie_dev_handle, channel_handle, port_name, buffer_size, status);
+}
+
+size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    void *host_buffer, size_t read_size, int *status) {
+
+  size_t buffer_size = 0;
+  size_t pulled;
+  int pcie_dev_handle;
+  void *pull_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+  pull_buffer =
+      device_info[physical_device_id]
+          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+
+  if ((NULL == pull_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pulled to user buffer
+  buffer_size = (read_size > buffer_size) ? buffer_size : read_size;
+
+  // Copy the data into the user buffer
+  safe_memcpy(host_buffer, pull_buffer, buffer_size, buffer_size, buffer_size);
+
+  pulled = buffer_size;
+
+  return pulled;
+}
+
+size_t acl_hal_mmd_hostchannel_sideband_push_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    const void *host_buffer, size_t write_size, int *status) {
+
+  size_t buffer_size = 0;
+  size_t pushed;
+  int pcie_dev_handle;
+  void *push_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  // get the pointer to host channel push buffer
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+
+  push_buffer =
+      device_info[physical_device_id]
+          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+
+  if ((NULL == push_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pushed to push buffer
+  buffer_size = (write_size > buffer_size) ? buffer_size : write_size;
+
+  // Copy the data into the push buffer
+
+  safe_memcpy(push_buffer, host_buffer, buffer_size, buffer_size, buffer_size);
+
+  pushed = buffer_size;
+  return pushed;
 }

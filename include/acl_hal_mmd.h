@@ -269,6 +269,16 @@ typedef struct {
   int (*aocl_mmd_simulation_device_global_interface_write)(
       int handle, const char *interface_name, const void *host_addr,
       size_t dev_addr, size_t size);
+
+  // Return the side band signal buffer corresponding to the side band signal
+  // port identifier Get a pointer to the mmd buffer for the host channel
+  // Simulation only mmd call as of 2024.1. HW MMD developer needs to implement
+  // this function in the future To support hostpipe sideband signals.
+  void *(*aocl_mmd_hostchannel_get_sideband_buffer)(int handle, int channel,
+                                                    int port_id,
+                                                    size_t *buffer_size,
+                                                    int *status);
+
 } acl_mmd_dispatch_t;
 
 typedef struct {

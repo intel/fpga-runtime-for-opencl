@@ -59,6 +59,97 @@ static cl_int l_push_packet(unsigned int physical_device_id, int channel_handle,
   }
 }
 
+static cl_int l_push_sideband_packet(unsigned int physical_device_id,
+                                     int channel_handle,
+                                     const void *host_buffer, size_t write_size,
+                                     host_pipe_t &host_pipe_info) {
+  // This pipe has sideband signals, need to break into data section and
+  // sideband signal sections
+  int status = 0;
+  bool final_status = true;
+  size_t total_pushed = 0;
+  for (auto const &sideband_signal_entry :
+       host_pipe_info.side_band_signals_vector) {
+    size_t pushed_data;
+    if (sideband_signal_entry.port_identifier == AvalonData) {
+      pushed_data = acl_get_hal()->hostchannel_push_no_ack(
+          host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+          (const void *)((char *)host_buffer +
+                         sideband_signal_entry.port_offset / 8),
+          sideband_signal_entry.side_band_size / 8, &status);
+    } else {
+      // this is sideband signal
+      pushed_data = acl_get_hal()->hostchannel_sideband_push_no_ack(
+          host_pipe_info.m_physical_device_id,
+          sideband_signal_entry.port_identifier,
+          host_pipe_info.m_channel_handle,
+          (const void *)((char *)host_buffer +
+                         sideband_signal_entry.port_offset / 8),
+          sideband_signal_entry.side_band_size / 8, &status);
+    }
+    final_status = final_status && status;
+    if (pushed_data == 0) {
+      return CL_PIPE_FULL;
+    }
+    total_pushed += pushed_data;
+  }
+  // Now need to acknowledge
+  size_t acked_size;
+
+  acked_size = acl_get_hal()->hostchannel_ack_buffer(
+      host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+      total_pushed, &status);
+
+  if (acked_size == 0) {
+    return CL_PIPE_FULL;
+  }
+
+  status = final_status && status;
+  return status;
+}
+
+static size_t l_pull_sideband_packet(unsigned int physical_device_id,
+                                     int channel_handle,
+                                     const void *host_buffer, size_t write_size,
+                                     host_pipe_t &host_pipe_info, int &status) {
+  bool final_status = true;
+  size_t total_pulled_data = 0;
+  for (auto const &sideband_signal_entry :
+       host_pipe_info.side_band_signals_vector) {
+    size_t pulled_data;
+    if (sideband_signal_entry.port_identifier == AvalonData) {
+      pulled_data = acl_get_hal()->hostchannel_pull_no_ack(
+          host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+          (void *)((char *)host_buffer + sideband_signal_entry.port_offset / 8),
+          sideband_signal_entry.side_band_size / 8, &status);
+    } else {
+      // this is sideband signal
+      pulled_data = acl_get_hal()->hostchannel_sideband_pull_no_ack(
+          host_pipe_info.m_physical_device_id,
+          sideband_signal_entry.port_identifier,
+          host_pipe_info.m_channel_handle,
+          (void *)((char *)host_buffer + sideband_signal_entry.port_offset / 8),
+          sideband_signal_entry.side_band_size / 8, &status);
+    }
+    final_status = final_status && status;
+    if (pulled_data == 0) {
+      return 0;
+    }
+    total_pulled_data += pulled_data;
+  }
+  // Now need to acknowledge
+  size_t acked_size;
+
+  acked_size = acl_get_hal()->hostchannel_ack_buffer(
+      host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+      total_pulled_data, &status);
+  if (acked_size == 0) {
+    return 0;
+  }
+  status = final_status && status;
+  return total_pulled_data;
+}
+
 static void l_clean_up_pending_pipe_ops(cl_mem pipe) {
   size_t acked_size = 0;
   int status = 0;
@@ -708,7 +799,7 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
   cl_event event = op->info.event;
   cl_int status = 0;
   size_t pulled_data = 0;
-  bool blocking = event->cmd.info.host_pipe_info.blocking;
+  bool blocking = event->cmd.info.host_pipe_dynamic_info.blocking;
   acl_assert_locked();
 
   if (!acl_event_is_valid(event) ||
@@ -717,10 +808,16 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     return;
   }
 
+  // Difference between event->cmd.info.host_pipe_dynamic_info
+  // And host_pipe_info.
+  // Event member contains dynamic information like data and size
+  // The host_pipe_info stored in the dev_prog->program_hostpipe_map
+  // Contains the static information of the pipe, like protocol
+
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
   auto host_pipe_info = dev_prog->program_hostpipe_map.at(
-      std::string(event->cmd.info.host_pipe_info.logical_name));
+      std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
   acl_mutex_lock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
@@ -771,8 +868,8 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     // start the CSR read
     auto status =
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, data_reg,
-                                event->cmd.info.host_pipe_info.ptr,
-                                event->cmd.info.host_pipe_info.size);
+                                event->cmd.info.host_pipe_dynamic_info.ptr,
+                                event->cmd.info.host_pipe_dynamic_info.size);
     if (status != 0) {
       acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
@@ -786,10 +883,19 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     }
   } else {
     // Non CSR Case
-    pulled_data = acl_get_hal()->hostchannel_pull(
-        host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
-        event->cmd.info.host_pipe_info.ptr, event->cmd.info.host_pipe_info.size,
-        &status);
+    if (host_pipe_info.num_side_band_signals == 0) {
+      pulled_data = acl_get_hal()->hostchannel_pull(
+          host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+          event->cmd.info.host_pipe_dynamic_info.ptr,
+          event->cmd.info.host_pipe_dynamic_info.size, &status);
+    } else {
+      // This pipe has sideband signals, need to break into data section and
+      // sideband signal sections
+      pulled_data = l_pull_sideband_packet(
+          host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+          event->cmd.info.host_pipe_dynamic_info.ptr,
+          event->cmd.info.host_pipe_dynamic_info.size, host_pipe_info, status);
+    }
 
     if (!blocking) {
       // If it is non-blocking read, we return with the success code right away
@@ -808,10 +914,20 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
       // are fully implemented. Right now we consider the result is good as long
       // as pulled_data > 0.
       while (status != 0 || pulled_data == 0) {
-        pulled_data = acl_get_hal()->hostchannel_pull(
-            host_pipe_info.m_physical_device_id,
-            host_pipe_info.m_channel_handle, event->cmd.info.host_pipe_info.ptr,
-            event->cmd.info.host_pipe_info.size, &status);
+        if (host_pipe_info.num_side_band_signals == 0) {
+          pulled_data = acl_get_hal()->hostchannel_pull(
+              host_pipe_info.m_physical_device_id,
+              host_pipe_info.m_channel_handle,
+              event->cmd.info.host_pipe_dynamic_info.ptr,
+              event->cmd.info.host_pipe_dynamic_info.size, &status);
+        } else {
+          pulled_data = l_pull_sideband_packet(
+              host_pipe_info.m_physical_device_id,
+              host_pipe_info.m_channel_handle,
+              event->cmd.info.host_pipe_dynamic_info.ptr,
+              event->cmd.info.host_pipe_dynamic_info.size, host_pipe_info,
+              status);
+        }
         acl_update_device_op_queue(&(acl_platform.device_op_queue));
       }
     }
@@ -825,7 +941,7 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
 
   cl_int status;
   cl_event event = op->info.event;
-  bool blocking = event->cmd.info.host_pipe_info.blocking;
+  bool blocking = event->cmd.info.host_pipe_dynamic_info.blocking;
   acl_assert_locked();
 
   if (!acl_event_is_valid(event) ||
@@ -834,10 +950,16 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
     return;
   }
 
+  // Difference between event->cmd.info.host_pipe_dynamic_info
+  // And host_pipe_info.
+  // Event member contains dynamic information like data and size
+  // The host_pipe_info stored in the dev_prog->program_hostpipe_map
+  // Contains the static information of the pipe, like protocol
+
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
   auto host_pipe_info = dev_prog->program_hostpipe_map.at(
-      std::string(event->cmd.info.host_pipe_info.logical_name));
+      std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
   acl_mutex_lock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
@@ -859,10 +981,10 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
                                  // this to the autodiscovery string maybe
     unsigned int valid = 1;
     // start the write
-    auto status =
-        acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, data_reg,
-                                 event->cmd.info.host_pipe_info.write_ptr,
-                                 event->cmd.info.host_pipe_info.size);
+    auto status = acl_get_hal()->write_csr(
+        host_pipe_info.m_physical_device_id, data_reg,
+        event->cmd.info.host_pipe_dynamic_info.write_ptr,
+        event->cmd.info.host_pipe_dynamic_info.size);
     if (status != 0) {
       acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
@@ -890,10 +1012,17 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
   } else {
     // Regular hostpipe
     // Attempt to write once
-    status = l_push_packet(host_pipe_info.m_physical_device_id,
-                           host_pipe_info.m_channel_handle,
-                           event->cmd.info.host_pipe_info.write_ptr,
-                           event->cmd.info.host_pipe_info.size);
+    if (host_pipe_info.num_side_band_signals == 0) {
+      status = l_push_packet(host_pipe_info.m_physical_device_id,
+                             host_pipe_info.m_channel_handle,
+                             event->cmd.info.host_pipe_dynamic_info.write_ptr,
+                             event->cmd.info.host_pipe_dynamic_info.size);
+    } else {
+      status = l_push_sideband_packet(
+          host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
+          event->cmd.info.host_pipe_dynamic_info.write_ptr,
+          event->cmd.info.host_pipe_dynamic_info.size, host_pipe_info);
+    }
     if (!blocking) {
       // If it is non-blocking write, we return with the success/failure code
       // right away
@@ -906,10 +1035,19 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
       // If it's a blocking write, this function won't return until the write
       // success.
       while (status != CL_SUCCESS) {
-        status = l_push_packet(host_pipe_info.m_physical_device_id,
-                               host_pipe_info.m_channel_handle,
-                               event->cmd.info.host_pipe_info.write_ptr,
-                               event->cmd.info.host_pipe_info.size);
+        if (host_pipe_info.num_side_band_signals == 0) {
+          status =
+              l_push_packet(host_pipe_info.m_physical_device_id,
+                            host_pipe_info.m_channel_handle,
+                            event->cmd.info.host_pipe_dynamic_info.write_ptr,
+                            event->cmd.info.host_pipe_dynamic_info.size);
+        } else {
+          status = l_push_sideband_packet(
+              host_pipe_info.m_physical_device_id,
+              host_pipe_info.m_channel_handle,
+              event->cmd.info.host_pipe_dynamic_info.write_ptr,
+              event->cmd.info.host_pipe_dynamic_info.size, host_pipe_info);
+        }
         acl_update_device_op_queue(&(acl_platform.device_op_queue));
       }
     }
@@ -1047,10 +1185,10 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadHostPipeINTEL(
   if (status != CL_SUCCESS)
     return status;
 
-  local_event->cmd.info.host_pipe_info.size = size;
-  local_event->cmd.info.host_pipe_info.ptr = ptr;
-  local_event->cmd.info.host_pipe_info.blocking = blocking_read;
-  local_event->cmd.info.host_pipe_info.logical_name = pipe_symbol;
+  local_event->cmd.info.host_pipe_dynamic_info.size = size;
+  local_event->cmd.info.host_pipe_dynamic_info.ptr = ptr;
+  local_event->cmd.info.host_pipe_dynamic_info.blocking = blocking_read;
+  local_event->cmd.info.host_pipe_dynamic_info.logical_name = pipe_symbol;
 
   acl_idle_update(
       command_queue
@@ -1114,10 +1252,10 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteHostPipeINTEL(
   if (status != CL_SUCCESS)
     return status;
 
-  local_event->cmd.info.host_pipe_info.size = size;
-  local_event->cmd.info.host_pipe_info.write_ptr = ptr;
-  local_event->cmd.info.host_pipe_info.blocking = blocking_write;
-  local_event->cmd.info.host_pipe_info.logical_name = pipe_symbol;
+  local_event->cmd.info.host_pipe_dynamic_info.size = size;
+  local_event->cmd.info.host_pipe_dynamic_info.write_ptr = ptr;
+  local_event->cmd.info.host_pipe_dynamic_info.blocking = blocking_write;
+  local_event->cmd.info.host_pipe_dynamic_info.logical_name = pipe_symbol;
 
   acl_idle_update(
       command_queue

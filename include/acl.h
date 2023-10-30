@@ -544,6 +544,25 @@ struct acl_hostpipe_mapping {
                      // avalon_mm = 2, avalon_mm_uses_ready = 3
 };
 
+// Mapping of sideband signals to logical pipe
+
+struct acl_sideband_signal_mapping {
+  std::string logical_name;
+  unsigned port_identifier;
+  unsigned port_offset;   // bit
+  unsigned sideband_size; // bit
+};
+
+// Must match the definition in the compiler
+// Analysis/FPGAAnalysis/Utils/StreamParameters.h
+enum signal_type {
+  SignalUnknown = -1,
+  AvalonData = 0,
+  AvalonSop = 1,
+  AvalonEop = 2,
+  AvalonEmpty = 3
+};
+
 // Part of acl_device_def_t where members are populated from the information
 // in the autodiscovery string. This will get updated every time the device
 // is programmed with a new device binary as the new binary would contain a
@@ -570,6 +589,7 @@ typedef struct acl_device_def_autodiscovery_t {
       true; // Set the default value to true for backwards compatibility flows.
 
   std::vector<acl_hostpipe_mapping> hostpipe_mappings;
+  std::vector<acl_sideband_signal_mapping> sideband_signal_mappings;
 } acl_device_def_autodiscovery_t;
 
 typedef struct acl_device_def_t {

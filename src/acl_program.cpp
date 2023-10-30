@@ -1374,6 +1374,41 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
     dev_prog->program_hostpipe_map[hostpipe.logical_name] = host_pipe_info;
   }
 
+  // Start from 2024.1, Runtime receives sideband signals information
+  for (const auto &sideband_signal_mapping :
+       dev_prog->device_binary.get_devdef()
+           .autodiscovery_def.sideband_signal_mappings) {
+
+    // Skip if the sideband_signal doesn't have a logical name.
+    // It's not the program scoped hostpipe.
+    if (sideband_signal_mapping.logical_name == "-") {
+      continue;
+    }
+
+    // The hostpipe hostpipe logical name must be found in the program
+    auto search = dev_prog->program_hostpipe_map.find(
+        sideband_signal_mapping.logical_name);
+    if (search == dev_prog->program_hostpipe_map.end()) {
+      ERR_RET(CL_INVALID_VALUE, context,
+              "Sideband signal is binded to non-exist hostpipe");
+    }
+
+    auto &host_pipe_info =
+        dev_prog->program_hostpipe_map.at(sideband_signal_mapping.logical_name);
+    if (sideband_signal_mapping.port_identifier != AvalonData) {
+      host_pipe_info.num_side_band_signals++;
+    }
+
+    // Store the sideband info into the hostpipe info.
+    sideband_signal_t sideband_signal_info;
+    sideband_signal_info.port_identifier =
+        sideband_signal_mapping.port_identifier;
+    sideband_signal_info.port_offset = sideband_signal_mapping.port_offset;
+    sideband_signal_info.side_band_size = sideband_signal_mapping.sideband_size;
+
+    host_pipe_info.side_band_signals_vector.emplace_back(sideband_signal_info);
+  }
+
   return CL_SUCCESS;
 }
 
