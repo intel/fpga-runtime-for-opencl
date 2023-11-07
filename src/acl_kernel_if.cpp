@@ -901,6 +901,10 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
         (unsigned int *)acl_malloc(kern->num_accel * sizeof(unsigned int));
     assert(kern->accel_invoc_queue_depth);
 
+    kern->accel_arg_cache =
+        (char **)acl_malloc(kern->num_accel * sizeof(char *));
+    assert(kern->accel_arg_cache);
+
     // Kernel IRQ is a separate thread. Need to use circular buffer to make this
     // multithread safe.
     kern->accel_queue_front = (int *)acl_malloc(kern->num_accel * sizeof(int));
@@ -920,6 +924,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
       for (unsigned b = 0; b < max_same_accel_launches; ++b) {
         kern->accel_job_ids[a][b] = -1;
       }
+      kern->accel_arg_cache[a] = nullptr;
     }
   }
 
@@ -1182,9 +1187,42 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
 
   if (kern->csr_version.has_value() &&
       (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0)) {
-    acl_kernel_cra_write_block(
-        kern, accel_id, offset + (unsigned int)image_size_static,
-        (unsigned int *)image->arg_value, image->arg_value_size);
+    if (kern->accel_arg_cache[accel_id] == nullptr) {
+      acl_kernel_cra_write_block(
+          kern, accel_id, offset + (unsigned int)image_size_static,
+          (unsigned int *)image->arg_value, image->arg_value_size);
+      kern->accel_arg_cache[accel_id] =
+          (char *)acl_malloc(image->arg_value_size);
+      memcpy(kern->accel_arg_cache[accel_id], (char *)image->arg_value,
+             image->arg_value_size);
+    } else {
+      for (size_t step = 0; step < image->arg_value_size;) {
+        size_t size_to_write = 0;
+        size_t cmp_size = (image->arg_value_size - step) > sizeof(int)
+                              ? sizeof(int)
+                              : (image->arg_value_size - step);
+        while (cmp_size > 0 &&
+               memcmp(kern->accel_arg_cache[accel_id] + step + size_to_write,
+                      image->arg_value + step + size_to_write, cmp_size) != 0) {
+          size_to_write += cmp_size;
+          cmp_size =
+              (image->arg_value_size - step - size_to_write) > sizeof(int)
+                  ? sizeof(int)
+                  : (image->arg_value_size - step - size_to_write);
+        }
+        if (size_to_write == 0) {
+          step += (unsigned)sizeof(int);
+        } else {
+          acl_kernel_cra_write_block(
+              kern, accel_id, offset + (unsigned int)(image_size_static + step),
+              (unsigned int *)(image->arg_value + step), size_to_write);
+          step += size_to_write;
+        }
+      }
+      // image->arg_value_size should not change
+      memcpy(kern->accel_arg_cache[accel_id], (char *)image->arg_value,
+             image->arg_value_size);
+    }
   }
 
   kern->accel_job_ids[accel_id][next_launch_index] = (int)activation_id;
@@ -1693,6 +1731,15 @@ void acl_kernel_if_close(acl_kernel_if *kern) {
     acl_free(kern->accel_queue_front);
   if (kern->accel_queue_back)
     acl_free(kern->accel_queue_back);
+  if (kern->accel_arg_cache) {
+    for (unsigned int a = 0; a < kern->num_accel; a++) {
+      if (kern->accel_arg_cache[a]) {
+        acl_free((void *)kern->accel_arg_cache[a]);
+        kern->accel_arg_cache[a] = NULL;
+      }
+    }
+    acl_free((void *)kern->accel_arg_cache);
+  }
   kern->accel_csr = NULL;
   kern->accel_perf_mon = NULL;
   kern->accel_num_printfs = NULL;
@@ -1700,6 +1747,7 @@ void acl_kernel_if_close(acl_kernel_if *kern) {
   kern->accel_invoc_queue_depth = NULL;
   kern->accel_queue_front = NULL;
   kern->accel_queue_back = NULL;
+  kern->accel_arg_cache = NULL;
   kern->autorun_profiling_kernel_id = -1;
 }
 
