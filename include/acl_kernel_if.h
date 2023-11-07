@@ -84,6 +84,8 @@ typedef struct {
 
   // CRA address offset for backwards compatibility
   unsigned int cra_address_offset = 8;
+
+  char **accel_arg_cache;
 } acl_kernel_if;
 
 // *********************** Public functions **************************
