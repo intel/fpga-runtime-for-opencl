@@ -32,12 +32,13 @@ typedef struct {
 
   // Accelerator details
   unsigned int num_accel;
-  int volatile **accel_job_ids; //[num_accel][accel_invoc_queue_depth]
-  int *accel_queue_front;
-  int *accel_queue_back;
-  acl_kernel_if_addr_range *accel_csr;
-  acl_kernel_if_addr_range *accel_perf_mon;
-  unsigned int *accel_num_printfs;
+  std::vector<std::vector<int>>
+      accel_job_ids; //[num_accel][accel_invoc_queue_depth]
+  std::vector<int> accel_queue_front;
+  std::vector<int> accel_queue_back;
+  std::vector<acl_kernel_if_addr_range> accel_csr;
+  std::vector<acl_kernel_if_addr_range> accel_perf_mon;
+  std::vector<unsigned int> accel_num_printfs;
 
   std::vector<std::optional<acl_streaming_kernel_control_info>>
       streaming_control_signal_names;
@@ -74,7 +75,7 @@ typedef struct {
   bool cra_ring_root_exist = false;
 
   // Depth of hardware kernel invocation queue
-  unsigned int *accel_invoc_queue_depth;
+  std::vector<unsigned int> accel_invoc_queue_depth;
 
   // Track which of the kernels is the autorun profiling kernel (-1 if none)
   int autorun_profiling_kernel_id;
@@ -85,7 +86,8 @@ typedef struct {
   // CRA address offset for backwards compatibility
   unsigned int cra_address_offset = 8;
 
-  char **accel_arg_cache;
+  // Kernel argument cache for trackinig changed arguments
+  std::vector<std::unique_ptr<char[]>> accel_arg_cache;
 } acl_kernel_if;
 
 // *********************** Public functions **************************

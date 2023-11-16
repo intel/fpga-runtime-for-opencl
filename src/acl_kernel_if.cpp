@@ -634,10 +634,6 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   kern->num_accel = 0;
   kern->cur_segment = 0xffffffff;
 
-  kern->accel_csr = NULL;
-  kern->accel_perf_mon = NULL;
-  kern->accel_num_printfs = NULL;
-
   kern->autorun_profiling_kernel_id = -1;
 
   if (check_version_id(kern) != 0) {
@@ -802,15 +798,9 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
 
   if (kern->num_accel > 0) {
     // Allocations for each kernel
-    kern->accel_csr = (acl_kernel_if_addr_range *)acl_malloc(
-        kern->num_accel * sizeof(acl_kernel_if_addr_range));
-    assert(kern->accel_csr);
-    kern->accel_perf_mon = (acl_kernel_if_addr_range *)acl_malloc(
-        kern->num_accel * sizeof(acl_kernel_if_addr_range));
-    assert(kern->accel_perf_mon);
-    kern->accel_num_printfs =
-        (unsigned int *)acl_malloc(kern->num_accel * sizeof(unsigned int));
-    assert(kern->accel_num_printfs);
+    kern->accel_csr.resize(kern->num_accel);
+    kern->accel_perf_mon.resize(kern->num_accel);
+    kern->accel_num_printfs.resize(kern->num_accel);
 
     // The Kernel CSR registers
     // The new and improved config ROM give us the address *offsets* from
@@ -893,38 +883,26 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
 
   // Set up the structures to store state information about the device
   if (kern->num_accel > 0) {
-    kern->accel_job_ids =
-        (int volatile **)acl_malloc(kern->num_accel * sizeof(int *));
-    assert(kern->accel_job_ids);
-
-    kern->accel_invoc_queue_depth =
-        (unsigned int *)acl_malloc(kern->num_accel * sizeof(unsigned int));
-    assert(kern->accel_invoc_queue_depth);
-
-    kern->accel_arg_cache =
-        (char **)acl_malloc(kern->num_accel * sizeof(char *));
-    assert(kern->accel_arg_cache);
+    kern->accel_job_ids.resize(kern->num_accel);
+    kern->accel_invoc_queue_depth.resize(kern->num_accel);
+    kern->accel_arg_cache.resize(kern->num_accel);
 
     // Kernel IRQ is a separate thread. Need to use circular buffer to make this
     // multithread safe.
-    kern->accel_queue_front = (int *)acl_malloc(kern->num_accel * sizeof(int));
-    assert(kern->accel_queue_front);
-    kern->accel_queue_back = (int *)acl_malloc(kern->num_accel * sizeof(int));
-    assert(kern->accel_queue_back);
+    kern->accel_queue_front.resize(kern->num_accel);
+    kern->accel_queue_back.resize(kern->num_accel);
 
     for (unsigned a = 0; a < kern->num_accel; ++a) {
       unsigned int max_same_accel_launches =
           devdef.accel[a].fast_launch_depth + 1;
       // +1, because fast launch depth does not account for the running kernel
       kern->accel_invoc_queue_depth[a] = max_same_accel_launches;
-      kern->accel_job_ids[a] =
-          (int *)acl_malloc(max_same_accel_launches * sizeof(int));
+      kern->accel_job_ids[a].resize(max_same_accel_launches);
       kern->accel_queue_front[a] = -1;
       kern->accel_queue_back[a] = -1;
       for (unsigned b = 0; b < max_same_accel_launches; ++b) {
         kern->accel_job_ids[a][b] = -1;
       }
-      kern->accel_arg_cache[a] = nullptr;
     }
   }
 
@@ -1187,22 +1165,24 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
 
   if (kern->csr_version.has_value() &&
       (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0)) {
-    if (kern->accel_arg_cache[accel_id] == nullptr) {
+    if (!kern->accel_arg_cache[accel_id]) {
       acl_kernel_cra_write_block(
           kern, accel_id, offset + (unsigned int)image_size_static,
           (unsigned int *)image->arg_value, image->arg_value_size);
       kern->accel_arg_cache[accel_id] =
-          (char *)acl_malloc(image->arg_value_size);
-      memcpy(kern->accel_arg_cache[accel_id], (char *)image->arg_value,
+          std::make_unique<char[]>(image->arg_value_size);
+      memcpy(kern->accel_arg_cache[accel_id].get(), (char *)image->arg_value,
              image->arg_value_size);
     } else {
+      char *arg_cache_ptr = kern->accel_arg_cache[accel_id].get();
+      assert(arg_cache_ptr && "kernel argument cache not initialized!");
       for (size_t step = 0; step < image->arg_value_size;) {
         size_t size_to_write = 0;
         size_t cmp_size = (image->arg_value_size - step) > sizeof(int)
                               ? sizeof(int)
                               : (image->arg_value_size - step);
         while (cmp_size > 0 &&
-               memcmp(kern->accel_arg_cache[accel_id] + step + size_to_write,
+               memcmp(arg_cache_ptr + step + size_to_write,
                       image->arg_value + step + size_to_write, cmp_size) != 0) {
           size_to_write += cmp_size;
           cmp_size =
@@ -1220,8 +1200,7 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
         }
       }
       // image->arg_value_size should not change
-      memcpy(kern->accel_arg_cache[accel_id], (char *)image->arg_value,
-             image->arg_value_size);
+      memcpy(arg_cache_ptr, (char *)image->arg_value, image->arg_value_size);
     }
   }
 
@@ -1709,45 +1688,14 @@ void acl_kernel_if_unstall_kernel(acl_kernel_if *kern, int activation_id) {
 
 void acl_kernel_if_close(acl_kernel_if *kern) {
   acl_assert_locked();
-  // De-Allocations for each kernel
-  if (kern->accel_csr)
-    acl_free(kern->accel_csr);
-  if (kern->accel_perf_mon)
-    acl_free(kern->accel_perf_mon);
-  if (kern->accel_num_printfs)
-    acl_free(kern->accel_num_printfs);
-  if (kern->accel_job_ids) {
-    for (unsigned int a = 0; a < kern->num_accel; a++) {
-      if (kern->accel_job_ids[a]) {
-        acl_free((void *)kern->accel_job_ids[a]);
-        kern->accel_job_ids[a] = NULL;
-      }
-    }
-    acl_free((void *)kern->accel_job_ids);
-  }
-  if (kern->accel_invoc_queue_depth)
-    acl_free(kern->accel_invoc_queue_depth);
-  if (kern->accel_queue_front)
-    acl_free(kern->accel_queue_front);
-  if (kern->accel_queue_back)
-    acl_free(kern->accel_queue_back);
-  if (kern->accel_arg_cache) {
-    for (unsigned int a = 0; a < kern->num_accel; a++) {
-      if (kern->accel_arg_cache[a]) {
-        acl_free((void *)kern->accel_arg_cache[a]);
-        kern->accel_arg_cache[a] = NULL;
-      }
-    }
-    acl_free((void *)kern->accel_arg_cache);
-  }
-  kern->accel_csr = NULL;
-  kern->accel_perf_mon = NULL;
-  kern->accel_num_printfs = NULL;
-  kern->accel_job_ids = NULL;
-  kern->accel_invoc_queue_depth = NULL;
-  kern->accel_queue_front = NULL;
-  kern->accel_queue_back = NULL;
-  kern->accel_arg_cache = NULL;
+  kern->accel_csr.clear();
+  kern->accel_perf_mon.clear();
+  kern->accel_num_printfs.clear();
+  kern->accel_job_ids.clear();
+  kern->accel_invoc_queue_depth.clear();
+  kern->accel_queue_front.clear();
+  kern->accel_queue_back.clear();
+  kern->accel_arg_cache.clear();
   kern->autorun_profiling_kernel_id = -1;
 }
 
