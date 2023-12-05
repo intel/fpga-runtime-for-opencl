@@ -1185,8 +1185,10 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
                                image_size_static);
   }
 
+  bool accel_has_agent_args = false;
   if (kern->csr_version.has_value() &&
       (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0)) {
+    accel_has_agent_args = true;
     if (kern->accel_arg_cache[accel_id] == nullptr) {
       acl_kernel_cra_write_block(
           kern, accel_id, offset + (unsigned int)image_size_static,
@@ -1238,7 +1240,8 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   if (kern->streaming_control_signal_names[accel_id]) {
     acl_get_hal()->simulation_streaming_kernel_start(
         kern->physical_device_id,
-        kern->streaming_control_signal_names[accel_id]->start, accel_id);
+        kern->streaming_control_signal_names[accel_id]->start, accel_id,
+        accel_has_agent_args);
     return;
   }
 
