@@ -242,7 +242,8 @@ typedef struct {
 
   void (*simulation_streaming_kernel_start)(unsigned int physical_device_id,
                                             const std::string &signal_name,
-                                            const int accel_id);
+                                            const int accel_id,
+                                            const bool accel_has_agent_args);
   void (*simulation_streaming_kernel_done)(unsigned int physical_device_id,
                                            const std::string &signal_name,
                                            unsigned int &finish_counter);
