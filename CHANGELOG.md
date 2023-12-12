@@ -2,15 +2,33 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2024.0] - 2024-02-20
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.0...HEAD
+### Added
+- Add support for hostpipe sideband signals ([#323]).
+
+### Changed
+- Update clGetDeviceInfo to follow OpenCL 1.2 spec ([#317]).
+- Update invocation image debug prints ([#318]).
+- Delay erasing context from contexts_set during `acl_idle_update` ([#322]).
+- Only write changing parts of kernel arguments to kernel CRA ([#324]).
+
+### Removed
+- Remove simulator device from offline devices ([#319]).
+
+### Fixed
+- Resolves hang when the device op queue gets full and no more commands can be submitted ([568569a]).
+- Fix CSR pipe write handshaking ([#326]).
+
+[2024.1]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.0...v2024.1
+[568569a]: https://github.com/intel/fpga-runtime-for-opencl/commit/568659a441459a55d24e2148cb1ab134e381bff4
+[#317]: https://github.com/intel/fpga-runtime-for-opencl/pull/317
+[#318]: https://github.com/intel/fpga-runtime-for-opencl/pull/318
+[#319]: https://github.com/intel/fpga-runtime-for-opencl/pull/319
+[#322]: https://github.com/intel/fpga-runtime-for-opencl/pull/322
+[#323]: https://github.com/intel/fpga-runtime-for-opencl/pull/323
+[#324]: https://github.com/intel/fpga-runtime-for-opencl/pull/324
+[#326]: https://github.com/intel/fpga-runtime-for-opencl/pull/326
 
 ## [2024.0] - 2023-10-24
 
