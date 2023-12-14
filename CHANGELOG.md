@@ -2,7 +2,7 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [2024.0] - 2024-02-20
+## [2024.1] - 2024-02-20
 
 ### Added
 - Add support for hostpipe sideband signals ([#323]).
@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Update invocation image debug prints ([#318]).
 - Delay erasing context from contexts_set during `acl_idle_update` ([#322]).
 - Only write changing parts of kernel arguments to kernel CRA ([#324]).
+- Pass information on whether a streaming kernel has CRA arguments to MMD ([#330]).
 
 ### Removed
 - Remove simulator device from offline devices ([#319]).
@@ -29,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 [#323]: https://github.com/intel/fpga-runtime-for-opencl/pull/323
 [#324]: https://github.com/intel/fpga-runtime-for-opencl/pull/324
 [#326]: https://github.com/intel/fpga-runtime-for-opencl/pull/326
+[#330]: https://github.com/intel/fpga-runtime-for-opencl/pull/330
 
 ## [2024.0] - 2023-10-24
 
