@@ -1964,6 +1964,10 @@ void acl_hal_mmd_unstall_kernel(unsigned int physical_device_id,
   acl_kernel_if_unstall_kernel(&kern[physical_device_id], activation_id);
 }
 
+static bool l_is_simulator_dispatch(acl_mmd_dispatch_t *mmd_dispatch) {
+  return mmd_dispatch->aocl_mmd_simulation_device_info != NULL;
+}
+
 static void update_simulator(int handle, unsigned int physical_device_id,
                              const acl_device_def_autodiscovery_t &dev) {
   std::vector<aocl_mmd_memory_info_t> mem_info(dev.num_global_mem_systems);
@@ -2076,8 +2080,8 @@ int acl_hal_mmd_program_device(unsigned int physical_device_id,
   // cases (e.g. features/printf/test), where there are multiple kernels and
   // resources are released between kernel runs.  For the simulator, only print
   // this message once. This is a horrible kludge.
-  is_simulator = device_info[physical_device_id]
-                     .mmd_dispatch->aocl_mmd_simulation_device_info != NULL;
+  is_simulator =
+      l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch);
   msg_printed = (cl_bool)CL_FALSE;
   if (!(is_simulator && msg_printed)) {
     ACL_HAL_DEBUG_MSG_VERBOSE(1, "Reprogramming device [%d] with handle %d\n",
@@ -2988,9 +2992,11 @@ void acl_hal_mmd_simulation_streaming_kernel_done(
 void acl_hal_mmd_simulation_set_kernel_cra_address_map(
     unsigned int physical_device_id,
     const std::vector<uintptr_t> &kernel_csr_address_map) {
-  device_info[physical_device_id]
-      .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
-          device_info[physical_device_id].handle, kernel_csr_address_map);
+  if (l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch)) {
+    device_info[physical_device_id]
+        .mmd_dispatch->aocl_mmd_simulation_set_kernel_cra_address_map(
+            device_info[physical_device_id].handle, kernel_csr_address_map);
+  }
 }
 
 size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
