@@ -1016,7 +1016,7 @@ static bool l_is_simulator_dispatch(acl_mmd_dispatch_t *mmd_dispatch) {
 }
 
 static void l_update_simulator(int handle, unsigned int physical_device_id,
-                             const acl_device_def_autodiscovery_t &dev) {
+                               const acl_device_def_autodiscovery_t &dev) {
   std::vector<aocl_mmd_memory_info_t> mem_info(dev.num_global_mem_systems);
   for (unsigned i = 0; i < mem_info.size(); ++i) {
     mem_info[i].start =
@@ -1312,17 +1312,6 @@ int acl_hal_mmd_pll_reconfigure(unsigned int physical_device_id,
   }
 }
 
-void acl_hal_mmd_get_device_status(cl_uint num_devices,
-                                   const cl_device_id *devices) {
-  unsigned physical_device_id;
-  for (unsigned idevice = 0; idevice < num_devices; idevice++) {
-    assert(devices[idevice]->opened_count > 0);
-
-    physical_device_id = devices[idevice]->def.physical_device_id;
-    acl_kernel_if_check_kernel_status(&kern[physical_device_id]);
-  }
-}
-
 int acl_hal_mmd_get_debug_verbosity() { return debug_verbosity; }
 
 ACL_HAL_EXPORT const acl_hal_t *
@@ -1545,6 +1534,17 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
   return &acl_hal_mmd;
 }
 
+void acl_hal_mmd_get_device_status(cl_uint num_devices,
+                                   const cl_device_id *devices) {
+  unsigned physical_device_id;
+  for (unsigned idevice = 0; idevice < num_devices; idevice++) {
+    assert(devices[idevice]->opened_count > 0);
+
+    physical_device_id = devices[idevice]->def.physical_device_id;
+    acl_kernel_if_check_kernel_status(&kern[physical_device_id]);
+  }
+}
+
 int acl_hal_mmd_try_devices(cl_uint num_devices, const cl_device_id *devices,
                             cl_platform_id platform) {
 
@@ -1686,6 +1686,246 @@ void acl_hal_mmd_init_device(const acl_system_def_t *sysdef) {
   sysdef = sysdef;
 
   // Perhaps tell kernel interface what cl_device looks like
+}
+
+// Program the FPGA device with the given binary.
+// the status returned:
+// 0 : program succeeds
+// ACL_PROGRAM_FAILED (-1) : program failed
+// ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM (-2) : memory-preserved program failed
+int acl_hal_mmd_program_device(unsigned int physical_device_id,
+                               const acl_device_def_t *devdef,
+                               const struct acl_pkg_file *binary,
+                               int acl_program_mode) {
+  char *sof;
+  size_t sof_len;
+  bool is_simulator;
+  static cl_bool msg_printed = CL_FALSE;
+  int temp_handle = 0;
+  acl_assert_locked();
+
+  if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_FPGA_BIN, &sof_len)) {
+    if (sof_len < MIN_SOF_SIZE) {
+      printf(" mmd: program_device:  fpga.bin is too small, only %lu bytes.\n",
+             (long)sof_len);
+      fflush(stdout);
+      return ACL_PROGRAM_FAILED;
+    }
+  }
+  // Get reference to the fpga.bin, just in case.
+  ACL_HAL_DEBUG_MSG_VERBOSE(
+      1, " mmd: program_device:  Get fpga.bin from binary...\n");
+  if (!acl_pkg_read_section_transient(binary, ACL_PKG_SECTION_FPGA_BIN, &sof)) {
+    printf("HAL program_device:  Could not get fpga.bin out of binary\n");
+    fflush(stdout);
+    return ACL_PROGRAM_FAILED;
+  }
+
+  size_t pll_config_len = 0;
+  std::string pll_config;
+  if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_PLL_CONFIG,
+                             &pll_config_len)) {
+    if (pll_config_len < MIN_PLL_CONFIG_SIZE) {
+      printf(
+          " mmd: program_device:  pll_config is too small, only %lu bytes.\n",
+          (long)pll_config_len);
+      fflush(stdout);
+      return ACL_PROGRAM_FAILED;
+    }
+    char *pll_config_read = nullptr;
+    if (!acl_pkg_read_section_transient(binary, ACL_PKG_SECTION_PLL_CONFIG,
+                                        &pll_config_read)) {
+      printf("HAL program_device:  Could not get pll_config out of binary\n");
+      fflush(stdout);
+      return ACL_PROGRAM_FAILED;
+    }
+    // The returned pll_config_read is not null terminated so have to
+    // assign the first pll_config_len characters to pll_config.
+    pll_config.assign(pll_config_read, pll_config_read + pll_config_len);
+  }
+
+  if (debug_verbosity) {
+    // Show the hash and version info, if they exist.
+    size_t version_len = 0;
+    size_t hash_len = 0;
+#define EXPECTED_HASH_LEN 40
+#define MAX_VERSION_LEN 40
+    char hash[EXPECTED_HASH_LEN + 1];
+    char version[MAX_VERSION_LEN + 1];
+    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_ACL_VERSION,
+                               &version_len) &&
+        version_len <= MAX_VERSION_LEN &&
+        acl_pkg_read_section(binary, ACL_PKG_SECTION_ACL_VERSION, version,
+                             version_len)) {
+      version[version_len] = 0; // terminate with NUL
+      printf("mmd: binary built with aocl version %s\n", version);
+    } else {
+      printf("mmd: no aocl version stored in binary\n");
+    }
+    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_HASH, &hash_len)) {
+      if (hash_len == EXPECTED_HASH_LEN &&
+          acl_pkg_read_section(binary, ACL_PKG_SECTION_HASH, hash, hash_len)) {
+        hash[EXPECTED_HASH_LEN] = 0; // terminate with NUL
+        printf("mmd: binary hash %s\n", hash);
+      } else {
+        if (hash_len != EXPECTED_HASH_LEN) {
+          printf("mmd: binary hash len should be %d but is %d\n",
+                 EXPECTED_HASH_LEN, (int)hash_len);
+        } else {
+          printf("mmd: Could not get hash from binary\n");
+        }
+      }
+    } else {
+      printf("mmd: no hash stored in binary\n");
+    }
+#undef EXPECTED_HASH_LEN
+    fflush(stdout);
+  }
+
+  // The message below may interfere with the simulator standard output in some
+  // cases (e.g. features/printf/test), where there are multiple kernels and
+  // resources are released between kernel runs.  For the simulator, only print
+  // this message once. This is a horrible kludge.
+  is_simulator =
+      l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch);
+  msg_printed = (cl_bool)CL_FALSE;
+  if (!(is_simulator && msg_printed)) {
+    ACL_HAL_DEBUG_MSG_VERBOSE(1, "Reprogramming device [%d] with handle %d\n",
+                              physical_device_id,
+                              device_info[physical_device_id].handle);
+    msg_printed = CL_TRUE;
+  }
+
+  // mmd check and use the correct reprogram flow accordingly
+  // only check the first board package
+  if (MMDVERSION_LESSTHAN(
+          device_info[physical_device_id].mmd_dispatch->mmd_version, 18.1)) {
+    // The mmd version is old. The runtime and hal would have to try reprogram
+    // the device with the old flow but first we need to check the
+    // aocl_mmd_reprogram is implemented.
+    if (!device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram) {
+      fprintf(stderr, "mmd program_device: The current board support package "
+                      "does not support device reprogramming. Exit.\n");
+      return ACL_PROGRAM_FAILED;
+    }
+    if (acl_program_mode == ACL_PROGRAM_PRESERVE_MEM) {
+      return ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM;
+    } else {
+      ACL_HAL_DEBUG_MSG_VERBOSE(
+          1,
+          "HAL program_device: MMD version [%f] does not match runtime, trying "
+          "memory-unpreserved reprogramming.\n",
+          device_info[physical_device_id].mmd_dispatch->mmd_version);
+      if ((device_info[physical_device_id].handle =
+               device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram(
+                   device_info[physical_device_id].handle, sof, sof_len)) < 0) {
+        fprintf(stderr, "mmd program_device: Board reprogram failed\n");
+        return ACL_PROGRAM_FAILED;
+      }
+    }
+  } else {
+    // The mmd version is up-to-date. Can safely try the new program flow
+    // first of all, check if the aocl_mmd_program is implemented
+    if (!device_info[physical_device_id].mmd_dispatch->aocl_mmd_program) {
+      fprintf(stderr, "mmd program_device: The current board support package "
+                      "does not support device reprogramming. Exit.\n");
+      return ACL_PROGRAM_FAILED;
+    }
+    // check if the old reprogram API is implemented in the BSP. If so, exit as
+    // error
+    if (device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram) {
+      fprintf(stderr, "mmd program_device: aocl_mmd_reprogram is deprecated! "
+                      "Program with aocl_mmd_program instead. Exit.\n");
+      return ACL_PROGRAM_FAILED;
+    }
+    if (acl_program_mode == ACL_PROGRAM_PRESERVE_MEM) {
+      // first time try reprogram with memory preserving
+      ACL_HAL_DEBUG_MSG_VERBOSE(
+          1, "HAL program_device: Trying memory-preserved programming\n");
+      temp_handle =
+          device_info[physical_device_id].mmd_dispatch->aocl_mmd_program(
+              device_info[physical_device_id].handle, sof, sof_len,
+              AOCL_MMD_PROGRAM_PRESERVE_GLOBAL_MEM);
+      if (temp_handle < 0) {
+        // memory-preserved program failed, needs to go back do the save/restore
+        // first and come back
+        ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL program_device: memory-preserved "
+                                     "reprogramming unsuccessful\n");
+        return ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM;
+      } else {
+        // memory-preserved program success, no need to reprogram again
+        device_info[physical_device_id].handle = temp_handle;
+      }
+    } else {
+      ACL_HAL_DEBUG_MSG_VERBOSE(
+          1, "HAL program_device: Trying memory-unpreserved programming\n");
+      // already know memory-preserved program failed. have done save/restore.
+      // Safe to go through memory-unpreserved program
+      if ((device_info[physical_device_id].handle =
+               device_info[physical_device_id].mmd_dispatch->aocl_mmd_program(
+                   device_info[physical_device_id].handle, sof, sof_len, 0)) <
+          0) {
+        ACL_HAL_DEBUG_MSG_VERBOSE(
+            1, "HAL program_device: memory-unpreserved programming failed\n");
+        fprintf(stderr, "mmd program_device: Board reprogram failed\n");
+        return ACL_PROGRAM_FAILED;
+      }
+    }
+  }
+  // Need to remap the IDs after reprogramming
+  kern[physical_device_id].io.device_info = &(device_info[physical_device_id]);
+  bsp_io_kern[physical_device_id].device_info =
+      &(device_info[physical_device_id]);
+  bsp_io_pll[physical_device_id].device_info =
+      &(device_info[physical_device_id]);
+
+  // Tell the simulator (if present) about global memory sizes.
+  if (is_simulator) {
+    l_update_simulator(device_info[physical_device_id].handle,
+                       physical_device_id, devdef->autodiscovery_def);
+  }
+
+  device_info[physical_device_id].mmd_dispatch->aocl_mmd_set_status_handler(
+      device_info[physical_device_id].handle, acl_hal_mmd_status_handler, NULL);
+  acl_kernel_if_update(devdef->autodiscovery_def, &kern[physical_device_id]);
+  if (pll_interface >= 0) {
+    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_PLL_CONFIG,
+                               &pll_config_len)) {
+      info_assert(acl_pll_init(&pll[physical_device_id],
+                               bsp_io_pll[physical_device_id], pll_config) == 0,
+                  "Failed to read PLL config");
+
+    } else {
+      info_assert(acl_pll_init(&pll[physical_device_id],
+                               bsp_io_pll[physical_device_id], "") == 0,
+                  "Failed to read PLL config");
+      l_override_pll(physical_device_id);
+    }
+  }
+  acl_kernel_if_reset(&kern[physical_device_id]);
+
+  // Register interrupt handlers
+  // Set kernel interrupt handler
+  interrupt_user_data[physical_device_id] = physical_device_id;
+  device_info[physical_device_id].mmd_dispatch->aocl_mmd_set_interrupt_handler(
+      device_info[physical_device_id].handle, acl_hal_mmd_kernel_interrupt,
+      &interrupt_user_data[physical_device_id]);
+
+  // ECC is handled by the device_interrupt
+  if (device_info[physical_device_id]
+          .mmd_dispatch->aocl_mmd_set_device_interrupt_handler != NULL) {
+    device_info[physical_device_id]
+        .mmd_dispatch->aocl_mmd_set_device_interrupt_handler(
+            device_info[physical_device_id].handle,
+            acl_hal_mmd_device_interrupt,
+            &interrupt_user_data[physical_device_id]);
+  }
+  // Post-PLL config init function - at this point, it's safe to talk to the
+  // kernel CSR registers.
+  if (acl_kernel_if_post_pll_config_init(&kern[physical_device_id]))
+    return -1;
+
+  return 0;
 }
 
 void acl_hal_mmd_kernel_interrupt(int handle_in, void *user_data) {
@@ -2015,246 +2255,24 @@ void acl_hal_mmd_unstall_kernel(unsigned int physical_device_id,
   acl_kernel_if_unstall_kernel(&kern[physical_device_id], activation_id);
 }
 
-// Program the FPGA device with the given binary.
-// the status returned:
-// 0 : program succeeds
-// ACL_PROGRAM_FAILED (-1) : program failed
-// ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM (-2) : memory-preserved program failed
-int acl_hal_mmd_program_device(unsigned int physical_device_id,
-                               const acl_device_def_t *devdef,
-                               const struct acl_pkg_file *binary,
-                               int acl_program_mode) {
-  char *sof;
-  size_t sof_len;
-  bool is_simulator;
-  static cl_bool msg_printed = CL_FALSE;
-  int temp_handle = 0;
-  acl_assert_locked();
-
-  if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_FPGA_BIN, &sof_len)) {
-    if (sof_len < MIN_SOF_SIZE) {
-      printf(" mmd: program_device:  fpga.bin is too small, only %lu bytes.\n",
-             (long)sof_len);
-      fflush(stdout);
-      return ACL_PROGRAM_FAILED;
-    }
-  }
-  // Get reference to the fpga.bin, just in case.
-  ACL_HAL_DEBUG_MSG_VERBOSE(
-      1, " mmd: program_device:  Get fpga.bin from binary...\n");
-  if (!acl_pkg_read_section_transient(binary, ACL_PKG_SECTION_FPGA_BIN, &sof)) {
-    printf("HAL program_device:  Could not get fpga.bin out of binary\n");
-    fflush(stdout);
-    return ACL_PROGRAM_FAILED;
-  }
-
-  size_t pll_config_len = 0;
-  std::string pll_config;
-  if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_PLL_CONFIG,
-                             &pll_config_len)) {
-    if (pll_config_len < MIN_PLL_CONFIG_SIZE) {
-      printf(
-          " mmd: program_device:  pll_config is too small, only %lu bytes.\n",
-          (long)pll_config_len);
-      fflush(stdout);
-      return ACL_PROGRAM_FAILED;
-    }
-    char *pll_config_read = nullptr;
-    if (!acl_pkg_read_section_transient(binary, ACL_PKG_SECTION_PLL_CONFIG,
-                                        &pll_config_read)) {
-      printf("HAL program_device:  Could not get pll_config out of binary\n");
-      fflush(stdout);
-      return ACL_PROGRAM_FAILED;
-    }
-    // The returned pll_config_read is not null terminated so have to
-    // assign the first pll_config_len characters to pll_config.
-    pll_config.assign(pll_config_read, pll_config_read + pll_config_len);
-  }
-
-  if (debug_verbosity) {
-    // Show the hash and version info, if they exist.
-    size_t version_len = 0;
-    size_t hash_len = 0;
-#define EXPECTED_HASH_LEN 40
-#define MAX_VERSION_LEN 40
-    char hash[EXPECTED_HASH_LEN + 1];
-    char version[MAX_VERSION_LEN + 1];
-    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_ACL_VERSION,
-                               &version_len) &&
-        version_len <= MAX_VERSION_LEN &&
-        acl_pkg_read_section(binary, ACL_PKG_SECTION_ACL_VERSION, version,
-                             version_len)) {
-      version[version_len] = 0; // terminate with NUL
-      printf("mmd: binary built with aocl version %s\n", version);
-    } else {
-      printf("mmd: no aocl version stored in binary\n");
-    }
-    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_HASH, &hash_len)) {
-      if (hash_len == EXPECTED_HASH_LEN &&
-          acl_pkg_read_section(binary, ACL_PKG_SECTION_HASH, hash, hash_len)) {
-        hash[EXPECTED_HASH_LEN] = 0; // terminate with NUL
-        printf("mmd: binary hash %s\n", hash);
-      } else {
-        if (hash_len != EXPECTED_HASH_LEN) {
-          printf("mmd: binary hash len should be %d but is %d\n",
-                 EXPECTED_HASH_LEN, (int)hash_len);
-        } else {
-          printf("mmd: Could not get hash from binary\n");
-        }
-      }
-    } else {
-      printf("mmd: no hash stored in binary\n");
-    }
-#undef EXPECTED_HASH_LEN
-    fflush(stdout);
-  }
-
-  // The message below may interfere with the simulator standard output in some
-  // cases (e.g. features/printf/test), where there are multiple kernels and
-  // resources are released between kernel runs.  For the simulator, only print
-  // this message once. This is a horrible kludge.
-  is_simulator =
-      l_is_simulator_dispatch(device_info[physical_device_id].mmd_dispatch);
-  msg_printed = (cl_bool)CL_FALSE;
-  if (!(is_simulator && msg_printed)) {
-    ACL_HAL_DEBUG_MSG_VERBOSE(1, "Reprogramming device [%d] with handle %d\n",
-                              physical_device_id,
-                              device_info[physical_device_id].handle);
-    msg_printed = CL_TRUE;
-  }
-
-  // mmd check and use the correct reprogram flow accordingly
-  // only check the first board package
-  if (MMDVERSION_LESSTHAN(
-          device_info[physical_device_id].mmd_dispatch->mmd_version, 18.1)) {
-    // The mmd version is old. The runtime and hal would have to try reprogram
-    // the device with the old flow but first we need to check the
-    // aocl_mmd_reprogram is implemented.
-    if (!device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram) {
-      fprintf(stderr, "mmd program_device: The current board support package "
-                      "does not support device reprogramming. Exit.\n");
-      return ACL_PROGRAM_FAILED;
-    }
-    if (acl_program_mode == ACL_PROGRAM_PRESERVE_MEM) {
-      return ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM;
-    } else {
-      ACL_HAL_DEBUG_MSG_VERBOSE(
-          1,
-          "HAL program_device: MMD version [%f] does not match runtime, trying "
-          "memory-unpreserved reprogramming.\n",
-          device_info[physical_device_id].mmd_dispatch->mmd_version);
-      if ((device_info[physical_device_id].handle =
-               device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram(
-                   device_info[physical_device_id].handle, sof, sof_len)) < 0) {
-        fprintf(stderr, "mmd program_device: Board reprogram failed\n");
-        return ACL_PROGRAM_FAILED;
-      }
-    }
-  } else {
-    // The mmd version is up-to-date. Can safely try the new program flow
-    // first of all, check if the aocl_mmd_program is implemented
-    if (!device_info[physical_device_id].mmd_dispatch->aocl_mmd_program) {
-      fprintf(stderr, "mmd program_device: The current board support package "
-                      "does not support device reprogramming. Exit.\n");
-      return ACL_PROGRAM_FAILED;
-    }
-    // check if the old reprogram API is implemented in the BSP. If so, exit as
-    // error
-    if (device_info[physical_device_id].mmd_dispatch->aocl_mmd_reprogram) {
-      fprintf(stderr, "mmd program_device: aocl_mmd_reprogram is deprecated! "
-                      "Program with aocl_mmd_program instead. Exit.\n");
-      return ACL_PROGRAM_FAILED;
-    }
-    if (acl_program_mode == ACL_PROGRAM_PRESERVE_MEM) {
-      // first time try reprogram with memory preserving
-      ACL_HAL_DEBUG_MSG_VERBOSE(
-          1, "HAL program_device: Trying memory-preserved programming\n");
-      temp_handle =
-          device_info[physical_device_id].mmd_dispatch->aocl_mmd_program(
-              device_info[physical_device_id].handle, sof, sof_len,
-              AOCL_MMD_PROGRAM_PRESERVE_GLOBAL_MEM);
-      if (temp_handle < 0) {
-        // memory-preserved program failed, needs to go back do the save/restore
-        // first and come back
-        ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL program_device: memory-preserved "
-                                     "reprogramming unsuccessful\n");
-        return ACL_PROGRAM_CANNOT_PRESERVE_GLOBAL_MEM;
-      } else {
-        // memory-preserved program success, no need to reprogram again
-        device_info[physical_device_id].handle = temp_handle;
-      }
-    } else {
-      ACL_HAL_DEBUG_MSG_VERBOSE(
-          1, "HAL program_device: Trying memory-unpreserved programming\n");
-      // already know memory-preserved program failed. have done save/restore.
-      // Safe to go through memory-unpreserved program
-      if ((device_info[physical_device_id].handle =
-               device_info[physical_device_id].mmd_dispatch->aocl_mmd_program(
-                   device_info[physical_device_id].handle, sof, sof_len, 0)) <
-          0) {
-        ACL_HAL_DEBUG_MSG_VERBOSE(
-            1, "HAL program_device: memory-unpreserved programming failed\n");
-        fprintf(stderr, "mmd program_device: Board reprogram failed\n");
-        return ACL_PROGRAM_FAILED;
-      }
-    }
-  }
-  // Need to remap the IDs after reprogramming
-  kern[physical_device_id].io.device_info = &(device_info[physical_device_id]);
-  bsp_io_kern[physical_device_id].device_info =
-      &(device_info[physical_device_id]);
-  bsp_io_pll[physical_device_id].device_info =
-      &(device_info[physical_device_id]);
-
-  // Tell the simulator (if present) about global memory sizes.
-  if (is_simulator) {
-    l_update_simulator(device_info[physical_device_id].handle, physical_device_id,
-                     devdef->autodiscovery_def);
-  }
-
-  device_info[physical_device_id].mmd_dispatch->aocl_mmd_set_status_handler(
-      device_info[physical_device_id].handle, acl_hal_mmd_status_handler, NULL);
-  acl_kernel_if_update(devdef->autodiscovery_def, &kern[physical_device_id]);
-  if (pll_interface >= 0) {
-    if (acl_pkg_section_exists(binary, ACL_PKG_SECTION_PLL_CONFIG,
-                               &pll_config_len)) {
-      info_assert(acl_pll_init(&pll[physical_device_id],
-                               bsp_io_pll[physical_device_id], pll_config) == 0,
-                  "Failed to read PLL config");
-
-    } else {
-      info_assert(acl_pll_init(&pll[physical_device_id],
-                               bsp_io_pll[physical_device_id], "") == 0,
-                  "Failed to read PLL config");
-      l_override_pll(physical_device_id);
-    }
-  }
+void acl_hal_mmd_reset_kernels(cl_device_id device) {
+  unsigned int physical_device_id = device->def.physical_device_id;
   acl_kernel_if_reset(&kern[physical_device_id]);
-
-  // Register interrupt handlers
-  // Set kernel interrupt handler
-  interrupt_user_data[physical_device_id] = physical_device_id;
-  device_info[physical_device_id].mmd_dispatch->aocl_mmd_set_interrupt_handler(
-      device_info[physical_device_id].handle, acl_hal_mmd_kernel_interrupt,
-      &interrupt_user_data[physical_device_id]);
-
-  // ECC is handled by the device_interrupt
-  if (device_info[physical_device_id]
-          .mmd_dispatch->aocl_mmd_set_device_interrupt_handler != NULL) {
-    device_info[physical_device_id]
-        .mmd_dispatch->aocl_mmd_set_device_interrupt_handler(
-            device_info[physical_device_id].handle,
-            acl_hal_mmd_device_interrupt,
-            &interrupt_user_data[physical_device_id]);
+  for (unsigned int k = 0; k < kern[physical_device_id].num_accel; ++k) {
+    for (unsigned int i = 0;
+         i < kern[physical_device_id].accel_invoc_queue_depth[k] + 1; ++i) {
+      int activation_id = kern[physical_device_id].accel_job_ids[k][i];
+      if (kern[physical_device_id].accel_job_ids[k][i] >= 0) {
+        kern[physical_device_id].accel_job_ids[k][i] = -1;
+        acl_kernel_update_fn(activation_id,
+                             -1); // Signal that it finished with error, since
+                                  // we forced it to finish
+      }
+    }
   }
-  // Post-PLL config init function - at this point, it's safe to talk to the
-  // kernel CSR registers.
-  if (acl_kernel_if_post_pll_config_init(&kern[physical_device_id]))
-    return -1;
-
-  return 0;
 }
 
+// ************************ Host pipe functions *************************
 int acl_hal_mmd_hostchannel_create(unsigned int physical_device_id,
                                    char *channel_name, size_t num_packets,
                                    size_t packet_size, int direction) {
@@ -2465,6 +2483,94 @@ size_t acl_hal_mmd_hostchannel_ack_buffer(unsigned int physical_device_id,
           pcie_dev_handle, channel_handle, ack_size, status);
 }
 
+void *acl_hal_mmd_hostchannel_get_sideband_buffer(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    size_t *buffer_size, int *status) {
+
+  int pcie_dev_handle;
+
+  pcie_dev_handle = device_info[physical_device_id].handle;
+  *status = 0;
+
+  // get the pointer to host channel mmd buffer
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+  return device_info[physical_device_id]
+      .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+          pcie_dev_handle, channel_handle, port_name, buffer_size, status);
+}
+
+size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    void *host_buffer, size_t read_size, int *status) {
+
+  size_t buffer_size = 0;
+  size_t pulled;
+  int pcie_dev_handle;
+  void *pull_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+  pull_buffer =
+      device_info[physical_device_id]
+          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+
+  if ((NULL == pull_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pulled to user buffer
+  buffer_size = (read_size > buffer_size) ? buffer_size : read_size;
+
+  // Copy the data into the user buffer
+  safe_memcpy(host_buffer, pull_buffer, buffer_size, buffer_size, buffer_size);
+
+  pulled = buffer_size;
+
+  return pulled;
+}
+
+size_t acl_hal_mmd_hostchannel_sideband_push_no_ack(
+    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
+    const void *host_buffer, size_t write_size, int *status) {
+
+  size_t buffer_size = 0;
+  size_t pushed;
+  int pcie_dev_handle;
+  void *push_buffer;
+
+  *status = 0;
+  pcie_dev_handle = device_info[physical_device_id].handle;
+
+  // get the pointer to host channel push buffer
+  assert(device_info[physical_device_id]
+             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
+
+  push_buffer =
+      device_info[physical_device_id]
+          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+
+  if ((NULL == push_buffer) || (0 == buffer_size)) {
+    return 0;
+  }
+
+  // How much can be pushed to push buffer
+  buffer_size = (write_size > buffer_size) ? buffer_size : write_size;
+
+  // Copy the data into the push buffer
+
+  safe_memcpy(push_buffer, host_buffer, buffer_size, buffer_size, buffer_size);
+
+  pushed = buffer_size;
+  return pushed;
+}
+// **********************************************************************
+
 cl_bool acl_hal_mmd_query_temperature(unsigned int physical_device_id,
                                       cl_int *temp) {
   float f;
@@ -2584,9 +2690,7 @@ cl_ulong acl_hal_mmd_get_timestamp() {
   seconds = ticks / (double)m_ticks_per_second;
   return (cl_ulong)((double)seconds * (double)NS_PER_S + 0.5);
 }
-
 #else
-
 // Query the system timer, return a timer value in ns
 cl_ulong acl_hal_mmd_get_timestamp() {
   struct timespec a;
@@ -2667,8 +2771,88 @@ int acl_hal_mmd_set_profile_stop_count(unsigned int physical_device_id,
   return acl_kernel_if_set_profile_stop_cycle(&kern[physical_device_id],
                                               accel_id, value);
 }
+// **********************************************************************
 
-// ********************* Wrapped functions ********************
+// Convert kernel and pll accessors to aocl_mmd
+static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
+                                 size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5,
+                            "HAL Reading from Kernel: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_read(
+             io->device_info->handle, NULL, size, (void *)dest,
+             kernel_interface, (size_t)src) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_kernel_if_write(acl_bsp_io *io, dev_addr_t dest,
+                                  const char *src, size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to Kernel: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_write(
+             io->device_info->handle, NULL, size, (const void *)src,
+             kernel_interface, (size_t)dest) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_pll_read(acl_bsp_io *io, dev_addr_t src, char *dest,
+                           size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Reading from PLL: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_read(
+             io->device_info->handle, NULL, size, (void *)dest, pll_interface,
+             (size_t)src) == 0
+             ? size
+             : 0;
+}
+
+static size_t acl_pll_write(acl_bsp_io *io, dev_addr_t dest, const char *src,
+                            size_t size) {
+  acl_assert_locked_or_sig();
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to PLL: %zu bytes %zx -> %zx\n",
+                            size, (size_t)src, (size_t)dest);
+  return io->device_info->mmd_dispatch->aocl_mmd_write(
+             io->device_info->handle, NULL, size, (const void *)src,
+             pll_interface, (size_t)dest) == 0
+             ? size
+             : 0;
+}
+
+static time_ns acl_bsp_get_timestamp() {
+  return (time_ns)acl_hal_mmd_get_timestamp();
+}
+
+static void *
+acl_hal_get_board_extension_function_address(const char *func_name,
+                                             unsigned int physical_device_id) {
+  char *error_msg;
+  acl_assert_locked();
+
+  auto *fn_ptr =
+      my_dlsym(device_info[physical_device_id].mmd_dispatch->mmd_library,
+               func_name, &error_msg);
+
+  if (!fn_ptr) {
+    printf("Error: Unable to find function name %s in board library %s (%p)\n",
+           func_name,
+           device_info[physical_device_id].mmd_dispatch->library_name.c_str(),
+           device_info[physical_device_id].mmd_dispatch->mmd_library);
+    return nullptr;
+  }
+
+  return fn_ptr;
+}
+
+// *************************** USM functions ****************************
 // Shared memory allocator
 void *acl_hal_mmd_legacy_shared_alloc(cl_context context, size_t size,
                                       unsigned long long *device_ptr_out) {
@@ -2780,102 +2964,6 @@ void acl_hal_mmd_legacy_shared_free(cl_context context, void *host_ptr,
   }
 }
 
-// Convert kernel and pll accessors to aocl_mmd
-
-static size_t acl_kernel_if_read(acl_bsp_io *io, dev_addr_t src, char *dest,
-                                 size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5,
-                            "HAL Reading from Kernel: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_read(
-             io->device_info->handle, NULL, size, (void *)dest,
-             kernel_interface, (size_t)src) == 0
-             ? size
-             : 0;
-}
-
-static size_t acl_kernel_if_write(acl_bsp_io *io, dev_addr_t dest,
-                                  const char *src, size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to Kernel: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_write(
-             io->device_info->handle, NULL, size, (const void *)src,
-             kernel_interface, (size_t)dest) == 0
-             ? size
-             : 0;
-}
-
-void acl_hal_mmd_reset_kernels(cl_device_id device) {
-  unsigned int physical_device_id = device->def.physical_device_id;
-  acl_kernel_if_reset(&kern[physical_device_id]);
-  for (unsigned int k = 0; k < kern[physical_device_id].num_accel; ++k) {
-    for (unsigned int i = 0;
-         i < kern[physical_device_id].accel_invoc_queue_depth[k] + 1; ++i) {
-      int activation_id = kern[physical_device_id].accel_job_ids[k][i];
-      if (kern[physical_device_id].accel_job_ids[k][i] >= 0) {
-        kern[physical_device_id].accel_job_ids[k][i] = -1;
-        acl_kernel_update_fn(activation_id,
-                             -1); // Signal that it finished with error, since
-                                  // we forced it to finish
-      }
-    }
-  }
-}
-
-static size_t acl_pll_read(acl_bsp_io *io, dev_addr_t src, char *dest,
-                           size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Reading from PLL: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_read(
-             io->device_info->handle, NULL, size, (void *)dest, pll_interface,
-             (size_t)src) == 0
-             ? size
-             : 0;
-}
-
-static size_t acl_pll_write(acl_bsp_io *io, dev_addr_t dest, const char *src,
-                            size_t size) {
-  acl_assert_locked_or_sig();
-
-  ACL_HAL_DEBUG_MSG_VERBOSE(5, "HAL Writing to PLL: %zu bytes %zx -> %zx\n",
-                            size, (size_t)src, (size_t)dest);
-  return io->device_info->mmd_dispatch->aocl_mmd_write(
-             io->device_info->handle, NULL, size, (const void *)src,
-             pll_interface, (size_t)dest) == 0
-             ? size
-             : 0;
-}
-static time_ns acl_bsp_get_timestamp() {
-  return (time_ns)acl_hal_mmd_get_timestamp();
-}
-
-static void *
-acl_hal_get_board_extension_function_address(const char *func_name,
-                                             unsigned int physical_device_id) {
-  char *error_msg;
-  acl_assert_locked();
-
-  auto *fn_ptr =
-      my_dlsym(device_info[physical_device_id].mmd_dispatch->mmd_library,
-               func_name, &error_msg);
-
-  if (!fn_ptr) {
-    printf("Error: Unable to find function name %s in board library %s (%p)\n",
-           func_name,
-           device_info[physical_device_id].mmd_dispatch->library_name.c_str(),
-           device_info[physical_device_id].mmd_dispatch->mmd_library);
-    return nullptr;
-  }
-
-  return fn_ptr;
-}
-
 void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
                                size_t alignment, mem_properties_t *properties,
                                int *error) {
@@ -2981,6 +3069,21 @@ int acl_hal_mmd_free(cl_context context, void *mem) {
     return result;
   }
 }
+// **********************************************************************
+
+size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
+                            void *ptr, size_t size) {
+  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_read(
+      device_info[physical_device_id].handle, NULL, size, (void *)ptr,
+      kernel_interface, (size_t)offset);
+}
+
+size_t acl_hal_mmd_write_csr(unsigned int physical_device_id, uintptr_t offset,
+                             const void *ptr, size_t size) {
+  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_write(
+      device_info[physical_device_id].handle, NULL, size, (const void *)ptr,
+      kernel_interface, (size_t)offset);
+}
 
 void acl_hal_mmd_simulation_streaming_kernel_start(
     unsigned int physical_device_id, const std::string &kernel_name,
@@ -3009,20 +3112,6 @@ void acl_hal_mmd_simulation_set_kernel_cra_address_map(
   }
 }
 
-size_t acl_hal_mmd_read_csr(unsigned int physical_device_id, uintptr_t offset,
-                            void *ptr, size_t size) {
-  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_read(
-      device_info[physical_device_id].handle, NULL, size, (void *)ptr,
-      kernel_interface, (size_t)offset);
-}
-
-size_t acl_hal_mmd_write_csr(unsigned int physical_device_id, uintptr_t offset,
-                             const void *ptr, size_t size) {
-  return device_info[physical_device_id].mmd_dispatch->aocl_mmd_write(
-      device_info[physical_device_id].handle, NULL, size, (const void *)ptr,
-      kernel_interface, (size_t)offset);
-}
-
 int acl_hal_mmd_simulation_device_global_interface_read(
     unsigned int physical_device_id, const char *interface_name,
     void *host_addr, size_t dev_addr, size_t size) {
@@ -3039,91 +3128,4 @@ int acl_hal_mmd_simulation_device_global_interface_write(
       .mmd_dispatch->aocl_mmd_simulation_device_global_interface_write(
           device_info[physical_device_id].handle, interface_name, host_addr,
           dev_addr, size);
-}
-
-void *acl_hal_mmd_hostchannel_get_sideband_buffer(
-    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
-    size_t *buffer_size, int *status) {
-
-  int pcie_dev_handle;
-
-  pcie_dev_handle = device_info[physical_device_id].handle;
-  *status = 0;
-
-  // get the pointer to host channel mmd buffer
-  assert(device_info[physical_device_id]
-             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
-  return device_info[physical_device_id]
-      .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-          pcie_dev_handle, channel_handle, port_name, buffer_size, status);
-}
-
-size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
-    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
-    void *host_buffer, size_t read_size, int *status) {
-
-  size_t buffer_size = 0;
-  size_t pulled;
-  int pcie_dev_handle;
-  void *pull_buffer;
-
-  *status = 0;
-  pcie_dev_handle = device_info[physical_device_id].handle;
-
-  assert(device_info[physical_device_id]
-             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
-  pull_buffer =
-      device_info[physical_device_id]
-          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
-
-  if ((NULL == pull_buffer) || (0 == buffer_size)) {
-    return 0;
-  }
-
-  // How much can be pulled to user buffer
-  buffer_size = (read_size > buffer_size) ? buffer_size : read_size;
-
-  // Copy the data into the user buffer
-  safe_memcpy(host_buffer, pull_buffer, buffer_size, buffer_size, buffer_size);
-
-  pulled = buffer_size;
-
-  return pulled;
-}
-
-size_t acl_hal_mmd_hostchannel_sideband_push_no_ack(
-    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
-    const void *host_buffer, size_t write_size, int *status) {
-
-  size_t buffer_size = 0;
-  size_t pushed;
-  int pcie_dev_handle;
-  void *push_buffer;
-
-  *status = 0;
-  pcie_dev_handle = device_info[physical_device_id].handle;
-
-  // get the pointer to host channel push buffer
-  assert(device_info[physical_device_id]
-             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
-
-  push_buffer =
-      device_info[physical_device_id]
-          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
-
-  if ((NULL == push_buffer) || (0 == buffer_size)) {
-    return 0;
-  }
-
-  // How much can be pushed to push buffer
-  buffer_size = (write_size > buffer_size) ? buffer_size : write_size;
-
-  // Copy the data into the push buffer
-
-  safe_memcpy(push_buffer, host_buffer, buffer_size, buffer_size, buffer_size);
-
-  pushed = buffer_size;
-  return pushed;
 }
