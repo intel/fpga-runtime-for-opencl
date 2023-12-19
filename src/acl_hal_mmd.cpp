@@ -959,6 +959,68 @@ cl_bool l_load_board_libraries(cl_bool load_libraries) {
 }
 #endif
 
+void l_get_physical_devices(acl_mmd_dispatch_t *mmd_dispatch,
+                            unsigned &num_phys_devices) {
+  int num_boards;
+  char *ptr, *saveptr;
+  // This is a bit subtle, pointers to device names might get cached by
+  // various routines
+  static char buf[MAX_BOARD_NAMES_LEN];
+
+  mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_VERSION, sizeof(buf), buf,
+                                          NULL);
+  buf[sizeof(buf) - 1] = 0;
+  mmd_dispatch->mmd_version = atof(buf);
+  min_MMD_version =
+      (!MMDVERSION_LESSTHAN(min_MMD_version, mmd_dispatch->mmd_version))
+          ? mmd_dispatch->mmd_version
+          : min_MMD_version;
+  ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info version: %s\n", buf);
+
+  if (MMDVERSION_LESSTHAN(atof(AOCL_MMD_VERSION_STRING),
+                          mmd_dispatch->mmd_version) || // MMD newer than HAL
+      MMDVERSION_LESSTHAN(mmd_dispatch->mmd_version,
+                          14.0)) // Before this wasn't forward compatible
+  {
+    printf("  Runtime version: %s\n", AOCL_MMD_VERSION_STRING);
+    printf("  MMD version:     %s\n", buf);
+    fflush(stdout);
+    assert(0 && "MMD version mismatch");
+  }
+
+  // Disable yield as initialization
+  acl_hal_mmd.yield = NULL;
+
+  // Dump offline info
+  if (debug_verbosity > 0) {
+    mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_VENDOR_NAME, sizeof(buf),
+                                            buf, NULL);
+    buf[sizeof(buf) - 1] = 0;
+    ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info vendor: %s\n", buf);
+    mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_NUM_BOARDS, sizeof(int),
+                                            &num_boards, NULL);
+    ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info num_boards: %d\n",
+                              num_boards);
+    mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES, sizeof(buf),
+                                            buf, NULL);
+    buf[sizeof(buf) - 1] = 0;
+    ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info boards: %s\n", buf);
+  }
+
+  mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_BOARD_NAMES,
+                                          MAX_BOARD_NAMES_LEN, buf, NULL);
+  buf[MAX_BOARD_NAMES_LEN - 1] = 0;
+  // Probe the platform devices by going through all the possibilities in the
+  // semicolon delimited list
+  ptr = acl_strtok(buf, ";", &saveptr);
+  while (ptr != NULL) {
+    num_phys_devices++;
+    ptr = acl_strtok(NULL, ";", &saveptr);
+  }
+
+  ACL_HAL_DEBUG_MSG_VERBOSE(1, "Found %d devices\n", num_phys_devices);
+}
+
 // Simulator MMD helpers
 static acl_mmd_dispatch_t *l_get_msim_mmd_layer() {
 #ifdef _WIN32
@@ -1318,11 +1380,6 @@ ACL_HAL_EXPORT const acl_hal_t *
 acl_mmd_get_system_definition(acl_system_def_t *sys,
                               acl_mmd_library_names_t *_libraries_to_load) {
   char *hal_debug_var;
-  int num_boards;
-  static char
-      buf[MAX_BOARD_NAMES_LEN]; // This is a bit subtle, pointers to device
-                                // names might get cached by various routines
-  char *ptr, *saveptr;
   int use_offline_only;
 
 #ifdef _WIN32
@@ -1474,62 +1531,9 @@ acl_mmd_get_system_definition(acl_system_def_t *sys,
   sys->num_devices = 0;
   num_physical_devices = 0;
   for (unsigned iboard = 0; iboard < num_board_pkgs; ++iboard) {
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_VERSION, sizeof(buf), buf, NULL);
-    buf[sizeof(buf) - 1] = 0;
-    internal_mmd_dispatch[iboard].mmd_version = atof(buf);
-    min_MMD_version =
-        (!MMDVERSION_LESSTHAN(min_MMD_version,
-                              internal_mmd_dispatch[iboard].mmd_version))
-            ? internal_mmd_dispatch[iboard].mmd_version
-            : min_MMD_version;
-    ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info version: %s\n", buf);
-
-    if (MMDVERSION_LESSTHAN(
-            atof(AOCL_MMD_VERSION_STRING),
-            internal_mmd_dispatch[iboard].mmd_version) || // MMD newer than HAL
-        MMDVERSION_LESSTHAN(internal_mmd_dispatch[iboard].mmd_version,
-                            14.0)) // Before this wasn't forward compatible
-    {
-      printf("  Runtime version: %s\n", AOCL_MMD_VERSION_STRING);
-      printf("  MMD version:     %s\n", buf);
-      fflush(stdout);
-      assert(0 && "MMD version mismatch");
-    }
-
-    // Disable yield as initialization
-    acl_hal_mmd.yield = NULL;
-
-    // Dump offline info
-    if (debug_verbosity > 0) {
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_VENDOR_NAME, sizeof(buf), buf, NULL);
-      buf[sizeof(buf) - 1] = 0;
-      ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info vendor: %s\n", buf);
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_NUM_BOARDS, sizeof(int), &num_boards, NULL);
-      ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info num_boards: %d\n",
-                                num_boards);
-      internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-          AOCL_MMD_BOARD_NAMES, sizeof(buf), buf, NULL);
-      buf[sizeof(buf) - 1] = 0;
-      ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info boards: %s\n", buf);
-    }
-
-    internal_mmd_dispatch[iboard].aocl_mmd_get_offline_info(
-        AOCL_MMD_BOARD_NAMES, MAX_BOARD_NAMES_LEN, buf, NULL);
-    buf[MAX_BOARD_NAMES_LEN - 1] = 0;
-    // Probe the platform devices by going through all the possibilities in the
-    // semicolon delimited list
-    sys->num_devices = 0;
-    ptr = acl_strtok(buf, ";", &saveptr);
-    while (ptr != NULL) {
-      num_physical_devices++;
-      ptr = acl_strtok(NULL, ";", &saveptr);
-    }
+    l_get_physical_devices(&(internal_mmd_dispatch[iboard]),
+                           num_physical_devices);
     sys->num_devices = num_physical_devices;
-
-    ACL_HAL_DEBUG_MSG_VERBOSE(1, "Found %d devices\n", sys->num_devices);
   }
   return &acl_hal_mmd;
 }
