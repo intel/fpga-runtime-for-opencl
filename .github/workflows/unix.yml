@@ -9,6 +9,12 @@
 # enforce UNIX line endings for all except Windows-specific text files.
 name: ensure UNIX line endings
 
+# https://github.blog/changelog/2021-04-20-github-actions-control-permissions-for-github_token/
+# https://github.com/ossf/scorecard/blob/2ef20f17fb2e64147c83440cd2c769653454015a/docs/checks.md#token-permissions
+permissions:
+  # top-level permissions must be defined for security reasons.
+  contents: read
+
 on:
   push:
   pull_request:

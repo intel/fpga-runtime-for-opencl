@@ -24,10 +24,6 @@ permissions:
   # repository, but a private repository that was created manually.
   contents: read
 
-  # If trigger-specific permissions were supported, write permissions to the
-  # container registry would only be needed for push events.
-  packages: write
-
 on:
   push:
     branches:
@@ -60,6 +56,11 @@ on:
 jobs:
   build:
     runs-on: ubuntu-20.04
+
+    permissions:
+      # If trigger-specific permissions were supported, write permissions to the
+      # container registry would only be needed for push events.
+      packages: write
 
     # This rebuilds all container images whenever any single Dockerfile is
     # changed. Therefore, when iterating on a container change, consider
