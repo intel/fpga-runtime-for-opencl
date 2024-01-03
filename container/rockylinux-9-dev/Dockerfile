@@ -23,7 +23,7 @@ RUN \
   && yum -y upgrade \
   && yum -y install \
   cmake \
-  curl \
+  # curl \ Start from rockylinux 9.2, curl is available by default
   elfutils-libelf-devel \
   gcc \
   gcc-c++ \
