@@ -104,6 +104,11 @@ jobs:
         env:
           tag: ${{ steps.tag.outputs.tag }}
 
+      - name: zibai test owner
+        run: echo "$user"
+        env:
+          user: ${{ github.repository_owner }}
+
       - name: login to registry
         #if: github.event_name == 'push'
         run: echo "$token" | docker login ghcr.io -u "$user" --password-stdin
