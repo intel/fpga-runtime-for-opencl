@@ -23,7 +23,7 @@ RUN \
   && yum -y upgrade \
   && yum -y install \
   cmake \
-  curl \
+  # curl \
   elfutils-libelf-devel \
   gcc \
   gcc-c++ \
