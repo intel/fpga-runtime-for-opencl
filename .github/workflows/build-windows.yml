@@ -5,6 +5,12 @@
 
 name: build on Windows
 
+# https://github.blog/changelog/2021-04-20-github-actions-control-permissions-for-github_token/
+permissions:
+  # Grant read permissions to repository in case it is not a forked public
+  # repository, but a private repository that was created manually.
+  contents: read
+
 on:
   push:
     paths:
