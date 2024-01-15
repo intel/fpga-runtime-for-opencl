@@ -823,9 +823,24 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
   acl_set_device_op_execution_status(op, CL_RUNNING);
 
   if (host_pipe_info.implement_in_csr) {
-    // CSR read, currently only blocking version is implemented
+    // Here is the logic for CSR pipe read
+    // Compiler initializes ready register to 1, if ready register exist
+    // Non-Blocking uses_ready<true>
+    //   1. if ready == 1, fail.
+    //   2. Read data.
+    //   3. write 1 to ready.
+
+    // Blocking uses_ready<true>
+    //   1. wait until ready = 0.
+    //   2. read data.
+    //   3. write 1 to ready.
+
+    // uses_ready<false>
+    // Both Blocking and NonBlocking
+    //   1. Read data (always succeeds)
+
     unsigned long long parsed;
-    uintptr_t data_reg, ready_reg, valid_reg;
+    uintptr_t data_reg, ready_reg;
     // Convert the CSR address to a pointer
     try {
       parsed = std::stoull(host_pipe_info.csr_address, nullptr);
@@ -839,27 +854,21 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     ready_reg = static_cast<uintptr_t>(
         parsed +
         csr_pipe_address_offet); // ready reg is data reg shift by 8 byte
-    valid_reg = static_cast<uintptr_t>(
-        parsed +
-        csr_pipe_address_offet * 2); // valid reg is ready reg shift by 8 byte
     unsigned ready = 1;
-    unsigned valid_value;
-    unsigned *valid_value_pointer = &valid_value;
+    unsigned ready_value;
+    unsigned *ready_value_pointer = &ready_value;
 
-    // protocol 3 is the avalon_mm_uses_ready protocol
-    // Only this uses_ready protocol requires reading/writing to ready&valid
-    // signals
-    if (host_pipe_info.protocol == 3) {
-      // If Blocking, wait until the data is valid.
-      // If Non-blocking, just read once and report failure if not valid.
+    if (host_pipe_info.is_stall_free == 0) {
+      // If Blocking, wait until the ready register = 0
+      // If Non-blocking, just read once and report failure if ready == 1
       do {
-        acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
-                                (void *)valid_value_pointer,
+        acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, ready_reg,
+                                (void *)ready_value_pointer,
                                 (size_t)sizeof(uintptr_t));
-      } while (blocking && valid_value != 1);
+      } while (blocking && ready_value != 0);
 
-      // If non-blocking and valid bit is not set, set the op to fail.
-      if (!blocking && valid_value == 0) {
+      // If non-blocking and ready bit is 1, set the op to fail.
+      if (!blocking && ready_value == 1) {
         acl_mutex_unlock(&(host_pipe_info.m_lock));
         acl_set_device_op_execution_status(op, -1);
         return;
@@ -875,9 +884,8 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
       acl_set_device_op_execution_status(op, -1);
       return;
     }
-    // Tell CSR it's ready
-    // Same reason as above, only avalon_mm_uses_ready needs to do this.
-    if (host_pipe_info.protocol == 3) {
+    // Tell CSR it's ready if ready register exist
+    if (host_pipe_info.is_stall_free == 0) {
       acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, ready_reg,
                                (void *)&ready, (size_t)sizeof(uintptr_t));
     }
@@ -968,10 +976,19 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
     // Get CSR address
 
     // Here is the logic for CSR pipe write
-    // 1. If blocking, read valid reg, wait until valid is 0.
-    // 2. If non-blocking, read valid reg once ->return failure if valid is 1.
-    // 3. write to the pipe.
-    // 4. write 1 to the valid.
+    // Blocking uses_valid<true>:
+    //   1. read valid reg, wait until valid is 0
+    //   2. write to the pipe.
+    //   3. write 1 to the valid.
+
+    // Non-blocking uses_valid<true>
+    //   1. read valid reg once ->return failure if valid is 1
+    //   2. write to the pipe.
+    //   3. write 1 to the valid.
+
+    // uses_valid<false>
+    // Both Blocking and NonBlocking
+    //   1. Write data (always succeeds)
 
     unsigned long long parsed;
     uintptr_t data_reg, valid_reg;
@@ -990,23 +1007,24 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
     unsigned valid_value = 1;
     unsigned *valid_value_pointer = &valid_value;
 
-    if (blocking) {
-      // Wait until the valid reg is 0, before the write.
-      while (valid_value != 0) {
+    if (host_pipe_info.is_stall_free == 0) {
+      if (blocking) {
+        while (valid_value != 0) {
+          acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id,
+                                  valid_reg, (void *)valid_value_pointer,
+                                  (size_t)sizeof(uintptr_t));
+        }
+      } else {
+        // Non-blocking, if valid reg is 1, return failure.
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
                                 (void *)valid_value_pointer,
                                 (size_t)sizeof(uintptr_t));
-      }
-    } else {
-      // Non-blocking, if valid reg is 1, return failure.
-      acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
-                              (void *)valid_value_pointer,
-                              (size_t)sizeof(uintptr_t));
 
-      if (valid_value == 1) {
-        acl_mutex_unlock(&(host_pipe_info.m_lock));
-        acl_set_device_op_execution_status(op, -1);
-        return;
+        if (valid_value == 1) {
+          acl_mutex_unlock(&(host_pipe_info.m_lock));
+          acl_set_device_op_execution_status(op, -1);
+          return;
+        }
       }
     }
 
@@ -1015,19 +1033,18 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
         host_pipe_info.m_physical_device_id, data_reg,
         event->cmd.info.host_pipe_dynamic_info.write_ptr,
         event->cmd.info.host_pipe_dynamic_info.size);
+
     if (status != 0) {
       acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
       return;
     }
 
-    // For now, we trust the AVALON_MM by default uses valid.
-    // TODO: fix this later by using the new protocol info
-    // provided by the compiler.
-
-    const unsigned valid = 1;
-    acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, valid_reg,
-                             (void *)&valid, (size_t)sizeof(uintptr_t));
+    if (host_pipe_info.is_stall_free == 0) {
+      const unsigned valid = 1;
+      acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, valid_reg,
+                               (void *)&valid, (size_t)sizeof(uintptr_t));
+    }
 
   } else {
     // Regular hostpipe

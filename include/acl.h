@@ -542,6 +542,9 @@ struct acl_hostpipe_mapping {
 
   int protocol = -1; // avalon_streaming = 0, avalon_streaming_uses_ready = 1
                      // avalon_mm = 2, avalon_mm_uses_ready = 3
+
+  // Introduced in 2024.2
+  int is_stall_free = -1; // -1 means unset, set value is 0 or 1;
 };
 
 // Mapping of sideband signals to logical pipe

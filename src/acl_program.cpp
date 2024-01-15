@@ -1364,6 +1364,7 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
       }
     }
     host_pipe_info.protocol = hostpipe.protocol;
+    host_pipe_info.is_stall_free = hostpipe.is_stall_free;
     acl_mutex_init(&(host_pipe_info.m_lock), NULL);
     // The following property is not used by the program scoped hostpipe but we
     // don't want to leave it uninitialized

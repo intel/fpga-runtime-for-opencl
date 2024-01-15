@@ -1496,14 +1496,14 @@ TEST(auto_configure, cra_ring_root_exist) {
 
 TEST(auto_configure, hostpipe_mappings) {
   const std::string config_str{
-      "23 71 " RANDOM_HASH
+      "23 76 " RANDOM_HASH
       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
-      "0 0 0 0 0 1 5 9 " // 5 Hostpipes, 9 in each mapping
-      "pipe_logical_name1 pipe_physical_name1 1 12345 0 1 4 10 0 "
-      "pipe_logical_name2 pipe_physical_name2 0 12323 1 0 8 20 1 "
-      "pipe_logical_name3 pipe_physical_name1 1 12313 0 1 4 10 2 "
-      "pipe_logical_name5 pipe_physical_name1 0 12316 1 0 8 20 3 "
-      "pipe_logical_name4 pipe_physical_name3 0 12342 0 1 4 10 3 "
+      "0 0 0 0 0 1 5 10 " // 5 Hostpipes, 10 in each mapping
+      "pipe_logical_name1 pipe_physical_name1 1 12345 0 1 4 10 0 0 "
+      "pipe_logical_name2 pipe_physical_name2 0 12323 1 0 8 20 1 1 "
+      "pipe_logical_name3 pipe_physical_name1 1 12313 0 1 4 10 2 0 "
+      "pipe_logical_name5 pipe_physical_name1 0 12316 1 0 8 20 3 1 "
+      "pipe_logical_name4 pipe_physical_name3 0 12342 0 1 4 10 3 0 "
       "3 90 "
       "_ZTS3CRCILi0EE 512 256 1 0 0 1 0 1 0 9 6 0 0 8 1 0 0 6 2 1 8 1024 0 3 6 "
       "0 0 8 1 0 0 6 0 0 8 1 0 0 6 0 0 8 1 0 0 6 2 1 8 1024 0 2 6 0 0 8 1 0 0 "
@@ -1538,6 +1538,7 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[0].pipe_width == 4);
   CHECK(devdef.hostpipe_mappings[0].pipe_depth == 10);
   CHECK(devdef.hostpipe_mappings[0].protocol == 0);
+  CHECK(devdef.hostpipe_mappings[0].is_stall_free == 0);
 
   CHECK(devdef.hostpipe_mappings[1].logical_name == "pipe_logical_name2");
   CHECK(devdef.hostpipe_mappings[1].physical_name == "pipe_physical_name2");
@@ -1548,6 +1549,7 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[1].pipe_width == 8);
   CHECK(devdef.hostpipe_mappings[1].pipe_depth == 20);
   CHECK(devdef.hostpipe_mappings[1].protocol == 1);
+  CHECK(devdef.hostpipe_mappings[1].is_stall_free == 1);
 
   CHECK(devdef.hostpipe_mappings[2].logical_name == "pipe_logical_name3");
   CHECK(devdef.hostpipe_mappings[2].physical_name == "pipe_physical_name1");
@@ -1558,6 +1560,7 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[2].pipe_width == 4);
   CHECK(devdef.hostpipe_mappings[2].pipe_depth == 10);
   CHECK(devdef.hostpipe_mappings[2].protocol == 2);
+  CHECK(devdef.hostpipe_mappings[2].is_stall_free == 0);
 
   CHECK(devdef.hostpipe_mappings[3].logical_name == "pipe_logical_name5");
   CHECK(devdef.hostpipe_mappings[3].physical_name == "pipe_physical_name1");
@@ -1568,6 +1571,7 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[3].pipe_width == 8);
   CHECK(devdef.hostpipe_mappings[3].pipe_depth == 20);
   CHECK(devdef.hostpipe_mappings[3].protocol == 3);
+  CHECK(devdef.hostpipe_mappings[3].is_stall_free == 1);
 
   CHECK(devdef.hostpipe_mappings[4].logical_name == "pipe_logical_name4");
   CHECK(devdef.hostpipe_mappings[4].physical_name == "pipe_physical_name3");
@@ -1578,18 +1582,19 @@ TEST(auto_configure, hostpipe_mappings) {
   CHECK(devdef.hostpipe_mappings[4].pipe_width == 4);
   CHECK(devdef.hostpipe_mappings[4].pipe_depth == 10);
   CHECK(devdef.hostpipe_mappings[4].protocol == 3);
+  CHECK(devdef.hostpipe_mappings[4].is_stall_free == 0);
 }
 
 TEST(auto_configure, sideband_mappings) {
   const std::string config_str{
-      "23 102 " RANDOM_HASH
+      "23 107 " RANDOM_HASH
       " pac_a10 0 1 13 DDR 2 2 24 1 2 0 4294967296 4294967296 8589934592 0 - 0 "
-      "0 0 0 0 0 1 5 9 " // 5 Hostpipes, 9 in each mapping
-      "pipe_logical_name1 pipe_physical_name1 1 12345 0 1 4 10 0 "
-      "pipe_logical_name2 pipe_physical_name2 0 12323 1 0 8 20 1 "
-      "pipe_logical_name3 pipe_physical_name1 1 12313 0 1 4 10 2 "
-      "pipe_logical_name5 pipe_physical_name1 0 12316 1 0 8 20 3 "
-      "pipe_logical_name4 pipe_physical_name3 0 12342 0 1 4 10 3 "
+      "0 0 0 0 0 1 5 10 " // 5 Hostpipes, 10 in each mapping
+      "pipe_logical_name1 pipe_physical_name1 1 12345 0 1 4 10 0 0 "
+      "pipe_logical_name2 pipe_physical_name2 0 12323 1 0 8 20 1 1 "
+      "pipe_logical_name3 pipe_physical_name1 1 12313 0 1 4 10 2 0 "
+      "pipe_logical_name5 pipe_physical_name1 0 12316 1 0 8 20 3 1 "
+      "pipe_logical_name4 pipe_physical_name3 0 12342 0 1 4 10 3 0 "
       "2 " // 2 Sideband groups
       "pipe_logical_name1 4 3 0 0 320 1 320 8 2 328 8 3 352 32 "
       "pipe_logical_name2 4 3 0 0 320 1 320 8 2 328 8 3 352 32 "
