@@ -349,6 +349,9 @@ typedef struct host_pipe_struct {
   // Sideband signals vector
   std::vector<sideband_signal_t> side_band_signals_vector;
 
+  // Introduced in 2024.2
+  int is_stall_free = -1; // -1 means unset, set value is 0 or 1;
+
 } host_pipe_t;
 
 // The device-specific information about a program.

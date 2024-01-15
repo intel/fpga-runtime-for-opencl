@@ -663,9 +663,19 @@ static bool read_hostpipe_mappings(
 
     // Start from 2024.0, there is a new field called protocol in the
     // auto-discovery string
+    // This field isn't currently being used by the Runtime.
+    // It is reserved for the future when new protocols are
+    // supported and the Runtime needs to differentiate.
     if (result && counters.back() > 0) {
       result = result && read_int_counters(config_str, curr_pos,
                                            mapping.protocol, counters);
+    }
+
+    // Start from 2024.2, there is a new field called is_stall_free in the
+    // auto-discovery string
+    if (result && counters.back() > 0) {
+      result = result && read_int_counters(config_str, curr_pos,
+                                           mapping.is_stall_free, counters);
     }
 
     hostpipe_mappings.emplace_back(mapping);
