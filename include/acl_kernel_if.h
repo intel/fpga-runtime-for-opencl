@@ -93,7 +93,7 @@ typedef struct {
 // *********************** Public functions **************************
 
 int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
-                       acl_system_def_t *sysdef);
+                       acl_system_def_t *sysdef, bool sim_mmd_dispatch);
 int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
                          acl_kernel_if *kern);
 int acl_kernel_if_is_valid(acl_kernel_if *kern);

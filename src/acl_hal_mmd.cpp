@@ -1216,8 +1216,10 @@ static int l_try_device(unsigned int physical_device_id, const char *name,
   bsp_io_kern[physical_device_id].printf = printf;
   bsp_io_kern[physical_device_id].debug_verbosity = debug_verbosity;
 
+  bool is_simulator = l_is_simulator_dispatch(device->mmd_dispatch);
   info_assert(acl_kernel_if_init(&kern[physical_device_id],
-                                 bsp_io_kern[physical_device_id], sys) == 0,
+                                 bsp_io_kern[physical_device_id], sys,
+                                 is_simulator) == 0,
               "Failed to initialize kernel interface");
 
   acl_kernel_if_reset(&kern[physical_device_id]);
