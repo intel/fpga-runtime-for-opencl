@@ -621,7 +621,7 @@ int acl_kernel_if_set_profile_shared_control(acl_kernel_if *kern,
 //
 // Returns 0 on success, -ve otherwise
 int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
-                       acl_system_def_t *sysdef) {
+                       acl_system_def_t *sysdef, bool sim_mmd_dispatch) {
   char description_size_msb[KERNEL_ROM_SIZE_BYTES_READ + 1];
   char description_size_lsb[KERNEL_ROM_SIZE_BYTES_READ + 1];
   unsigned int size_location, version, size;
@@ -716,15 +716,6 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
   auto load_result = acl_load_device_def_from_str(
       config_string, sysdef->device[kern->physical_device_id].autodiscovery_def,
       auto_config_err_str);
-  if (load_result) {
-    if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
-      sysdef->device[kern->physical_device_id].autodiscovery_def.name =
-          ACL_MPSIM_DEVICE_NAME;
-      sysdef->num_devices = 1;
-    } else {
-      ++sysdef->num_devices;
-    }
-  }
   result |= load_result ? 0 : -1;
 
   if (result != 0) {
@@ -738,6 +729,11 @@ int acl_kernel_if_init(acl_kernel_if *kern, acl_bsp_io bsp_io,
 
   result = acl_kernel_if_update(
       sysdef->device[kern->physical_device_id].autodiscovery_def, kern);
+
+  if (sim_mmd_dispatch) {
+    sysdef->device[kern->physical_device_id].autodiscovery_def.name =
+        ACL_MPSIM_DEVICE_NAME;
+  }
 
   return result;
 }
