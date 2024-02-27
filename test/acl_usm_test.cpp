@@ -395,35 +395,39 @@ MT_TEST(acl_usm, alloc_and_free_device_usm) {
 
 MT_TEST(acl_usm, buffer_location_usm) {
   ACL_LOCKED(acl_print_debug_msg("begin buffer_location_usm\n"));
-  const int alignment = ACL_MEM_ALIGN;
+  const int device_alignment = ACL_MEM_ALIGN;
+  const int host_shared_alignment = 16;
   cl_int status;
   this->yeah = true;
 
   acl_usm_allocation_t *test_device_alloc;
+  acl_usm_allocation_t *test_host_alloc;
+  acl_usm_allocation_t *test_shared_alloc;
 
   cl_mem_properties_intel good_property[3] = {
       CL_MEM_ALLOC_BUFFER_LOCATION_INTEL, 0, 0};
 
   ACL_LOCKED(CHECK(acl_context_is_valid(m_context)));
 
-  // Correct USM buffer allocation
-  void *test_ptr = clDeviceMemAllocINTEL(
-      m_context, m_device[0], &(good_property[0]), 8, alignment, &status);
+  // Correct USM device buffer allocation
+  void *test_device_ptr =
+      clDeviceMemAllocINTEL(m_context, m_device[0], &(good_property[0]), 8,
+                            device_alignment, &status);
   CHECK_EQUAL(status, CL_SUCCESS);
-  CHECK(ACL_DEVICE_ALLOCATION(test_ptr));
-  CHECK(test_ptr != NULL);
+  CHECK(ACL_DEVICE_ALLOCATION(test_device_ptr));
+  CHECK(test_device_ptr != NULL);
   CHECK(!m_context->usm_allocation.empty());
-  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(m_context, test_ptr),
-                         CL_TRUE));
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_device_ptr), CL_TRUE));
   ACL_LOCKED(test_device_alloc =
-                 acl_get_usm_alloc_from_ptr(m_context, test_ptr));
+                 acl_get_usm_alloc_from_ptr(m_context, test_device_ptr));
   assert(test_device_alloc);
-  CHECK_EQUAL(test_device_alloc->range.begin, test_ptr);
+  CHECK_EQUAL(test_device_alloc->range.begin, test_device_ptr);
 
   // Check alloc information
   cl_uint read_mem_id = 4;
   size_t ret_size = 9;
-  status = clGetMemAllocInfoINTEL(m_context, test_ptr,
+  status = clGetMemAllocInfoINTEL(m_context, test_device_ptr,
                                   CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
                                   sizeof(cl_uint), &read_mem_id, &ret_size);
 
@@ -431,13 +435,15 @@ MT_TEST(acl_usm, buffer_location_usm) {
   CHECK_EQUAL(0, read_mem_id);
   CHECK_EQUAL(sizeof(cl_uint), ret_size);
 
-  status = clMemFreeINTEL(m_context, test_ptr);
-  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(m_context, test_ptr),
-                         CL_FALSE));
+  status = clMemFreeINTEL(m_context, test_device_ptr);
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_device_ptr), CL_FALSE));
   CHECK(m_context->usm_allocation.empty());
 
   // Check when given pointer is already freed
-  status = clGetMemAllocInfoINTEL(m_context, test_ptr,
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(m_context, test_device_ptr,
                                   CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
                                   sizeof(cl_uint), &read_mem_id, &ret_size);
 
@@ -445,6 +451,156 @@ MT_TEST(acl_usm, buffer_location_usm) {
   CHECK_EQUAL(0, read_mem_id);
   CHECK_EQUAL(sizeof(cl_uint), ret_size);
   CHECK_EQUAL(status, CL_SUCCESS);
+
+  // Correct USM host buffer allocation
+  cl_context context =
+      clCreateContext(acl_test_context_prop_preloaded_binary_only(), 1,
+                      &(m_device[0]), NULL, NULL, &status);
+  CHECK_EQUAL(CL_SUCCESS, status);
+  ACL_LOCKED(CHECK(acl_context_is_valid(context)));
+
+  good_property[1] = 1;
+  void *test_host_ptr = clHostMemAllocINTEL(context, &(good_property[0]), 8,
+                                            host_shared_alignment, &status);
+  CHECK_EQUAL(status, CL_SUCCESS);
+  CHECK(test_host_ptr != NULL);
+  CHECK(!context->usm_allocation.empty());
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(context, test_host_ptr),
+                         CL_TRUE));
+  ACL_LOCKED(test_host_alloc =
+                 acl_get_usm_alloc_from_ptr(context, test_host_ptr));
+  assert(test_host_alloc);
+
+  // Check alloc information
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(context, test_host_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(1, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+
+  status = clMemFreeINTEL(context, test_host_ptr);
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(context, test_host_ptr),
+                         CL_FALSE));
+  CHECK(context->usm_allocation.empty());
+
+  // Check when given pointer is already freed
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(context, test_host_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+  CHECK_EQUAL(status, CL_SUCCESS);
+
+  // Host alloc with MMD not supporting buffer location
+  acl_test_hal_set_buffer_location_support(false);
+  test_host_ptr = clHostMemAllocINTEL(context, &(good_property[0]), 8,
+                                      host_shared_alignment, &status);
+  CHECK_EQUAL(status, CL_SUCCESS);
+  CHECK(test_host_ptr != NULL);
+  CHECK(!context->usm_allocation.empty());
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(context, test_host_ptr),
+                         CL_TRUE));
+  ACL_LOCKED(test_host_alloc =
+                 acl_get_usm_alloc_from_ptr(context, test_host_ptr));
+  assert(test_host_alloc);
+
+  // Check alloc information
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(context, test_host_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+
+  status = clMemFreeINTEL(context, test_host_ptr);
+  ACL_LOCKED(CHECK_EQUAL(acl_usm_ptr_belongs_to_context(context, test_host_ptr),
+                         CL_FALSE));
+  CHECK(context->usm_allocation.empty());
+
+  clReleaseContext(context);
+
+  // Correct USM shared buffer allocation
+  acl_test_hal_set_buffer_location_support(true);
+  void *test_shared_ptr =
+      clSharedMemAllocINTEL(m_context, m_device[0], &(good_property[0]), 8,
+                            host_shared_alignment, &status);
+  CHECK_EQUAL(status, CL_SUCCESS);
+  CHECK(test_shared_ptr != NULL);
+  CHECK(!m_context->usm_allocation.empty());
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_shared_ptr), CL_TRUE));
+  ACL_LOCKED(test_shared_alloc =
+                 acl_get_usm_alloc_from_ptr(m_context, test_shared_ptr));
+  assert(test_shared_alloc);
+
+  // Check alloc information
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(m_context, test_shared_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(1, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+
+  status = clMemFreeINTEL(m_context, test_shared_ptr);
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_shared_ptr), CL_FALSE));
+  CHECK(m_context->usm_allocation.empty());
+
+  // Check when given pointer is already freed
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(m_context, test_shared_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+  CHECK_EQUAL(status, CL_SUCCESS);
+
+  // Shared alloc with MMD not supporting buffer location
+  acl_test_hal_set_buffer_location_support(false);
+  test_shared_ptr =
+      clSharedMemAllocINTEL(m_context, m_device[0], &(good_property[0]), 8,
+                            host_shared_alignment, &status);
+  CHECK_EQUAL(status, CL_SUCCESS);
+  CHECK(test_shared_ptr != NULL);
+  CHECK(!m_context->usm_allocation.empty());
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_shared_ptr), CL_TRUE));
+  ACL_LOCKED(test_shared_alloc =
+                 acl_get_usm_alloc_from_ptr(m_context, test_shared_ptr));
+  assert(test_shared_alloc);
+
+  // Check alloc information
+  read_mem_id = 4;
+  ret_size = 9;
+  status = clGetMemAllocInfoINTEL(m_context, test_shared_ptr,
+                                  CL_MEM_ALLOC_BUFFER_LOCATION_INTEL,
+                                  sizeof(cl_uint), &read_mem_id, &ret_size);
+
+  CHECK_EQUAL(CL_SUCCESS, status);
+  CHECK_EQUAL(0, read_mem_id);
+  CHECK_EQUAL(sizeof(cl_uint), ret_size);
+
+  status = clMemFreeINTEL(m_context, test_shared_ptr);
+  ACL_LOCKED(CHECK_EQUAL(
+      acl_usm_ptr_belongs_to_context(m_context, test_shared_ptr), CL_FALSE));
+  CHECK(m_context->usm_allocation.empty());
 
   ACL_LOCKED(acl_print_debug_msg("end buffer_location_usm\n"));
 }
@@ -652,7 +808,7 @@ MT_TEST(acl_usm, alloc_and_free_host_usm) {
       clCreateContext(acl_test_context_prop_preloaded_binary_only(), 1,
                       &(m_device[0]), NULL, NULL, &status);
   CHECK_EQUAL(CL_SUCCESS, status);
-  ACL_LOCKED(CHECK(acl_context_is_valid(m_context)));
+  ACL_LOCKED(CHECK(acl_context_is_valid(context)));
 
   // Alloc & free is error free
   void *test_ptr = clHostMemAllocINTEL(context, NULL, 8, alignment, &status);

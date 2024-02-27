@@ -30,6 +30,7 @@ static int acl_test_svm_memory_support =
     (CL_DEVICE_SVM_COARSE_GRAIN_BUFFER | CL_DEVICE_SVM_FINE_GRAIN_BUFFER |
      CL_DEVICE_SVM_FINE_GRAIN_SYSTEM);
 static bool acl_test_physical_memory_support = true;
+static bool acl_test_buffer_location_support = true;
 
 // Parts of a valid HAL.
 void acltest_hal_init_device(const acl_system_def_t *def);
@@ -81,6 +82,8 @@ int acltest_hal_set_profile_stop_cycle(unsigned int physical_device_id,
                                        unsigned int accel_id, uint64_t value);
 int acl_test_hal_has_svm_support(unsigned int physical_device_id, int *value);
 int acl_test_hal_has_physical_mem(unsigned int physical_device_id);
+int acl_test_hal_support_buffer_location(
+    const std::vector<cl_device_id> &devices);
 int acl_test_hal_pll_reconfigure(unsigned int physical_device_id,
                                  const char *pll_settings_str);
 void acl_test_hal_reset_kernels(cl_device_id device);
@@ -128,6 +131,7 @@ static const acl_hal_t simple_hal = {acltest_hal_init_device,
                                      acltest_hal_set_profile_stop_cycle,
                                      acl_test_hal_has_svm_support,
                                      acl_test_hal_has_physical_mem,
+                                     acl_test_hal_support_buffer_location,
                                      0,
                                      acl_test_hal_pll_reconfigure,
                                      acl_test_hal_reset_kernels,
@@ -589,6 +593,10 @@ void acl_test_hal_set_physical_memory_support(bool value) {
   acl_test_physical_memory_support = value;
 }
 
+void acl_test_hal_set_buffer_location_support(bool value) {
+  acl_test_buffer_location_support = value;
+}
+
 int acl_test_hal_has_svm_support(unsigned int physical_device_id, int *value) {
   physical_device_id = physical_device_id; // Avoid Windows warning
   *value = acl_test_svm_memory_support;
@@ -598,6 +606,11 @@ int acl_test_hal_has_svm_support(unsigned int physical_device_id, int *value) {
 int acl_test_hal_has_physical_mem(unsigned int physical_device_id) {
   physical_device_id = physical_device_id; // Avoid Windows warning
   return acl_test_physical_memory_support;
+}
+
+int acl_test_hal_support_buffer_location(
+    const std::vector<cl_device_id> &devices) {
+  return acl_test_buffer_location_support;
 }
 
 int acl_test_hal_pll_reconfigure(unsigned int physical_device_id,
