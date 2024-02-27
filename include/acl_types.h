@@ -296,7 +296,8 @@ typedef struct host_op_struct {
 } host_op_t;
 
 struct sideband_signal_t {
-  unsigned port_identifier; // matches enum signal_type in acl.h
+  unsigned port_identifier; // matches enum aocl_mmd_hostchannel_port_id_t in
+                            // aocl_mmd.h
   unsigned port_offset;     // in bit
   unsigned side_band_size;  // in bit
 };

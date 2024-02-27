@@ -184,6 +184,8 @@ typedef struct {
   int (*has_svm_memory_support)(unsigned int physical_device_id, int *value);
   /// Returns 1 if physical mem is supported
   int (*has_physical_mem)(unsigned int physical_device_id);
+  /// Returns 1 if buffer location is supported across devices
+  int (*support_buffer_location)(const std::vector<cl_device_id> &devices);
 
   /// Get pointer to board specific extension functions
   void *(*get_board_extension_function_address)(
@@ -266,14 +268,7 @@ typedef struct {
       unsigned int physical_device_id, const char *interface_name,
       const void *host_addr, size_t dev_addr, size_t size);
 
-  /// Simulation only mmd call as of 2024.1
-  /// Return the sideband signal buffer corresponding to the side band signal
-  /// port identifier
-  void *(*hostchannel_get_sideband_buffer)(unsigned int physical_device_id,
-                                           unsigned int port_name,
-                                           int channel_handle,
-                                           size_t *buffer_size, int *status);
-
+  /// Simulation only hal function as of 2024.1
   /// Pull read_size of sideband data from the device into host_buffer, WITHOUT
   /// acknowledge
   size_t (*hostchannel_sideband_pull_no_ack)(unsigned int physical_device_id,
@@ -282,6 +277,7 @@ typedef struct {
                                              void *host_buffer,
                                              size_t read_size, int *status);
 
+  /// Simulation only hal function as of 2024.1
   /// Push write_size of sideband data to the device from host_buffer, WITHOUT
   /// acknowledge
   size_t (*hostchannel_sideband_push_no_ack)(unsigned int physical_device_id,
