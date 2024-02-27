@@ -143,12 +143,14 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     }
   }
 
+  bool track_mem_id = false;
   if (acl_get_hal()->host_alloc) {
     std::array<mem_properties_t, 3> mmd_properties;
     {
       auto mmd_properties_it = mmd_properties.begin();
       if (mem_id) {
-        if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+        if (acl_get_hal()->support_buffer_location(devices)) {
+          track_mem_id = true;
           *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
           *mmd_properties_it++ = *mem_id;
         }
@@ -197,6 +199,10 @@ CL_API_ENTRY void *CL_API_CALL clHostMemAllocINTEL(
     usm_alloc->alloc_flags = alloc_flags;
     usm_alloc->type = CL_MEM_TYPE_HOST_INTEL;
     usm_alloc->alignment = alignment;
+    usm_alloc->host_shared_mem_id = 0; // Initialize to 0
+    if (track_mem_id) {
+      usm_alloc->host_shared_mem_id = *mem_id;
+    }
 
     l_add_usm_alloc_to_context(context, usm_alloc);
     return mem;
@@ -434,12 +440,15 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     properties += 2;
   }
 
+  bool track_mem_id = false;
   if (acl_get_hal()->shared_alloc) {
     std::array<mem_properties_t, 3> mmd_properties;
     {
       auto mmd_properties_it = mmd_properties.begin();
       if (mem_id) {
-        if (acl_platform.offline_mode == ACL_CONTEXT_MPSIM) {
+        if (acl_get_hal()->support_buffer_location(
+                std::vector<cl_device_id>{device})) {
+          track_mem_id = true;
           *mmd_properties_it++ = AOCL_MMD_MEM_PROPERTIES_BUFFER_LOCATION;
           *mmd_properties_it++ = *mem_id;
         }
@@ -488,6 +497,10 @@ clSharedMemAllocINTEL(cl_context context, cl_device_id device,
     usm_alloc->alloc_flags = alloc_flags;
     usm_alloc->type = CL_MEM_TYPE_SHARED_INTEL;
     usm_alloc->alignment = alignment;
+    usm_alloc->host_shared_mem_id = 0; // Initialize to 0
+    if (track_mem_id) {
+      usm_alloc->host_shared_mem_id = *mem_id;
+    }
 
     l_add_usm_alloc_to_context(context, usm_alloc);
     return mem;
@@ -554,6 +567,7 @@ CL_API_ENTRY cl_int CL_API_CALL clMemFreeINTEL(cl_context context, void *ptr) {
 
   l_remove_usm_alloc_from_context(context, usm_alloc);
   acl_free(usm_alloc);
+  usm_alloc = nullptr;
 
   return CL_SUCCESS;
 }
@@ -617,6 +631,7 @@ CL_API_ENTRY cl_int CL_API_CALL clMemBlockingFreeINTEL(cl_context context,
 
   l_remove_usm_alloc_from_context(context, usm_alloc);
   acl_free(usm_alloc);
+  usm_alloc = nullptr;
 
   return CL_SUCCESS;
 }
@@ -650,7 +665,11 @@ CL_API_ENTRY cl_int CL_API_CALL clGetMemAllocInfoINTEL(
 
   case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
     if (usm_alloc) {
-      RESULT_UINT(usm_alloc->mem->mem_id);
+      if (usm_alloc->mem) {
+        RESULT_UINT(usm_alloc->mem->mem_id);
+      } else {
+        RESULT_UINT(usm_alloc->host_shared_mem_id);
+      }
     } else {
       RESULT_UINT(0);
     }

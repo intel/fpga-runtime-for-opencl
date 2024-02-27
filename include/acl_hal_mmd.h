@@ -283,10 +283,9 @@ typedef struct {
   // port identifier Get a pointer to the mmd buffer for the host channel
   // Simulation only mmd call as of 2024.1. HW MMD developer needs to implement
   // this function in the future To support hostpipe sideband signals.
-  void *(*aocl_mmd_hostchannel_get_sideband_buffer)(int handle, int channel,
-                                                    int port_id,
-                                                    size_t *buffer_size,
-                                                    int *status);
+  void *(*aocl_mmd_hostchannel_get_sideband_buffer)(
+      int handle, int channel, aocl_mmd_hostchannel_port_id_t port_id,
+      size_t *buffer_size, int *status);
 
 } acl_mmd_dispatch_t;
 
