@@ -1672,3 +1672,39 @@ TEST(auto_configure, sideband_mappings) {
   CHECK(devdef.sideband_signal_mappings[7].port_offset == 352);
   CHECK(devdef.sideband_signal_mappings[7].sideband_size == 32);
 }
+
+TEST(auto_configure, global_mem_id) {
+  const std::string config_str{
+      "23 46 " RANDOM_HASH " custom_ipa 0 3 "
+      " 10 1 2 1 2 2199023255552 2233382993920 4 - 0 1"   // Global memory 1
+      " 10 3 2 1 2 6597069766656 6631429505024 4 - 0 3"   // Global memory 2
+      " 10 5 2 1 2 10995116277760 11029476016128 4 - 0 5" // Global memory 3
+      " 0 0 0 0 0 1 0 0"
+      " 0 2 133 _ZTS10SimpleVAddIiE 0 256 1 0 0 1 0 1 0 13 8 2 1 8"
+      " 1 1 5 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 8"
+      " 2 1 8 1 1 3 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0"
+      " 0 0 8 2 1 8 1 1 1 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0"
+      " 8 1 0 0 0 7 0 0 4 1 0 0 0 0 0 0 0 1 1 1 3 1 1 1 0 1 1 0 133 "
+      " _ZTS10SimpleVAddIfE 256 256 1 0 0 1 0 1 0 13 8 2 1 8 1 1 5 0"
+      " 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 8 2 1 8 1 1"
+      " 3 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 8 2 1 8"
+      " 1 1 1 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0 0 8 1 0 0 0 7 0"
+      " 0 4 1 0 0 0 0 0 0 0 1 1 1 3 1 1 1 0 1 1 0"};
+
+  acl_device_def_autodiscovery_t devdef;
+  {
+    bool result;
+    std::string err_str;
+    ACL_LOCKED(result =
+                   acl_load_device_def_from_str(config_str, devdef, err_str));
+    std::cerr << err_str;
+    CHECK(result);
+  }
+
+  CHECK("1" == devdef.global_mem_defs[0].name);
+  CHECK("1" == devdef.global_mem_defs[0].id);
+  CHECK("3" == devdef.global_mem_defs[1].name);
+  CHECK("3" == devdef.global_mem_defs[1].id);
+  CHECK("5" == devdef.global_mem_defs[2].name);
+  CHECK("5" == devdef.global_mem_defs[2].id);
+}

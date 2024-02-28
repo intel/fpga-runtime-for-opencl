@@ -2125,6 +2125,7 @@ l_device_memory_definition_copy(acl_device_def_autodiscovery_t *dest_dev,
         src_dev->global_mem_defs[idef].primary_interface;
     dest_dev->global_mem_defs[idef].can_access_list =
         src_dev->global_mem_defs[idef].can_access_list;
+    dest_dev->global_mem_defs[idef].id = src_dev->global_mem_defs[idef].id;
   }
 }
 

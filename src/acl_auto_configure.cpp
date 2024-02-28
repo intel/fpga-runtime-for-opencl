@@ -278,6 +278,8 @@ read_global_mem_defs(const std::string &config_str,
 
   for (auto i = 0U; result && (i < num_global_mem_systems); i++) {
     std::string gmem_name;
+    std::string gmem_id = "-"; // This should be the default value even if the
+                               // auto-discovery string doesn't have this field.
     // read total number of fields in global_memories
     int total_fields_global_memories = 0;
     result = read_int_counters(config_str, curr_pos,
@@ -403,6 +405,12 @@ read_global_mem_defs(const std::string &config_str,
           can_access.push_back(temp);
         }
       }
+
+      // read global memory id field. If it doesn't exist, then the value is "-"
+      // It's a new field introduced from 2024.2
+      if (result && counters.back() > 0) {
+        result = read_string_counters(config_str, curr_pos, gmem_id, counters);
+      }
     }
 
     if (result) {
@@ -428,6 +436,7 @@ read_global_mem_defs(const std::string &config_str,
       global_mem_defs[i].allocation_type = allocation_type;
       global_mem_defs[i].primary_interface = primary_interface;
       global_mem_defs[i].can_access_list = can_access;
+      global_mem_defs[i].id = gmem_id;
     }
 
     // forward compatibility: bypassing remaining fields at the end of global
