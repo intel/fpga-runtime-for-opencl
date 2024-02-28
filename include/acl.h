@@ -381,6 +381,8 @@ typedef struct {
 
     return result;
   }
+
+  std::string id = "-";
 } acl_system_global_mem_def_t;
 
 // Our allocator is optimized for simplicity, and for the case where there

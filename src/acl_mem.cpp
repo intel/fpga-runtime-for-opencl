@@ -437,6 +437,64 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
     } break;
     case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
       tmp_mem_id = (cl_uint) * (properties + 1);
+
+      // In FullSystem flow, buffer location is always the index of the global
+      // memories. Therefore, there is no additional handling needed for FS.
+
+      // However, in SYCL_HLS(IPA) flow, the user passed buffer_location<id>
+      // maps to the global memory with the same id. Runtime needs to find the
+      // correct index of the global memory with that id. The id filed is
+      // introduced in 2024.2 in auto-discovery string. This change is for
+      // accessor only and the USM buffer location change is done in the
+      // simulator.
+
+      // Runtime needs to determine whether it's FS or SYCL_HLS first by
+      // checking if the global memory id exist or not. If exists, then it's
+      // SYCL_HLS flow.
+      bool is_SYCL_HLS = false;
+
+      // We document the limitation here:
+      // https://www.intel.com/content/www/us/en/docs/oneapi-fpga-add-on/
+      // developer-guide/2024-0/targeting-multiple-homogeneous-fpga-devices.html
+      // All FPGA devices used must be of the same FPGA card (same -Xstarget
+      // target). There might be some workaround supporting multi-device with
+      // different boards but they are for FS, not for SYCL_HLS.
+
+      // Therefore, we can safely assume all devices have the same
+      // global_mem_defs in SYCL_HLS flow as of 2024.2. So we can just check
+      // acl_platform.device[0].
+
+      auto global_mem_defs =
+          acl_platform.device[0].def.autodiscovery_def.global_mem_defs;
+
+      for (const auto &global_mem_def : global_mem_defs) {
+        if (global_mem_def.id != "-") {
+          is_SYCL_HLS = true;
+          break;
+        }
+      }
+
+      if (is_SYCL_HLS) {
+        // find the correct index in the global memory
+        long index = -1;
+        for (auto it = begin(global_mem_defs); it != end(global_mem_defs);
+             ++it) {
+          if (stoul(it->id) == tmp_mem_id) {
+            index = it - global_mem_defs.begin();
+            break;
+          }
+        }
+
+        if (index == -1) {
+          BAIL_INFO(CL_INVALID_VALUE, context,
+                    "Invalid Buffer Location id provided");
+        }
+
+        // Update the tmp_mem_id to the corect index in the global memories
+        // vector.
+        tmp_mem_id = static_cast<cl_uint>(index);
+      }
+
     } break;
     default: {
       BAIL_INFO(CL_INVALID_DEVICE, context, "Invalid properties");
