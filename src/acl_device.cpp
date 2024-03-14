@@ -642,6 +642,14 @@ CL_API_ENTRY cl_int CL_API_CALL clGetDeviceInfoIntelFPGA(
     RESULT_BITFIELD(0);
   } break;
 
+  case CL_DEVICE_ATOMIC_FENCE_CAPABILITIES: {
+    cl_bitfield res = 0;
+    res = res | CL_DEVICE_ATOMIC_SCOPE_WORK_ITEM;
+    res = res | CL_DEVICE_ATOMIC_SCOPE_WORK_GROUP;
+    res = res | CL_DEVICE_ATOMIC_SCOPE_DEVICE;
+    RESULT_BITFIELD(res);
+  } break;
+
   default:
     break;
   }
