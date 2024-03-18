@@ -49,10 +49,10 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
 
     container:
-      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-22.04-dev:main
+      image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-20.04-dev:main
 
     continue-on-error: true
 
