@@ -116,7 +116,11 @@ jobs:
         run: echo "$user"
         env:
           user: ${{ github.repository_owner }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: test print 2
+        run: echo "$tag"
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
 
       # - name: push image to registry
       #   if: github.event_name == 'push'
