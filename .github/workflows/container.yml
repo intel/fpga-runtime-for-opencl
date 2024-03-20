@@ -100,30 +100,20 @@ jobs:
 
       # Override uid of default user in container to align with GitHub-hosted runners
       # https://github.com/actions/checkout/issues/47
-      # - name: build image
-      #   run: docker build --build-arg uid=1001 -t "$image:main" -f container/${{ matrix.container }}/Dockerfile .
-      #   env:
-      #     tag: ${{ steps.tag.outputs.tag }}
-
-      # - name: login to registry
-      #   if: github.event_name == 'push'
-      #   run: echo "$token" | docker login ghcr.io -u "$user" --password-stdin
-      #   env:
-      #     user: ${{ github.repository_owner }}
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: test print
-        run: echo "$user"
-        env:
-          user: ${{ github.repository_owner }}
-
-      - name: test print 2
-        run: echo "$tag"
+      - name: build image
+        run: docker build --build-arg uid=1001 -t "$image:main" -f container/${{ matrix.container }}/Dockerfile .
         env:
           tag: ${{ steps.tag.outputs.tag }}
 
-      # - name: push image to registry
-      #   if: github.event_name == 'push'
-      #   run: docker image push "$image:main"
-      #   env:
-      #     tag: ${{ steps.tag.outputs.tag }}
+      - name: login to registry
+        if: github.event_name == 'push'
+        run: echo "$token" | docker login ghcr.io -u "$user" --password-stdin
+        env:
+          user: ${{ github.repository_owner }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: push image to registry
+        # if: github.event_name == 'push'
+        run: docker image push "$image:main"
+        env:
+          tag: ${{ steps.tag.outputs.tag }}
