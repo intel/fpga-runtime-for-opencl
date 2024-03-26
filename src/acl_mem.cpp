@@ -159,7 +159,7 @@ CL_API_ENTRY cl_int CL_API_CALL clReleaseMemObjectIntelFPGA(cl_mem mem) {
 
   // In the double-free case, we'll error out here, for two reasons:
   // 1) the reference count will be 0.
-  // 1) mem->region == 0
+  // 2) mem->region == 0
   if (!acl_mem_is_valid(mem)) {
     return CL_INVALID_MEM_OBJECT;
   }
@@ -4572,7 +4572,7 @@ static void l_get_working_range(const acl_block_allocation_t *block_allocation,
     // a free block somewhere between the requested bank and end of memory, it
     // will try again from the beginning of memory. WARNING: Nothing prevents
     // the block from straddling across two banks
-    if (bank_id > 0) {
+    if (bank_id > 0 && global_mem_def.burst_interleaved == 0) {
       // Bank start and end addresses are calculated using the physical_range
       // since banks correspond to the physical layout of the memory.
       *initial_try =
