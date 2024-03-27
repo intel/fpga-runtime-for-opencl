@@ -86,6 +86,8 @@ typedef struct {
   // CRA address offset for backwards compatibility
   unsigned int cra_address_offset = 8;
 
+  // Kernel static image cache for trackinig changed work dimensions, etc.
+  std::vector<std::unique_ptr<char[]>> static_img_cache;
   // Kernel argument cache for trackinig changed arguments
   std::vector<std::unique_ptr<char[]>> accel_arg_cache;
 } acl_kernel_if;
