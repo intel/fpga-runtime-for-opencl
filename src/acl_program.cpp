@@ -1396,7 +1396,8 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
 
     auto &host_pipe_info =
         dev_prog->program_hostpipe_map.at(sideband_signal_mapping.logical_name);
-    if (sideband_signal_mapping.port_identifier != AvalonData) {
+    if (sideband_signal_mapping.port_identifier !=
+        static_cast<unsigned>(AOCL_MMD_HOSTCHANNEL_PORT_DATA)) {
       host_pipe_info.num_side_band_signals++;
     }
 

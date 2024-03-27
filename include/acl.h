@@ -468,6 +468,7 @@ typedef struct {
   cl_mem_alloc_flags_intel alloc_flags;
   cl_unified_shared_memory_type_intel type;
   cl_uint alignment; // May not be needed. Track for now.
+  cl_uint host_shared_mem_id;
 } acl_usm_allocation_t;
 
 typedef struct {
@@ -556,16 +557,6 @@ struct acl_sideband_signal_mapping {
   unsigned port_identifier;
   unsigned port_offset;   // bit
   unsigned sideband_size; // bit
-};
-
-// Must match the definition in the compiler
-// Analysis/FPGAAnalysis/Utils/StreamParameters.h
-enum signal_type {
-  SignalUnknown = -1,
-  AvalonData = 0,
-  AvalonSop = 1,
-  AvalonEop = 2,
-  AvalonEmpty = 3
 };
 
 // Part of acl_device_def_t where members are populated from the information

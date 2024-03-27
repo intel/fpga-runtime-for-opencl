@@ -185,10 +185,6 @@ int acl_hal_mmd_simulation_device_global_interface_write(
     unsigned int physical_device_id, const char *interface_name,
     const void *host_addr, size_t dev_addr, size_t size);
 
-void *acl_hal_mmd_hostchannel_get_sideband_buffer(
-    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
-    size_t *buffer_size, int *status);
-
 size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
     unsigned int physical_device_id, unsigned int port_name, int channel_handle,
     void *host_buffer, size_t read_size, int *status);
@@ -209,6 +205,8 @@ static time_ns acl_bsp_get_timestamp(void);
 
 int acl_hal_mmd_has_svm_support(unsigned int physical_device_id, int *value);
 int acl_hal_mmd_has_physical_mem(unsigned int physical_device_id);
+int acl_hal_mmd_support_buffer_location(
+    const std::vector<cl_device_id> &devices);
 
 static void *
 acl_hal_get_board_extension_function_address(const char *func_name,
@@ -296,6 +294,7 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_set_profile_stop_count,      // set_profile_stop_cycle
     acl_hal_mmd_has_svm_support,             // has_svm_memory_support
     acl_hal_mmd_has_physical_mem,            // has_physical_mem
+    acl_hal_mmd_support_buffer_location,     // support_buffer_location
     acl_hal_get_board_extension_function_address, // get_board_extension_function_address
     acl_hal_mmd_pll_reconfigure,                  // pll_reconfigure
     acl_hal_mmd_reset_kernels,                    // reset_kernels
@@ -319,9 +318,8 @@ static acl_hal_t acl_hal_mmd = {
     acl_hal_mmd_write_csr,                             // write_csr
     acl_hal_mmd_simulation_device_global_interface_read, // simulation_device_global_interface_read
     acl_hal_mmd_simulation_device_global_interface_write, // simulation_device_global_interface_write
-    acl_hal_mmd_hostchannel_get_sideband_buffer, // hostchannel_get_sideband_buffer
-    acl_hal_mmd_hostchannel_sideband_pull_no_ack, // hostchannel_sideband_push
-    acl_hal_mmd_hostchannel_sideband_push_no_ack, // hostchannel_sideband_push
+    acl_hal_mmd_hostchannel_sideband_pull_no_ack, // hostchannel_sideband_pull_no_ack
+    acl_hal_mmd_hostchannel_sideband_push_no_ack, // hostchannel_sideband_push_no_ack
     acl_hal_mmd_hostchannel_pull_no_ack,          // hostchannel_pull_no_ack
     acl_hal_mmd_hostchannel_push_no_ack,          // hostchannel_push_no_ack
 };
@@ -418,6 +416,39 @@ static int debug_verbosity = 0;
 // **************************************************************************
 // ************************** Helper functions ******************************
 // **************************************************************************
+
+// Version string format should be MAJOR.MINOR(.PATCH)
+// To compare the MMD/HAL versions we will only compare the last two digits
+// of the MAJOR field together with the MINOR field, and ignore the PATCH field
+// if that exists. This function truncates the version string to exactly that
+// and convert it to double to be compared. Returns -1 if input is invalid.
+double l_parse_mmd_version_str(std::string version_str) {
+  size_t start_idx, length;
+
+  // Find the '.' between the MAJOR and MINOR field
+  std::string::size_type i = version_str.find('.');
+  if (i == std::string::npos || i < 2) {
+    return -1;
+  } else {
+    start_idx = i - 2;
+  }
+  // Check if there is a '.' for PATCH field
+  std::string::size_type j = version_str.find('.', i + 1);
+  length = (j == std::string::npos ? version_str.length() : j) - start_idx;
+
+  // Get the part of the MMD version string that will be used to compare
+  // for compatibility with the runtime HAL
+  std::string version_substr = version_str.substr(start_idx, length);
+  double mmd_version_num = 0;
+  try {
+    mmd_version_num = std::stod(version_substr);
+  } catch (const std::exception &) {
+    // Just return error and let the caller handle failure
+    return -1;
+  }
+
+  return mmd_version_num;
+}
 
 // MMD dynamic load helpers
 #ifdef _WIN32
@@ -965,22 +996,40 @@ void l_get_physical_devices(acl_mmd_dispatch_t *mmd_dispatch,
   mmd_dispatch->aocl_mmd_get_offline_info(AOCL_MMD_VERSION, sizeof(buf), buf,
                                           NULL);
   buf[sizeof(buf) - 1] = 0;
-  mmd_dispatch->mmd_version = atof(buf);
+  mmd_dispatch->mmd_version = l_parse_mmd_version_str(std::string(buf));
+  if (mmd_dispatch->mmd_version < 0) {
+    printf("  Invalid MMD version:     %s\n", buf);
+    printf("Contact the board package support vendor for resolution.\n");
+    fflush(stdout);
+    assert(0);
+  }
   min_MMD_version =
       (!MMDVERSION_LESSTHAN(min_MMD_version, mmd_dispatch->mmd_version))
           ? mmd_dispatch->mmd_version
           : min_MMD_version;
   ACL_HAL_DEBUG_MSG_VERBOSE(1, "HAL : Getting info version: %s\n", buf);
 
-  if (MMDVERSION_LESSTHAN(atof(AOCL_MMD_VERSION_STRING),
+  static double hal_version = 0;
+  if (hal_version == 0) { // Just parse once at start-up
+    hal_version = l_parse_mmd_version_str(AOCL_MMD_VERSION_STRING);
+    if (hal_version < 0) { // This should theoretically never happen
+      printf("  Invalid runtime version: %s\n", AOCL_MMD_VERSION_STRING);
+      fflush(stdout);
+      assert(0);
+    }
+  }
+  if (MMDVERSION_LESSTHAN(hal_version,
                           mmd_dispatch->mmd_version) || // MMD newer than HAL
       MMDVERSION_LESSTHAN(mmd_dispatch->mmd_version,
                           14.0)) // Before this wasn't forward compatible
   {
     printf("  Runtime version: %s\n", AOCL_MMD_VERSION_STRING);
     printf("  MMD version:     %s\n", buf);
+    printf("MMD version is newer than the runtime version! Use the runtime "
+           "with version greater or equal to the MMD version, or contact the "
+           "board support package vendors if mismatch is unexpected.\n");
     fflush(stdout);
-    assert(0 && "MMD version mismatch");
+    assert(0);
   }
 
   // Disable yield as initialization
@@ -2496,23 +2545,6 @@ size_t acl_hal_mmd_hostchannel_ack_buffer(unsigned int physical_device_id,
           pcie_dev_handle, channel_handle, ack_size, status);
 }
 
-void *acl_hal_mmd_hostchannel_get_sideband_buffer(
-    unsigned int physical_device_id, unsigned int port_name, int channel_handle,
-    size_t *buffer_size, int *status) {
-
-  int pcie_dev_handle;
-
-  pcie_dev_handle = device_info[physical_device_id].handle;
-  *status = 0;
-
-  // get the pointer to host channel mmd buffer
-  assert(device_info[physical_device_id]
-             .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
-  return device_info[physical_device_id]
-      .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-          pcie_dev_handle, channel_handle, port_name, buffer_size, status);
-}
-
 size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
     unsigned int physical_device_id, unsigned int port_name, int channel_handle,
     void *host_buffer, size_t read_size, int *status) {
@@ -2527,10 +2559,11 @@ size_t acl_hal_mmd_hostchannel_sideband_pull_no_ack(
 
   assert(device_info[physical_device_id]
              .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
-  pull_buffer =
-      device_info[physical_device_id]
-          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+  pull_buffer = device_info[physical_device_id]
+                    .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+                        pcie_dev_handle, channel_handle,
+                        static_cast<aocl_mmd_hostchannel_port_id_t>(port_name),
+                        &buffer_size, status);
 
   if ((NULL == pull_buffer) || (0 == buffer_size)) {
     return 0;
@@ -2563,10 +2596,11 @@ size_t acl_hal_mmd_hostchannel_sideband_push_no_ack(
   assert(device_info[physical_device_id]
              .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer);
 
-  push_buffer =
-      device_info[physical_device_id]
-          .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
-              pcie_dev_handle, channel_handle, port_name, &buffer_size, status);
+  push_buffer = device_info[physical_device_id]
+                    .mmd_dispatch->aocl_mmd_hostchannel_get_sideband_buffer(
+                        pcie_dev_handle, channel_handle,
+                        static_cast<aocl_mmd_hostchannel_port_id_t>(port_name),
+                        &buffer_size, status);
 
   if ((NULL == push_buffer) || (0 == buffer_size)) {
     return 0;
@@ -2686,6 +2720,27 @@ int acl_hal_mmd_has_physical_mem(unsigned int physical_device_id) {
 
     return ret;
   }
+}
+
+/**
+ * Returns if a set of devices all support buffer location mem property
+ * @param  a vector of devices on which to query
+ * @return 1 if supported, else 0
+ */
+int acl_hal_mmd_support_buffer_location(
+    const std::vector<cl_device_id> &devices) {
+  acl_assert_locked();
+
+  int bl_supported = 1;
+  for (const auto &device : devices) {
+    unsigned int physical_device_id = device->def.physical_device_id;
+    if (MMDVERSION_LESSTHAN(
+            device_info[physical_device_id].mmd_dispatch->mmd_version, 24.2)) {
+      bl_supported = 0;
+    }
+  }
+
+  return bl_supported;
 }
 
 #ifdef _WIN32

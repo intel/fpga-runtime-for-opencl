@@ -71,7 +71,8 @@ static cl_int l_push_sideband_packet(unsigned int physical_device_id,
   for (auto const &sideband_signal_entry :
        host_pipe_info.side_band_signals_vector) {
     size_t pushed_data;
-    if (sideband_signal_entry.port_identifier == AvalonData) {
+    if (sideband_signal_entry.port_identifier ==
+        static_cast<unsigned>(AOCL_MMD_HOSTCHANNEL_PORT_DATA)) {
       pushed_data = acl_get_hal()->hostchannel_push_no_ack(
           host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
           (const void *)((char *)host_buffer +
@@ -117,7 +118,8 @@ static size_t l_pull_sideband_packet(unsigned int physical_device_id,
   for (auto const &sideband_signal_entry :
        host_pipe_info.side_band_signals_vector) {
     size_t pulled_data;
-    if (sideband_signal_entry.port_identifier == AvalonData) {
+    if (sideband_signal_entry.port_identifier ==
+        static_cast<unsigned>(AOCL_MMD_HOSTCHANNEL_PORT_DATA)) {
       pulled_data = acl_get_hal()->hostchannel_pull_no_ack(
           host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
           (void *)((char *)host_buffer + sideband_signal_entry.port_offset / 8),

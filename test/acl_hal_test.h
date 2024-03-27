@@ -16,6 +16,7 @@ void *acltest_translate_device_address(const void *device_ptr, size_t offset);
 
 void acl_test_hal_set_svm_memory_support(int value);
 void acl_test_hal_set_physical_memory_support(bool value);
+void acl_test_hal_set_buffer_location_support(bool value);
 
 extern bool acltest_hal_emulate_device_mem;
 

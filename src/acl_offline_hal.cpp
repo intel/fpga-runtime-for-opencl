@@ -143,6 +143,7 @@ static const acl_hal_t acl_offline_hal = {
     acl_offline_hal_set_profile_stop_cycle,
     acl_offline_hal_has_svm_memory_support,
     acl_offline_hal_has_physical_mem,
+    NULL,
     acl_offline_hal_get_board_extension_function_address,
     acl_offline_hal_pll_reconfigure,
     acl_offline_hal_reset_kernels,
