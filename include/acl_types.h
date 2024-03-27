@@ -442,7 +442,7 @@ private:
 // don't expect it.
 #pragma pack(push, 4)
 // These are the bytes written to global memory for a kernel invocation.
-typedef struct {
+typedef struct acl_dev_kernel_invocation_image {
   // The activation_id is the index into the device op queue.
   // The value at acl_platform.device_op_queue[activation_id] will be
   // updated asynchronously by the HAL, so its address must remain stable.
@@ -485,6 +485,19 @@ typedef struct {
   // allocated, rather than a pointer.
   char *arg_value;
   size_t arg_value_size;
+
+  // Define constructor to initialize the invocation image to default values
+  // Hard code for now
+  acl_dev_kernel_invocation_image()
+      : activation_id(0), accel_id(0), work_dim(1), work_group_size(1),
+        padding(0), arg_value(NULL), arg_value_size(0) {
+    for (unsigned i = 0; i < 3; ++i) {
+      global_work_size[i] = 1;
+      num_groups[i] = 1;
+      local_work_size[i] = 1;
+      global_work_offset[i] = 0;
+    }
+  }
 
 } acl_dev_kernel_invocation_image_t;
 

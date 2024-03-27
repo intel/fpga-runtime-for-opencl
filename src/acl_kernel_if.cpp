@@ -879,6 +879,7 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
   if (kern->num_accel > 0) {
     kern->accel_job_ids.resize(kern->num_accel);
     kern->accel_invoc_queue_depth.resize(kern->num_accel);
+    kern->static_img_cache.resize(kern->num_accel);
     kern->accel_arg_cache.resize(kern->num_accel);
 
     // Kernel IRQ is a separate thread. Need to use circular buffer to make this
@@ -886,7 +887,15 @@ int acl_kernel_if_update(const acl_device_def_autodiscovery_t &devdef,
     kern->accel_queue_front.resize(kern->num_accel);
     kern->accel_queue_back.resize(kern->num_accel);
 
+    acl_dev_kernel_invocation_image_t default_invocation;
+    size_t image_size_static =
+        (size_t)((uintptr_t) & (default_invocation.arg_value) - (uintptr_t) &
+                 (default_invocation.work_dim));
+
     for (unsigned a = 0; a < kern->num_accel; ++a) {
+      kern->static_img_cache[a] = std::make_unique<char[]>(image_size_static);
+      memcpy(kern->static_img_cache[a].get(),
+             (char *)(&(default_invocation.work_dim)), image_size_static);
       unsigned int max_same_accel_launches =
           devdef.accel[a].fast_launch_depth + 1;
       // +1, because fast launch depth does not account for the running kernel
@@ -1153,8 +1162,19 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
   // it is in dynamic memory.  Only write the static part of the invocation
   // image if this kernel uses CRA control.
   if (!kern->streaming_control_signal_names[accel_id]) {
-    acl_kernel_cra_write_block(kern, accel_id, offset, (unsigned int *)image_p,
-                               image_size_static);
+    if (kern->csr_version == CSR_VERSION_ID_18_1) {
+      // Just write everything for older CSR version
+      acl_kernel_cra_write_block(kern, accel_id, offset,
+                                 (unsigned int *)image_p, image_size_static);
+    } else {
+      char *img_cache_ptr = kern->static_img_cache[accel_id].get();
+      assert(img_cache_ptr && "kernel image cache not initialized!");
+      if (memcmp(img_cache_ptr, (char *)image_p, image_size_static) != 0) {
+        acl_kernel_cra_write_block(kern, accel_id, offset,
+                                   (unsigned int *)image_p, image_size_static);
+        memcpy(img_cache_ptr, (char *)image_p, image_size_static);
+      }
+    }
   }
 
   bool accel_has_agent_args = false;
@@ -1692,6 +1712,7 @@ void acl_kernel_if_close(acl_kernel_if *kern) {
   kern->accel_invoc_queue_depth.clear();
   kern->accel_queue_front.clear();
   kern->accel_queue_back.clear();
+  kern->static_img_cache.clear();
   kern->accel_arg_cache.clear();
   kern->autorun_profiling_kernel_id = -1;
 }
