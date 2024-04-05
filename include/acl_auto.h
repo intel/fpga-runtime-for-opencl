@@ -16,9 +16,9 @@ extern "C" {
  * The last one is for the driver version query.  The OpenCL spec says it
  * has to match \d+.\d+ and nothing else.
  */
-#define ACL_VERSION "v2024.2.0"
-#define ACL_VERSION_PLAIN "2024.2"
-#define ACL_VERSION_PLAIN_FOR_DRIVER_QUERY "2024.2"
+#define ACL_VERSION "v2025.0.0"
+#define ACL_VERSION_PLAIN "2025.0"
+#define ACL_VERSION_PLAIN_FOR_DRIVER_QUERY "2025.0"
 
 /* Check if we are currently compiling for ACDS Pro or Standard.
  * 1 means Pro and 0 means Standard.
