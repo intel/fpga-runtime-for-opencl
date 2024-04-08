@@ -4651,9 +4651,8 @@ TEST(acl_kernel_reprogram_scheduler, skip_reprogram_on_start) {
   CHECK_EQUAL(CL_SUCCESS, clSetUserEventStatus(ue, CL_COMPLETE));
   CHECK_EQUAL(CL_SUCCESS, clReleaseEvent(ue));
 
-  // Since reprogram didn't occur, only last_bin should be updated
   CHECK_EQUAL(&(dp0->device_binary), m_device->last_bin);
-  CHECK(m_device->loaded_bin == NULL);
+  CHECK_EQUAL(&(dp0->device_binary), m_device->loaded_bin);
 
   // set MEM_MIGRATE 1 to RUNNING +
   // set MEM_MIGRATE 1 to COMPLETE +
