@@ -3112,6 +3112,13 @@ int acl_submit_kernel_device_op(cl_event event) {
     // We managed to enqueue everything.
     cl_kernel kernel = event->cmd.info.ndrange_kernel.kernel;
 
+    // If current last bin is loaded on the board and we are going to update
+    // last bin pointer without any reprogram, we should update the loaded bin
+    // to reflect that as well.
+    if (!need_reprogram && device->last_bin == device->loaded_bin &&
+        device->last_bin != event->cmd.info.ndrange_kernel.dev_bin) {
+      device->loaded_bin = event->cmd.info.ndrange_kernel.dev_bin;
+    }
     device->last_bin = event->cmd.info.ndrange_kernel.dev_bin;
     event->last_device_op = last_op;
 
