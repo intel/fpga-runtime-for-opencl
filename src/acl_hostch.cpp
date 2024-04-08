@@ -814,6 +814,8 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
   // The host_pipe_info stored in the dev_prog->program_hostpipe_map
   // Contains the static information of the pipe, like protocol
 
+  assert(event->command_queue->device->loaded_bin != NULL &&
+         "No loaded binary for read hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
   auto host_pipe_info = dev_prog->program_hostpipe_map.at(
@@ -964,6 +966,8 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
   // The host_pipe_info stored in the dev_prog->program_hostpipe_map
   // Contains the static information of the pipe, like protocol
 
+  assert(event->command_queue->device->loaded_bin != NULL &&
+         "No loaded binary for write hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
   auto host_pipe_info = dev_prog->program_hostpipe_map.at(
@@ -1196,6 +1200,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueReadHostPipeINTEL(
     ERR_RET(CL_INVALID_VALUE, context, "Invalid Pipe Symbol");
   }
 
+  assert(device->loaded_bin != NULL &&
+         "No loaded binary for enqueue hostpipe read");
   acl_device_program_info_t *dev_prog = device->loaded_bin->get_dev_prog();
 
   auto search = dev_prog->program_hostpipe_map.find(std::string(pipe_symbol));
@@ -1269,6 +1275,8 @@ CL_API_ENTRY cl_int CL_API_CALL clEnqueueWriteHostPipeINTEL(
     ERR_RET(CL_INVALID_VALUE, context, "Invalid Pipe Symbol");
   }
 
+  assert(device->loaded_bin != NULL &&
+         "No loaded binary for enqueue hostpipe write");
   acl_device_program_info_t *dev_prog = device->loaded_bin->get_dev_prog();
 
   auto search = dev_prog->program_hostpipe_map.find(std::string(pipe_symbol));
