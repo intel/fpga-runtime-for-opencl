@@ -97,22 +97,23 @@ void acl_kernel_if_register_callbacks(
 // **************************** Utility Functions ***************************
 // **************************************************************************
 void print_invocation_image(acl_kernel_if *kern, char *image_ptr,
-                            size_t image_size, unsigned int offset,
-                            bool is_static) {
+                            size_t image_size, size_t size_to_write,
+                            unsigned int csr_offset, bool is_static,
+                            bool is_write = true, size_t print_offset = 0) {
   std::string image_type = is_static ? "stat" : "args";
-  for (uintptr_t p = 0; p < image_size; p += sizeof(int)) {
+  std::string overwrite = is_write ? "Writing" : "Keeping";
+  size_t print_end = print_offset + size_to_write;
+  assert(print_end <= image_size && "printing invocation image out of bound");
+  for (uintptr_t p = print_offset; p < print_end; p += sizeof(int)) {
     unsigned int pword = 0;
-    if (p + sizeof(int) > image_size) {
-      for (size_t i = 0; i < image_size - p; i += sizeof(char)) {
-        safe_memcpy(((char *)(&pword)) + i, image_ptr + p + i, sizeof(char),
-                    sizeof(int), image_size - p - i);
-      }
-    } else {
-      pword = *(unsigned int *)(image_ptr + p);
-    }
+    uintptr_t cpy_size =
+        (print_end - p > sizeof(int)) ? sizeof(int) : (print_end - p);
+    safe_memcpy(((char *)(&pword)), image_ptr + p, cpy_size * sizeof(char),
+                sizeof(int), (print_end - p) * sizeof(char));
     ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
-        kern, 2, "::   Writing inv image (%s) [%2d] @%8p := %4x\n",
-        image_type.c_str(), (int)(p), (void *)(offset + p), pword);
+        kern, 2, "::   %s inv image (%s) [%2d] @%8p := %4x\n",
+        overwrite.c_str(), image_type.c_str(), (int)(p),
+        (void *)(csr_offset + p), pword);
   }
 }
 
@@ -1143,36 +1144,35 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
                  (image->work_dim));
   }
 
-  if ((kern->io.debug_verbosity) >= 2) {
-    // We only write the static part of the invocation image if the kernel uses
-    // CRA control.
-    if (!kern->streaming_control_signal_names[accel_id]) {
-      print_invocation_image(kern, (char *)image_p, image_size_static, offset,
-                             true);
-    }
-
-    if (kern->csr_version.has_value() &&
-        (kern->csr_version != CSR_VERSION_ID_18_1)) {
-      print_invocation_image(kern, image->arg_value, image->arg_value_size,
-                             (unsigned int)(offset + image_size_static), false);
-    }
-  }
-
   // When csr version is 18.1, the kernel args is part of the image. otherwise,
   // it is in dynamic memory.  Only write the static part of the invocation
   // image if this kernel uses CRA control.
   if (!kern->streaming_control_signal_names[accel_id]) {
     if (kern->csr_version == CSR_VERSION_ID_18_1) {
       // Just write everything for older CSR version
+      if ((kern->io.debug_verbosity) >= 2) {
+        print_invocation_image(kern, (char *)image_p, image_size_static,
+                               image_size_static, offset, true);
+      }
       acl_kernel_cra_write_block(kern, accel_id, offset,
                                  (unsigned int *)image_p, image_size_static);
     } else {
       char *img_cache_ptr = kern->static_img_cache[accel_id].get();
       assert(img_cache_ptr && "kernel image cache not initialized!");
       if (memcmp(img_cache_ptr, (char *)image_p, image_size_static) != 0) {
+        // Something changed in static part of the invocation image,
+        // write everything to csr
+        if ((kern->io.debug_verbosity) >= 2) {
+          print_invocation_image(kern, (char *)image_p, image_size_static,
+                                 image_size_static, offset, true);
+        }
         acl_kernel_cra_write_block(kern, accel_id, offset,
                                    (unsigned int *)image_p, image_size_static);
         memcpy(img_cache_ptr, (char *)image_p, image_size_static);
+      } else if ((kern->io.debug_verbosity) >= 2) {
+        // Nothing's changed, just print the static part of the invocation image
+        print_invocation_image(kern, (char *)image_p, image_size_static,
+                               image_size_static, offset, true, false);
       }
     }
   }
@@ -1182,9 +1182,17 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
       (kern->csr_version != CSR_VERSION_ID_18_1 && image->arg_value_size > 0)) {
     accel_has_agent_args = true;
     if (!kern->accel_arg_cache[accel_id]) {
+      // The first time invoking the kernel, just write all the arguments
+      if ((kern->io.debug_verbosity) >= 2) {
+        print_invocation_image(kern, image->arg_value, image->arg_value_size,
+                               image->arg_value_size,
+                               (unsigned int)(offset + image_size_static),
+                               false);
+      }
       acl_kernel_cra_write_block(
           kern, accel_id, offset + (unsigned int)image_size_static,
           (unsigned int *)image->arg_value, image->arg_value_size);
+      // Initialize kernel argument cache and cache the values
       kern->accel_arg_cache[accel_id] =
           std::make_unique<char[]>(image->arg_value_size);
       memcpy(kern->accel_arg_cache[accel_id].get(), (char *)image->arg_value,
@@ -1197,6 +1205,7 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
         size_t cmp_size = (image->arg_value_size - step) > sizeof(int)
                               ? sizeof(int)
                               : (image->arg_value_size - step);
+        // Find range of changed arguments and record size of that block
         while (cmp_size > 0 &&
                memcmp(arg_cache_ptr + step + size_to_write,
                       image->arg_value + step + size_to_write, cmp_size) != 0) {
@@ -1207,8 +1216,23 @@ void acl_kernel_if_launch_kernel_on_custom_sof(
                   : (image->arg_value_size - step - size_to_write);
         }
         if (size_to_write == 0) {
-          step += (unsigned)sizeof(int);
+          // Current compared block is the same as before, skipping write
+          size_t size_to_skip = (image->arg_value_size - step > sizeof(int))
+                                    ? sizeof(int)
+                                    : (image->arg_value_size - step);
+          if ((kern->io.debug_verbosity) >= 2) {
+            print_invocation_image(
+                kern, image->arg_value, image->arg_value_size, size_to_skip,
+                (unsigned int)(offset + image_size_static), false, false, step);
+          }
+          step += size_to_skip;
         } else {
+          // Write the changed argument block to csr
+          if ((kern->io.debug_verbosity) >= 2) {
+            print_invocation_image(
+                kern, image->arg_value, image->arg_value_size, size_to_write,
+                (unsigned int)(offset + image_size_static), false, true, step);
+          }
           acl_kernel_cra_write_block(
               kern, accel_id, offset + (unsigned int)(image_size_static + step),
               (unsigned int *)(image->arg_value + step), size_to_write);
