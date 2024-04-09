@@ -149,8 +149,7 @@ static acl_system_def_t acltest_simple_system = {
 
     // Device definitions.
     1,
-    {{nullptr,
-      0,
+    {{0,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -556,8 +555,7 @@ static acl_system_def_t acltest_complex_system = {
     /* num_devices */ 5,
     {// All of these have kernels 0 and 2 in common.  This is used for
      // testing clCreateKernels
-     {nullptr,
-      0,
+     {0,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -565,24 +563,33 @@ static acl_system_def_t acltest_complex_system = {
       1,
       0, /* alloc capabilities */
       0, /* min_host_mem_alignment */
-      {"fpga0",
-       "sample40byterandomhash000000000000000000",
-       0,
-       acltest_complex_system_device0_accel, /* accel */
-       {},                                   /* hal_info */
-       1,                                    // number of global memory systems
-       {
-           /* global mem info array */
-           {
-               /* global mem info for memory 0 */
-               /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
-               /* acl_system_global_mem_type_t */ ACL_GLOBAL_MEM_DEVICE_PRIVATE,
-               /* num_global_bank */ 2,
-               /* burst_interleaved */ 1,
-           },
-       }}},
-     {nullptr,
-      1,
+      {
+          "fpga0",
+          "sample40byterandomhash000000000000000000",
+          0,
+          acltest_complex_system_device0_accel, /* accel */
+          {},                                   /* hal_info */
+          1, // number of global memory systems
+          {
+              /* global mem info array */
+              {
+                  /* global mem info for memory 0 */
+                  /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
+                  /* acl_system_global_mem_type_t */
+                  ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                  /* num_global_bank */ 2,
+                  /* burst_interleaved */ 1,
+              },
+          },
+          {}, // hostpipe info
+          {
+              // device_global_mem_defs map
+              {"dev_global_name",
+               {0x1024, 2048, ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, 0, 0,
+                0}},
+          },
+      }},
+     {1,
       1,
       1,
       2, /* full duplex memory transfers */
@@ -590,24 +597,33 @@ static acl_system_def_t acltest_complex_system = {
       0,
       0, /* alloc capabilities */
       0, /* min_host_mem_alignment */
-      {"fpga1",
-       "sample40byterandomhash000000000000000001",
-       0,
-       acltest_complex_system_device1_accel, /* accel */
-       {},                                   /* hal_info */
-       1,                                    // number of global memory systems
-       {
-           /* global mem info array */
-           {
-               /* global mem info for memory 0 */
-               /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
-               /* acl_system_global_mem_type_t */ ACL_GLOBAL_MEM_DEVICE_PRIVATE,
-               /* num_global_bank */ 2,
-               /* burst_interleaved */ 1,
-           },
-       }}},
-     {nullptr,
-      2,
+      {
+          "fpga1",
+          "sample40byterandomhash000000000000000001",
+          0,
+          acltest_complex_system_device1_accel, /* accel */
+          {},                                   /* hal_info */
+          1, // number of global memory systems
+          {
+              /* global mem info array */
+              {
+                  /* global mem info for memory 0 */
+                  /* global mem */ ACL_RANGE_FROM_ARRAY(acltest_global),
+                  /* acl_system_global_mem_type_t */
+                  ACL_GLOBAL_MEM_DEVICE_PRIVATE,
+                  /* num_global_bank */ 2,
+                  /* burst_interleaved */ 1,
+              },
+          },
+          {}, // hostpipe info
+          {
+              // device_global_mem_defs map
+              {"dev_global_name",
+               {0x1024, 2048, ACL_DEVICE_GLOBAL_HOST_ACCESS_TYPE_COUNT, 0, 0,
+                0}},
+          },
+      }},
+     {2,
       1,
       1,
       2, /* full duplex memory transfers */
@@ -631,8 +647,7 @@ static acl_system_def_t acltest_complex_system = {
                /* burst_interleaved */ 1,
            },
        }}},
-     {nullptr,
-      3,
+     {3,
       1,
       1,
       1, /* half duplex memory transfers */
@@ -656,8 +671,7 @@ static acl_system_def_t acltest_complex_system = {
                /* burst_interleaved */ 1,
            },
        }}},
-     {nullptr,
-      4,
+     {4,
       1,
       1,
       1, /* half duplex memory transfers */
