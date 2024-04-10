@@ -7,12 +7,12 @@ permissions:
   packages: read
 
 on:
-  workflow_dispatch:
+  pull_request:
     inputs:
       num_of_iterations:
         description: Number of iterations per fuzzable variable
         required: False
-        default: 5
+        default: 100
 
 jobs:
   build:
