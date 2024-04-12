@@ -56,10 +56,6 @@ Submit a pull request to the `main` branch with these commits, e.g., [#97]:
     that case, you may focus on revising and combining changelog entries,
     to convey the impact of changes on users clearly and concisely.
 
--   [ ] Update the release version in [README.md].
-
-    See, e.g., [Update README.md for 2022.2 release].
-
 -   [ ] Add a new Unreleased section to [CHANGELOG.md] for the next release.
 
     See, e.g., [Add new Unreleased section to changelog].
@@ -95,6 +91,10 @@ On the release date, [create a new release on GitHub]:
 
     The verbatim copy of the changes may be appreciated by users who
     subscribed to release notifications.
+
+-   [ ] Update the release version in [README.md].
+
+    See, e.g., [Update README.md for 2022.2 release].
 
 [Intel® oneAPI Base Toolkit]: https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html
 [Intel® FPGA Add-on for oneAPI Base Toolkit]: https://www.intel.com/content/www/us/en/developer/tools/oneapi/fpga.html
