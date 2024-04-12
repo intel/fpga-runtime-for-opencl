@@ -2,15 +2,30 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
-### Added
-### Changed
-### Deprecated
-### Removed
-### Fixed
-### Security
+## [2024.2] - 2024-06-14
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.1...HEAD
+### Added
+- Support arbitary Buffer Location for accessor ([#343]).
+- Informally support atomic fence capability device query ([#345]).
+
+### Changed
+- Use c++ constructs to replace malloc calls in `acl_kernel_if` ([#325]).
+- Various Runtime code clean up ([#334], [#335]).
+- Update Thread Sanitizer to use Ubuntu 22.04 ([#339]).
+- Prerequisite changes for getting rid of simulation environment variable ([#341]).
+
+### Fixed
+- Correct CSR pipe behaviour when StallFree is used ([#340]).
+
+[2024.2]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.1...v2024.2
+[#325]: https://github.com/intel/fpga-runtime-for-opencl/pull/325
+[#334]: https://github.com/intel/fpga-runtime-for-opencl/pull/334
+[#335]: https://github.com/intel/fpga-runtime-for-opencl/pull/335
+[#339]: https://github.com/intel/fpga-runtime-for-opencl/pull/339
+[#340]: https://github.com/intel/fpga-runtime-for-opencl/pull/340
+[#341]: https://github.com/intel/fpga-runtime-for-opencl/pull/341
+[#343]: https://github.com/intel/fpga-runtime-for-opencl/pull/343
+[#345]: https://github.com/intel/fpga-runtime-for-opencl/pull/345
 
 ## [2024.1] - 2024-02-20
 
