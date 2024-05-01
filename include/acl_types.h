@@ -744,6 +744,10 @@ typedef struct _cl_event {
 
   int is_on_device_op_queue; // bool whether this event is submitted to DevQ
   bool support_profiling;    // bool whether this event can be profiled
+
+  // Flag to indicate the event is being removed during command/inorder_command
+  // traversal and the removal should be deferred
+  bool defer_removal = false;
 } _cl_event;
 
 ACL_DECLARE_CL_OBJECT_ALLOC_FUNCTIONS(cl_event);
@@ -763,6 +767,9 @@ typedef struct _cl_command_queue {
 
   int num_commands;           // Number of commands in the queue.
   int num_commands_submitted; // Number of events submitted to device_op_queue
+
+  // Flag to indicate whether commands/inorder_commands is being traversed
+  bool waiting_for_events = false;
 
   // Used only for in-order command queues. Owner of all events managed by this
   // queue

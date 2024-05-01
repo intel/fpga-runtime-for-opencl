@@ -764,7 +764,13 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
       command_queue->last_barrier = NULL;
     }
     acl_maybe_delete_event(event);
-    command_queue->commands.erase(event);
+    if (command_queue->waiting_for_events) {
+      // We are in the middle of traversing command_queue->commands, defer
+      // the removal till later to avoid corruption
+      event->defer_removal = true;
+    } else {
+      command_queue->commands.erase(event);
+    }
     event->not_popped = false;
     command_queue->num_commands--;
     acl_release(command_queue);
@@ -820,8 +826,14 @@ int acl_update_inorder_queue(cl_command_queue command_queue) {
         // popping it the second time.
 
         // Deleted event. Remove it from our queue.
-        command_queue->inorder_commands.erase(
-            command_queue->inorder_commands.begin() + queue_idx);
+        if (command_queue->waiting_for_events) {
+          // We are in the middle of traversing command_queue->inorder_commands,
+          // defer the removal till later to avoid corruption
+          event->defer_removal = true;
+        } else {
+          command_queue->inorder_commands.erase(
+              command_queue->inorder_commands.begin() + queue_idx);
+        }
         command_queue->num_commands--;
         num_updates++;
         event->not_popped = false;
