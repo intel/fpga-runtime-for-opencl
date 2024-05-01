@@ -1224,48 +1224,72 @@ void l_cl_mem_blocking_free(cl_context context, void *ptr) {
 
   for (int i = 0; i < num_command_queues; i++) {
     cl_command_queue current_cq = context->command_queue[i];
-    // check events in commands
-    for (const auto &event : current_cq->commands) {
-      if (event->execution_status != CL_COMPLETE) {
-        // check if ptr is used by kernels when we submit to queue
-        if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
-          clWaitForEvents(1, &event);
-        }
-        // check if ptr is used in queues
-        if ((event->cmd.type == CL_COMMAND_MEMCPY_INTEL) ||
-            (event->cmd.type == CL_COMMAND_MEMFILL_INTEL)) {
-          src_usm_alloc = acl_get_usm_alloc_from_ptr(
-              context, event->cmd.info.usm_xfer.src_ptr);
-          dst_usm_alloc = acl_get_usm_alloc_from_ptr(
-              context, event->cmd.info.usm_xfer.dst_ptr);
-          if ((src_usm_alloc && (src_usm_alloc->range.begin == ptr)) ||
-              (dst_usm_alloc && (dst_usm_alloc->range.begin == ptr))) {
+    // Set a flag to indicate the command set of this command queue is being
+    // traversed, and any event deletion should be deferred
+    current_cq->waiting_for_events = true;
+
+    if (current_cq->properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) {
+      // Current queue is ooo queue, check events in commands
+      for (auto it = current_cq->commands.begin();
+           it != current_cq->commands.end();) {
+        auto event = *it;
+        if (event->execution_status != CL_COMPLETE) {
+          // check if ptr is used by kernels when we submit to queue
+          if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
             clWaitForEvents(1, &event);
           }
+          // check if ptr is used in queues
+          if ((event->cmd.type == CL_COMMAND_MEMCPY_INTEL) ||
+              (event->cmd.type == CL_COMMAND_MEMFILL_INTEL)) {
+            src_usm_alloc = acl_get_usm_alloc_from_ptr(
+                context, event->cmd.info.usm_xfer.src_ptr);
+            dst_usm_alloc = acl_get_usm_alloc_from_ptr(
+                context, event->cmd.info.usm_xfer.dst_ptr);
+            if ((src_usm_alloc && (src_usm_alloc->range.begin == ptr)) ||
+                (dst_usm_alloc && (dst_usm_alloc->range.begin == ptr))) {
+              clWaitForEvents(1, &event);
+            }
+          }
+        }
+        if (event->defer_removal) {
+          it = current_cq->commands.erase(it);
+          event->defer_removal = false; // Reset as this event might get reused
+        } else {
+          ++it;
+        }
+      }
+    } else {
+      // Current queue is inorder queue, check events in inorder commands
+      for (auto it = current_cq->inorder_commands.begin();
+           it != current_cq->inorder_commands.end();) {
+        auto event = *it;
+        if (event->execution_status != CL_COMPLETE) {
+          // check if ptr is used by kernels when we submit to queue
+          if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
+            clWaitForEvents(1, &event);
+          }
+          // check if ptr is used in queues
+          if ((event->cmd.type == CL_COMMAND_MEMCPY_INTEL) ||
+              (event->cmd.type == CL_COMMAND_MEMFILL_INTEL)) {
+            src_usm_alloc = acl_get_usm_alloc_from_ptr(
+                context, event->cmd.info.usm_xfer.src_ptr);
+            dst_usm_alloc = acl_get_usm_alloc_from_ptr(
+                context, event->cmd.info.usm_xfer.dst_ptr);
+            if ((src_usm_alloc && (src_usm_alloc->range.begin == ptr)) ||
+                (dst_usm_alloc && (dst_usm_alloc->range.begin == ptr))) {
+              clWaitForEvents(1, &event);
+            }
+          }
+        }
+        if (event->defer_removal) {
+          it = current_cq->inorder_commands.erase(it);
+          event->defer_removal = false; // Reset as this event might get reused
+        } else {
+          ++it;
         }
       }
     }
-    // check events in inorder commands
-    for (const auto &event : current_cq->inorder_commands) {
-      if (event->execution_status != CL_COMPLETE) {
-        // check if ptr is used by kernels when we submit to queue
-        if (event->ptr_hashtable.find(ptr) != event->ptr_hashtable.end()) {
-          clWaitForEvents(1, &event);
-        }
-        // check if ptr is used in queues
-        if ((event->cmd.type == CL_COMMAND_MEMCPY_INTEL) ||
-            (event->cmd.type == CL_COMMAND_MEMFILL_INTEL)) {
-          src_usm_alloc = acl_get_usm_alloc_from_ptr(
-              context, event->cmd.info.usm_xfer.src_ptr);
-          dst_usm_alloc = acl_get_usm_alloc_from_ptr(
-              context, event->cmd.info.usm_xfer.dst_ptr);
-          if ((src_usm_alloc && (src_usm_alloc->range.begin == ptr)) ||
-              (dst_usm_alloc && (dst_usm_alloc->range.begin == ptr))) {
-            clWaitForEvents(1, &event);
-          }
-        }
-      }
-    }
+    current_cq->waiting_for_events = false;
   }
 }
 
