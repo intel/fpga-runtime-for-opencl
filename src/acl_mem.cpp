@@ -264,25 +264,32 @@ static int acl_do_physical_buffer_allocation(unsigned physical_device_id,
 
   acl_assert_locked();
 
-  // When mem_id == 0 it indicates the mem_id is not finalized yet so need to
-  // set it to a real value here.
+  // When mem_id == 0 and buffer location is not set, it indicates the mem_id
+  // is not finalized yet so need to set it to a real value here.
   bool glob_mem = mem->block_allocation->region == &(acl_platform.global_mem);
-  if (glob_mem && mem->mem_id == 0) {
+  if (glob_mem && mem->mem_id == 0 && !mem->buffer_location_set) {
     // Memory migration between SVM and device global memory is not supported.
-    // If device supports both, do physical buffer allocation on device global
-    // memory only.
-    if (acl_svm_device_supports_physical_memory(physical_device_id) &&
-        acl_svm_device_supports_any_svm(physical_device_id)) {
+    // When the device supports device global memory, if SVM is also supported,
+    // do physical buffer allocation on device global memory only; else if SVM
+    // is not supported, we can only allocate on device global memory.
+    if (acl_svm_device_supports_physical_memory(physical_device_id)) {
       assert(
           acl_platform.device[physical_device_id]
                   .def.autodiscovery_def.num_global_mem_systems > 0 &&
           "Device is not configured to support SVM and device global memory.");
-      int tmp_mem_id = acl_get_default_device_global_memory(
-          acl_platform.device[physical_device_id].def);
-      assert(tmp_mem_id >= 0 &&
-             "Device does not have any device global memory.");
+      int tmp_mem_id = acl_get_fit_device_global_memory(
+          acl_platform.device[physical_device_id].def, mem->size);
+      assert(tmp_mem_id >= 0 && "Device does not have any device global memory "
+                                "for the allocation size.");
       mem->mem_id = (unsigned int)tmp_mem_id;
     }
+  } else if (mem->buffer_location_set) {
+    // Sanity check if the specified buffer location is large enough
+    assert(
+        ACL_RANGE_SIZE(acl_platform.device[physical_device_id]
+                           .def.autodiscovery_def.global_mem_defs[mem->mem_id]
+                           .get_usable_range()) >= mem->size &&
+        "Specified buffer location does not fit the requested allocation size");
   }
 
   int result = 0;
@@ -420,6 +427,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
   unsigned int idevice;
   cl_uint bank_id = 0;
   cl_uint tmp_mem_id = 0;
+  bool buffer_location_set = false;
   std::scoped_lock lock{acl_mutex_wrapper};
 
 #ifdef MEM_DEBUG_MSG
@@ -436,6 +444,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
       bank_id = (cl_uint) * (properties + 1);
     } break;
     case CL_MEM_ALLOC_BUFFER_LOCATION_INTEL: {
+      buffer_location_set = true;
       tmp_mem_id = (cl_uint) * (properties + 1);
 
       // In FullSystem flow, buffer location is always the index of the global
@@ -612,6 +621,7 @@ CL_API_ENTRY cl_mem clCreateBufferWithPropertiesINTEL(
               "Could not allocate a cl_mem object");
   }
   mem->mem_id = tmp_mem_id;
+  mem->buffer_location_set = buffer_location_set;
 
   mem->block_allocation = new_block;
   mem->block_allocation->mem_obj = mem;
@@ -4161,8 +4171,15 @@ ACL_EXPORT CL_API_ENTRY cl_int CL_API_CALL clEnqueueMigrateMemObjectsIntelFPGA(
   physical_id = command_queue->device->def.physical_device_id;
   // SVM memory is not associated with any device.
   // Migration should only be moving device global memories.
-  int tmp_mem_id =
-      acl_get_default_device_global_memory(command_queue->device->def);
+  // First find the largest mem object.
+  size_t mem_objects_largest_size = 0;
+  for (i = 0; i < num_mem_objects; ++i) {
+    if (mem_objects[i]->size > mem_objects_largest_size) {
+      mem_objects_largest_size = mem_objects[i]->size;
+    }
+  }
+  int tmp_mem_id = acl_get_fit_device_global_memory(command_queue->device->def,
+                                                    mem_objects_largest_size);
   if (tmp_mem_id < 0) {
     ERR_RET(CL_OUT_OF_RESOURCES, command_queue->context,
             "Can not find default global memory system");
@@ -4901,11 +4918,8 @@ int acl_mem_is_valid(cl_mem mem) {
 }
 
 // Iterate through device's global memories and return the ID of the first
-// device private global memory.
-// This is needed over acl_get_default_memory(dev) because device can have
-// both device private and shared virtual memory.
-// Returns the id of the memory that clCreateBuffer would allocate in by default
-// (i.e. when CL_MEM_USE_HOST_PTR is not used) or -1 if no such memory exists.
+// device private global memory
+// TODO: Used for ARM board device query, need to verify correctness
 int acl_get_default_device_global_memory(const acl_device_def_t &dev) {
   int lowest_gmem_idx = -1;
   cl_ulong lowest_gmem_begin = 0xFFFFFFFFFFFFFFFF;
@@ -4921,6 +4935,46 @@ int acl_get_default_device_global_memory(const acl_device_def_t &dev) {
             ACL_GLOBAL_MEM_DEVICE_PRIVATE &&
         (size_t)dev.autodiscovery_def.global_mem_defs[gmem_idx].range.begin <
             lowest_gmem_begin) {
+      lowest_gmem_begin =
+          (size_t)dev.autodiscovery_def.global_mem_defs[gmem_idx].range.begin;
+      lowest_gmem_idx = static_cast<int>(gmem_idx);
+    }
+  }
+
+  // This can return -1, but that means there's no device private memory
+  return lowest_gmem_idx;
+}
+
+// Iterate through device's global memories and return the ID of the first
+// device private global memory that has enough capacity to fit the allocation.
+// This is needed over acl_get_default_memory(dev) because device can have
+// both device private and shared virtual memory.
+// Returns the id of the memory that clCreateBuffer would allocate in by default
+// (i.e. when CL_MEM_USE_HOST_PTR is not used) or -1 if no such memory exists.
+int acl_get_fit_device_global_memory(const acl_device_def_t &dev,
+                                     const size_t size) {
+  int lowest_gmem_idx = -1;
+  cl_ulong lowest_gmem_begin = 0xFFFFFFFFFFFFFFFF;
+  acl_assert_locked();
+
+  // If the device has no physical memory then clCreateBuffer will fall back to
+  // allocating device global memory in the default memory.
+  if (!acl_svm_device_supports_physical_memory(dev.physical_device_id))
+    return acl_get_default_memory(dev);
+  for (unsigned gmem_idx = 0;
+       gmem_idx < dev.autodiscovery_def.num_global_mem_systems; gmem_idx++) {
+    acl_system_global_mem_allocation_type_t alloc_type =
+        dev.autodiscovery_def.global_mem_defs[gmem_idx].allocation_type;
+    bool is_device_alloc =
+        !alloc_type || (alloc_type & ACL_GLOBAL_MEM_DEVICE_ALLOCATION);
+    bool is_device_private =
+        dev.autodiscovery_def.global_mem_defs[gmem_idx].type ==
+        ACL_GLOBAL_MEM_DEVICE_PRIVATE;
+    if (is_device_private && is_device_alloc &&
+        (size_t)dev.autodiscovery_def.global_mem_defs[gmem_idx].range.begin <
+            lowest_gmem_begin &&
+        ACL_RANGE_SIZE(dev.autodiscovery_def.global_mem_defs[gmem_idx]
+                           .get_usable_range()) >= size) {
       lowest_gmem_begin =
           (size_t)dev.autodiscovery_def.global_mem_defs[gmem_idx].range.begin;
       lowest_gmem_idx = static_cast<int>(gmem_idx);
