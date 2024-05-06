@@ -69,6 +69,8 @@ cl_int acl_reserve_buffer_block(cl_mem mem, acl_mem_region_t *region,
 
 int acl_get_default_memory(const acl_device_def_t &dev);
 int acl_get_default_device_global_memory(const acl_device_def_t &dev);
+int acl_get_fit_device_global_memory(const acl_device_def_t &dev,
+                                     const size_t size);
 
 void acl_mem_destructor_callback(
     cl_mem memobj); // The function that calls the user registered callbacks via
