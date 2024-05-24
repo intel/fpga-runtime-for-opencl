@@ -32,10 +32,19 @@ typedef struct {
 
   // Accelerator details
   unsigned int num_accel;
-  std::vector<std::vector<int>>
-      accel_job_ids; //[num_accel][accel_invoc_queue_depth]
+
+  // Circular buffer that implements hardware kernel invocation queue
+  // size: [num_accel][accel_invoc_queue_depth]
+  std::vector<std::vector<int>> accel_job_ids;
+  // Depth of hardware kernel invocation queue [num_accel]
+  std::vector<unsigned int> accel_invoc_queue_depth;
+  // Points to the last kernel that has been launched but not yet finished
+  // [num_accel]
   std::vector<int> accel_queue_front;
+  // Points to the last empty slot on hardware kernel invocation queue
+  // where kernel at the next index is the next one to finish [num_accel]
   std::vector<int> accel_queue_back;
+
   std::vector<acl_kernel_if_addr_range> accel_csr;
   std::vector<acl_kernel_if_addr_range> accel_perf_mon;
   std::vector<unsigned int> accel_num_printfs;
@@ -73,9 +82,6 @@ typedef struct {
   // read/write functions in case those are accidentally invoked too early,
   // e.g., in a future code refactoring.
   bool cra_ring_root_exist = false;
-
-  // Depth of hardware kernel invocation queue
-  std::vector<unsigned int> accel_invoc_queue_depth;
 
   // Track which of the kernels is the autorun profiling kernel (-1 if none)
   int autorun_profiling_kernel_id;
