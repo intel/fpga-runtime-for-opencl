@@ -400,20 +400,42 @@ static uintptr_t acl_kernel_cra_set_segment_rom(acl_kernel_if *kern,
 
 static int acl_kernel_cra_read(acl_kernel_if *kern, unsigned int accel_id,
                                unsigned int addr, unsigned int *val) {
+  int result = 0;
   assert(kern->cra_ring_root_exist);
-  uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
-  acl_assert_locked_or_sig();
-  return acl_kernel_if_read_32b(
-      kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+#ifdef __linux__
+  acl_sig_block_signals();
+#endif
+  {
+    std::lock_guard<std::mutex> lock(kern->segment_mutex);
+    uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
+    acl_assert_locked_or_sig();
+    result = acl_kernel_if_read_32b(
+        kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+  }
+#ifdef __linux__
+  acl_sig_unblock_signals();
+#endif
+  return result;
 }
 
 int acl_kernel_cra_read_64b(acl_kernel_if *kern, unsigned int accel_id,
                             unsigned int addr, uint64_t *val) {
+  int result = 0;
   assert(kern->cra_ring_root_exist);
-  uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
-  acl_assert_locked_or_sig();
-  return acl_kernel_if_read_64b(
-      kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+#ifdef __linux__
+  acl_sig_block_signals();
+#endif
+  {
+    std::lock_guard<std::mutex> lock(kern->segment_mutex);
+    uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
+    acl_assert_locked_or_sig();
+    result = acl_kernel_if_read_64b(
+        kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+  }
+#ifdef __linux__
+  acl_sig_unblock_signals();
+#endif
+  return result;
 }
 
 // Read 32b from kernel ROM
@@ -461,61 +483,95 @@ static int acl_kernel_rom_cra_read_block(acl_kernel_if *kern, unsigned int addr,
 
 static int acl_kernel_cra_write(acl_kernel_if *kern, unsigned int accel_id,
                                 unsigned int addr, unsigned int val) {
+  int result = 0;
   assert(kern->cra_ring_root_exist);
-  uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
-  acl_assert_locked_or_sig();
-  return acl_kernel_if_write_32b(
-      kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+#ifdef __linux__
+  acl_sig_block_signals();
+#endif
+  {
+    std::lock_guard<std::mutex> lock(kern->segment_mutex);
+    uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
+    acl_assert_locked_or_sig();
+    result = acl_kernel_if_write_32b(
+        kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+  }
+#ifdef __linux__
+  acl_sig_unblock_signals();
+#endif
+  return result;
 }
 
 static int acl_kernel_cra_write_64b(acl_kernel_if *kern, unsigned int accel_id,
                                     unsigned int addr, uint64_t val) {
+  int result = 0;
   assert(kern->cra_ring_root_exist);
-  uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
-  acl_assert_locked();
-  return acl_kernel_if_write_64b(
-      kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+#ifdef __linux__
+  acl_sig_block_signals();
+#endif
+  {
+    std::lock_guard<std::mutex> lock(kern->segment_mutex);
+    uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
+    acl_assert_locked();
+    result = acl_kernel_if_write_64b(
+        kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val);
+  }
+#ifdef __linux__
+  acl_sig_unblock_signals();
+#endif
+  return result;
 }
 
 static int acl_kernel_cra_write_block(acl_kernel_if *kern,
                                       unsigned int accel_id, unsigned int addr,
                                       unsigned int *val, size_t size) {
+  int result = 0;
   assert(kern->cra_ring_root_exist);
-  uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
-  uintptr_t logical_addr =
-      kern->accel_csr[accel_id].address + addr - OFFSET_KERNEL_CRA;
-  uintptr_t segment = logical_addr & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
+#ifdef __linux__
+  acl_sig_block_signals();
+#endif
+  {
+    std::lock_guard<std::mutex> lock(kern->segment_mutex);
+    uintptr_t segment_offset = acl_kernel_cra_set_segment(kern, accel_id, addr);
+    uintptr_t logical_addr =
+        kern->accel_csr[accel_id].address + addr - OFFSET_KERNEL_CRA;
+    uintptr_t segment = logical_addr & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
 
-  uintptr_t logical_addr_end =
-      kern->accel_csr[accel_id].address + addr + size - OFFSET_KERNEL_CRA;
-  uintptr_t segment_end =
-      logical_addr_end & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
+    uintptr_t logical_addr_end =
+        kern->accel_csr[accel_id].address + addr + size - OFFSET_KERNEL_CRA;
+    uintptr_t segment_end =
+        logical_addr_end & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
 
-  unsigned int step = 0;
-  if (segment != segment_end) {
-    ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
-        kern, 2, ":: Segment change during block write detected.\n");
-    while (step < size) {
-      segment = (logical_addr + step) & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
-      if (kern->cur_segment != segment) {
-        acl_kernel_if_write_block(
-            kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val,
-            step);
-        segment_offset =
-            acl_kernel_cra_set_segment(kern, accel_id, addr + step);
-        logical_addr =
-            kern->accel_csr[accel_id].address + addr + step - OFFSET_KERNEL_CRA;
-        val += step;
-        size -= step;
-        step = 0;
-      } else {
-        step += (unsigned)sizeof(int);
+    unsigned int step = 0;
+    if (segment != segment_end) {
+      ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(
+          kern, 2, ":: Segment change during block write detected.\n");
+      while (step < size) {
+        segment =
+            (logical_addr + step) & ((size_t)0 - (KERNEL_CRA_SEGMENT_SIZE));
+        if (kern->cur_segment != segment) {
+          acl_kernel_if_write_block(
+              kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val,
+              step);
+          segment_offset =
+              acl_kernel_cra_set_segment(kern, accel_id, addr + step);
+          logical_addr = kern->accel_csr[accel_id].address + addr + step -
+                         OFFSET_KERNEL_CRA;
+          val += step;
+          size -= step;
+          step = 0;
+        } else {
+          step += (unsigned)sizeof(int);
+        }
       }
     }
+    result = acl_kernel_if_write_block(
+        kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val,
+        size);
   }
-
-  return acl_kernel_if_write_block(
-      kern, (unsigned)OFFSET_KERNEL_CRA + (unsigned)segment_offset, val, size);
+#ifdef __linux__
+  acl_sig_unblock_signals();
+#endif
+  return result;
 }
 
 // Private utility function to issue a command to the profile hardware
@@ -1470,16 +1526,6 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
   ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(kern, 5, ":: Updating kernel status.\n");
 #endif
 
-  // Get the state of kernel_cra address span extender segment prior to IRQ in
-  // hardware If IRQ is received in middle of segment change, segment value in
-  // cache and hardware could go out of sync
-  unsigned int segment;
-  acl_kernel_if_read_32b(kern, OFFSET_KERNEL_CRA_SEGMENT, &segment);
-
-  // Zero upper 32-bits on 64-bit machines
-  kern->cur_segment = segment & 0xffffffff;
-  uintptr_t segment_pre_irq = kern->cur_segment;
-
   // Check which accelerators are done and update their status appropriately
   for (unsigned int accel_id = 0; accel_id < kern->num_accel; ++accel_id) {
     int next_queue_back;
@@ -1551,14 +1597,6 @@ void acl_kernel_if_update_status(acl_kernel_if *kern) {
                                 CL_RUNNING);
       }
     }
-  }
-
-  // Restore value of kernel cra address span extender segment to that of prior
-  // to IRQ
-  if (kern->cur_segment != segment_pre_irq) {
-    acl_kernel_if_write_32b(kern, OFFSET_KERNEL_CRA_SEGMENT,
-                            (unsigned int)segment_pre_irq);
-    kern->cur_segment = segment_pre_irq;
   }
 }
 
