@@ -12,6 +12,7 @@
 #include "acl_hal.h"
 #include "acl_types.h"
 
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -59,6 +60,12 @@ typedef struct {
   uintptr_t cur_segment;
 
   acl_bsp_io io;
+
+  // Acquired when any thread is trying to perform CRA non-ROM read or write.
+  // This is to ensure that CRA segment register write happens concurrently
+  // with the subsequent data read or write, so the data read or write goes
+  // to the CRA of the intended kernel.
+  std::mutex segment_mutex;
 
   // csr_version is absent if there is no accelerators or cra_ring_root doesn't
   // exist
