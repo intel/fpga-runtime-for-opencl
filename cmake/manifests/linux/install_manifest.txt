@@ -37,3 +37,4 @@
 /fpga-runtime-for-opencl/include/CL/opencl.hpp
 /fpga-runtime-for-opencl/include/MMD/aocl_mmd.h
 /fpga-runtime-for-opencl/include/MMD/aocl_mmd_deprecated.h
+/__w/fpga-runtime-for-opencl/fpga-runtime-for-opencl/glibc_wrap/libglibc_wrap.a
