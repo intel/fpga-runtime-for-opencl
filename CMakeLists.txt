@@ -19,6 +19,11 @@ set(CPACK_PACKAGE_VERSION_PATCH "0")
 set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 
+if (NOT WIN32)
+    set(GLIBC_WRAP_FUNCTIONS
+        -Wl,--wrap=gettid
+        -Wl,--wrap=log2)
+endif()
 # Enforce keeping the source directory clean by building in a separate
 # directory. This avoids unnecessary corner cases, e.g., copying files
 # from source to binary directory with identical relative paths.
@@ -333,7 +338,10 @@ target_link_libraries(acl PRIVATE
 if(UNIX)
   # we need this flag to expose symbols, otherwise linking will fail with:
   # "relocation against protected symbol X can not be used when making a shared object"
+  add_subdirectory(glibc_wrap)
   set_target_properties(acl PROPERTIES LINK_FLAGS "-Wl,-Bsymbolic")
+  target_include_directories(acl PRIVATE ${CMAKE_SOURCE_DIR}/glibc_wrap)
+  target_link_libraries(acl PRIVATE glibc_wrap)
 endif()
 
 set_property(TARGET acl PROPERTY PUBLIC_HEADER
