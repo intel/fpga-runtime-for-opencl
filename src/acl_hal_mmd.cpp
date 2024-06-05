@@ -1985,13 +1985,13 @@ int acl_hal_mmd_program_device(unsigned int physical_device_id,
 
 void acl_hal_mmd_kernel_interrupt(int handle_in, void *user_data) {
   unsigned physical_device_id;
-#ifdef __linux__
+
   // Callbacks received from non-dma transfers.
   // (those calls are not initiated by a signal handler, so we need to block all
   // signals here to avoid simultaneous calls to signal handler.)
-  acl_sig_block_signals(); // Call before acl_sig_started. Must call
-                           // acl_sig_unblock_signals after acl_sig_finished.
-#endif
+  // Must instantiate before acl_sig_started, destruct after acl_sig_finished.
+  acl_signal_blocker sig_blocker;
+
   acl_sig_started();
   // NOTE: all exit points of this function must first call acl_sig_finished()
 
@@ -2005,10 +2005,6 @@ void acl_hal_mmd_kernel_interrupt(int handle_in, void *user_data) {
     assert(acl_kernel_if_is_valid(&kern[physical_device_id]));
     acl_kernel_if_update_status(&kern[physical_device_id]);
     acl_sig_finished();
-#ifdef __linux__
-    // Unblocking the signals we blocked
-    acl_sig_unblock_signals();
-#endif
     return;
   }
 
@@ -2021,14 +2017,13 @@ void acl_hal_mmd_device_interrupt(int handle_in,
                                   aocl_mmd_interrupt_info *data_in,
                                   void *user_data) {
   unsigned physical_device_id;
-#ifdef __linux__
+
   // Callbacks received from non-dma transfers.
-  //(those calls are not initiated by a signal handler, so we need to block all
-  // signals
-  // here to avoid simultaneous calls to signal handler.)
-  acl_sig_block_signals(); // Call before acl_sig_started. Must call
-                           // acl_sig_unblock_signals after acl_sig_finished.
-#endif
+  // (those calls are not initiated by a signal handler, so we need to block all
+  // signals here to avoid simultaneous calls to signal handler.)
+  // Must instantiate before acl_sig_started, destruct after acl_sig_finished.
+  acl_signal_blocker sig_blocker;
+
   acl_sig_started();
   // NOTE: all exit points of this function must first call acl_sig_finished()
 
@@ -2042,10 +2037,6 @@ void acl_hal_mmd_device_interrupt(int handle_in,
     acl_device_update_fn(physical_device_id, data_in->exception_type,
                          data_in->user_private_info, data_in->user_cb);
     acl_sig_finished();
-#ifdef __linux__
-    // Unblocking the signals we blocked
-    acl_sig_unblock_signals();
-#endif
     return;
   }
 
@@ -2056,14 +2047,12 @@ void acl_hal_mmd_device_interrupt(int handle_in,
 
 void acl_hal_mmd_status_handler(int handle, void *user_data, aocl_mmd_op_t op,
                                 int status) {
-#ifdef __linux__
   // Callbacks received from non-dma transfers.
-  //(those calls are not initiated by a signal handler, so we need to block all
-  // signals)
-  // here to avoid simultaneous  calls to signal handler.)
-  acl_sig_block_signals(); // Call before acl_sig_started. Must call
-                           // acl_sig_unblock_signals after acl_sig_finished.
-#endif
+  // (those calls are not initiated by a signal handler, so we need to block all
+  // signals here to avoid simultaneous calls to signal handler.)
+  // Must instantiate before acl_sig_started, destruct after acl_sig_finished.
+  acl_signal_blocker sig_blocker;
+
   acl_sig_started();
   // NOTE: all exit points of this function must first call acl_sig_finished()
   // Removing Windows warning
@@ -2073,10 +2062,6 @@ void acl_hal_mmd_status_handler(int handle, void *user_data, aocl_mmd_op_t op,
   acl_event_update_fn((cl_event)op, CL_COMPLETE);
 
   acl_sig_finished();
-#ifdef __linux__
-  // Unblocking the signals we blocked
-  acl_sig_unblock_signals();
-#endif
 }
 
 void acl_hal_mmd_register_callbacks(

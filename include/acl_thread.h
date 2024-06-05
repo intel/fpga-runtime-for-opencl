@@ -67,20 +67,13 @@ static inline void acl_sig_finished() {
 }
 
 // Blocking/Unblocking signals (Only implemented for Linux)
-#ifdef __linux__
-extern ACL_TLS sigset_t acl_sigset;
-static inline void acl_sig_block_signals() {
-  sigset_t mask;
-  if (sigfillset(&mask))
-    assert(0 && "Error in creating signal mask in status handler");
-  if (pthread_sigmask(SIG_BLOCK, &mask, &acl_sigset))
-    assert(0 && "Error in blocking signals in status handler");
-}
-static inline void acl_sig_unblock_signals() {
-  if (pthread_sigmask(SIG_SETMASK, &acl_sigset, NULL))
-    assert(0 && "Error in unblocking signals in status handler");
-}
-#endif
+class acl_signal_blocker {
+public:
+  acl_signal_blocker &operator=(const acl_signal_blocker &) = delete;
+  acl_signal_blocker(const acl_signal_blocker &) = delete;
+  acl_signal_blocker();
+  ~acl_signal_blocker();
+};
 
 // -- global lock functions --
 
