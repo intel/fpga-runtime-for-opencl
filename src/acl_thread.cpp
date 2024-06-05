@@ -135,6 +135,27 @@ static void l_init_once() {
 
 #endif // !LINUX
 
+// Blocking/Unblocking signals (Actual implementation only for Linux)
+acl_signal_blocker::acl_signal_blocker() {
+#ifdef __linux__
+  sigset_t mask;
+  if (sigfillset(&mask)) {
+    assert(0 && "Error in creating signal mask in status handler");
+  }
+  if (pthread_sigmask(SIG_BLOCK, &mask, &acl_sigset)) {
+    assert(0 && "Error in blocking signals in status handler");
+  }
+#endif
+}
+
+acl_signal_blocker::~acl_signal_blocker() {
+#ifdef __linux__
+  if (pthread_sigmask(SIG_SETMASK, &acl_sigset, NULL)) {
+    assert(0 && "Error in unblocking signals in status handler");
+  }
+#endif
+}
+
 // Current thread releases mutex lock and sleeps briefly to allow other threads
 // a chance to execute. This function is useful for multithreaded hosts with
 // e.g. polling BSPs (using yield) to prevent one thread from hogging the mutex
