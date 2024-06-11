@@ -126,12 +126,15 @@ jobs:
       - name: create build directory
         run: mkdir build
 
+      # CMAKE_CXX_FLAGS is workaround for github runner image issue:
+      # https://github.com/actions/runner-images/issues/10004#issuecomment-2153445161
+      # Remove after ths issue is resolved.
       - name: create build files
         shell: cmd
         run: |
           call "${{ steps.msvc.outputs.path }}"
           cd build
-          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=c:\fpga-runtime-for-opencl -DCMAKE_PREFIX_PATH=c:\libelf;c:\zlib
+          cmake -G Ninja .. -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_INSTALL_PREFIX=c:\fpga-runtime-for-opencl -DCMAKE_PREFIX_PATH=c:\libelf;c:\zlib -DCMAKE_CXX_FLAGS=" /D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR"
 
       - name: build runtime
         shell: cmd
