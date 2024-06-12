@@ -1328,6 +1328,9 @@ TEST(acl_mem, exhaustion) {
   int num_mems[num_trials];
   static cl_mem mem[max_mems];
 
+  // Set burst interleave to 0 to enable mem channel property
+  m_cq->device->def.autodiscovery_def.global_mem_defs[0].burst_interleaved = 0;
+
   cl_mem_properties_intel props[] = {CL_MEM_CHANNEL_INTEL, 2, 0};
 
   // Simple exhaustion across dimms - assumes 2 banks exist
@@ -1459,6 +1462,9 @@ TEST(acl_mem, exhaustion) {
       }
     }
   }
+  // Reset burst interleave
+  m_cq->device->def.autodiscovery_def.global_mem_defs[0].burst_interleaved = 1;
+
   ACL_LOCKED(acl_print_debug_msg("end exhaustion\n"));
 }
 
@@ -2825,6 +2831,9 @@ TEST(acl_mem, case_205751_overlapping_alloc) {
   size_t bank_size = total_size / 2;
   size_t small_size = bank_size / 1024;
 
+  // Set burst interleave to 0 to enable mem channel property
+  m_cq->device->def.autodiscovery_def.global_mem_defs[0].burst_interleaved = 0;
+
   // This always passed
   a = clCreateBuffer(m_context, 0, small_size, 0, &status);
   CHECK_EQUAL(CL_SUCCESS, status);
@@ -2859,6 +2868,9 @@ TEST(acl_mem, case_205751_overlapping_alloc) {
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(a));
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(b));
   CHECK_EQUAL(CL_SUCCESS, clReleaseMemObject(c));
+
+  // Reset burst interleave
+  m_cq->device->def.autodiscovery_def.global_mem_defs[0].burst_interleaved = 1;
 }
 
 TEST(acl_mem, buffer_location_property) {
