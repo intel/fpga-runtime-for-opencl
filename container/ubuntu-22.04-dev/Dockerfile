@@ -36,6 +36,7 @@ RUN apt-get -y update \
   libxml2 \
   ninja-build \
   python3 \
+  python3-pip \
   sudo \
   zlib1g-dev \
   && apt-get -y clean \
