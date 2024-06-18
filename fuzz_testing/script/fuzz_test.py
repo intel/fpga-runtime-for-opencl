@@ -84,7 +84,7 @@ def fuzz_test_main(test_file_name, group, test, var, original_value, all_outputs
     # Mutate variable
     fuzz_var_str = "Fuzzing variable: " + group + "--" + test + "--" + var
     print("      " + fuzz_var_str)
-    mutation_command = ["python", "mutator.py", test_file_name, group, test, var]
+    mutation_command = ["python3", "mutator.py", test_file_name, group, test, var]
     # mutated_value = subprocess.check_output(mutation_command) 
     original_value_message = "Original value: \n" + original_value
     subprocess.check_output(mutation_command) 
