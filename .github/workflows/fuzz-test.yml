@@ -16,21 +16,13 @@ on:
 
 jobs:
   build:
-    runs-on:
-      - self-hosted
-      - linux
-      - x64
-      - container
+    runs-on: ubuntu-22.04
 
     container:
       image: ghcr.io/intel/fpga-runtime-for-opencl/ubuntu-22.04-dev:main
 
     name: Fuzz Testing
     steps:
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
     - name: Clone Radamsa
       run: |
         mkdir radamsa_repo
