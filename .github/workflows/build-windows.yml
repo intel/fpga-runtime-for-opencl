@@ -64,7 +64,7 @@ jobs:
 
     steps:
       - name: checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: query path of compiler setup script
         id: msvc
@@ -74,7 +74,7 @@ jobs:
 
       - name: cache libelf
         id: cache-libelf
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: c:\libelf
           key: libelf-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_libelf.ps1') }}
@@ -91,7 +91,7 @@ jobs:
 
       - name: cache zlib
         id: cache-zlib
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: c:\zlib
           key: zlib-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_zlib.ps1') }}
@@ -108,7 +108,7 @@ jobs:
 
       - name: cache ninja
         id: cache-ninja
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: c:\ninja
           key: ninja-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_ninja.ps1') }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: cache aocl
         id: cache-aocl
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: c:\aocl
           key: aocl-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_aocl.ps1') }}
@@ -169,7 +169,7 @@ jobs:
 
       - name: upload binary package
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fpga-runtime-for-opencl-${{ github.sha }}-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
           path: c:\fpga-runtime-for-opencl
@@ -197,7 +197,7 @@ jobs:
           manifests: cmake\manifests\windows
 
       - name: upload manifests if installed components changed
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: manifests-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
