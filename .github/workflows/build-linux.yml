@@ -80,7 +80,7 @@ jobs:
 
     steps:
       - name: checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: query distribution
         run: cat /etc/os-release
@@ -118,7 +118,7 @@ jobs:
 
       - name: upload binary package
         if: github.event_name == 'push'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fpga-runtime-for-opencl-${{ github.sha }}-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
           path: /fpga-runtime-for-opencl
@@ -147,7 +147,7 @@ jobs:
           manifests: cmake/manifests/linux
 
       - name: upload manifests if installed components changed
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: manifests-${{ matrix.image }}-${{ matrix.config }}-${{ github.run_id }}
