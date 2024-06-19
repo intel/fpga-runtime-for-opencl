@@ -39,7 +39,7 @@ jobs:
         - /opt/coverity:/opt/coverity
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - run: cmake -G Ninja -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: echo /opt/coverity/latest/bin >> "$GITHUB_PATH"
       # The --compiler names must match those used by CMake.
@@ -53,7 +53,7 @@ jobs:
       - run: cov-format-errors --text-output-style multiline --dir results --filesort --file "$PWD" --strip-path "$PWD" > cov-errors.txt
       - run: cat cov-errors.txt
       - run: count=$(grep -c '^$' cov-errors.txt) || true && echo "$(( $count / 2 ))"
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
           path: cov-errors.txt

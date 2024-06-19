@@ -37,7 +37,7 @@ jobs:
     - name: Install PyYAML 
       run: pip install pyyaml
     - name: Checkout runtime
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
     - name: Build
       run: | 
         mkdir -p build/fuzz_testing
@@ -60,7 +60,7 @@ jobs:
       run: |
         cat build/fuzz_testing/fuzz_testing/results/results.yml
     - name: Upload results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: fpga-runtime-for-opencl-${{ github.sha }}-fuzz-test-results-${{ github.run_id }}
         path: |
