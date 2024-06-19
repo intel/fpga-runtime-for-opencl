@@ -35,7 +35,7 @@ jobs:
 
     steps:
       - name: checkout main branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.base_ref }}
 
@@ -55,7 +55,7 @@ jobs:
         run: mv -t "$RUNNER_TEMP" build
 
       - name: checkout current branch
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: create build directory
         run: mkdir build

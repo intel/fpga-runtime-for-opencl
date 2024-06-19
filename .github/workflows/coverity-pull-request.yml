@@ -48,7 +48,7 @@ jobs:
 
     steps:
       - name: Checkout PR
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - run: echo /opt/coverity/latest/bin >> "$GITHUB_PATH"
       - name: Build current
         run: |
@@ -77,17 +77,13 @@ jobs:
           cov-format-errors --text-output-style multiline --dir results --filesort --file "$(realpath ..)" --strip-path "$(realpath ..)" > ../cov-errors-base.txt 
           cd ..
           readlink -f cov-errors-base.txt
-      - name: Upload current cov-errors.txt
-        uses: actions/upload-artifact@v3
+      - name: Upload current and base cov-errors
+        uses: actions/upload-artifact@v4
         with:
           name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
-          path: cov-errors.txt
-          if-no-files-found: error
-      - name: Upload base cov-errors.txt
-        uses: actions/upload-artifact@v3
-        with:
-          name: fpga-runtime-for-opencl-${{ github.sha }}-coverity-${{ github.run_id }}
-          path: cov-errors-base.txt
+          path: |
+            cov-errors.txt
+            cov-errors-base.txt
           if-no-files-found: error
       - name: Verify no new Coverity Issues
         run: |
