@@ -34,7 +34,6 @@ on:
       - 'container/rockylinux-9-dev/**'
       - 'container/debian-11-arm-dev/**'
       - 'container/opensuse-leap-15-dev/**'
-      - 'container/ubuntu-18.04-dev/**'
       - 'container/ubuntu-20.04-dev/**'
       - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
@@ -46,7 +45,6 @@ on:
       - 'container/rockylinux-9-dev/**'
       - 'container/debian-11-arm-dev/**'
       - 'container/opensuse-leap-15-dev/**'
-      - 'container/ubuntu-18.04-dev/**'
       - 'container/ubuntu-20.04-dev/**'
       - 'container/ubuntu-22.04-dev/**'
       - 'scripts/install_aocl.sh'
@@ -72,7 +70,6 @@ jobs:
           - rockylinux-9-dev
           - debian-11-arm-dev
           - opensuse-leap-15-dev
-          - ubuntu-18.04-dev
           - ubuntu-20.04-dev
           - ubuntu-22.04-dev
 
