@@ -52,7 +52,10 @@ target_link_libraries(acl_test PRIVATE
   )
 add_test(NAME acl_test COMMAND acl_test -v)
 set_property(TEST acl_test PROPERTY ENVIRONMENT
-  "AOCL_BOARD_PACKAGE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/board/a10_ref"
+  "\
+AOCL_BOARD_PACKAGE_ROOT=${CMAKE_CURRENT_SOURCE_DIR}/board/a10_ref;\
+ACL_TEST_EXAMPLE_BINARY=${CMAKE_CURRENT_SOURCE_DIR}/example_binary\
+"
   )
 
 add_subdirectory(fake_bsp)
