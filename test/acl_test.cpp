@@ -218,90 +218,139 @@ const unsigned char *acl_test_get_example_binary(size_t *binary_len) {
 }
 
 static void l_load_example_binary(void) {
-  const char *envvar_offline_device = "CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA";
-  const char *envvar_program_lib =
-      "CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA";
-  const char *offline_old_value = acl_getenv(envvar_offline_device);
-  const char *program_lib_old_value = acl_getenv(envvar_program_lib);
-  int system_ret = -1;
-  enum { MAX_DEVICES = 100 };
-  cl_platform_id platform;
-  cl_device_id device[MAX_DEVICES];
-  cl_context context;
-  cl_program program;
-  cl_int status;
-
-  acl_test_setenv(envvar_offline_device, ACLTEST_DEFAULT_BOARD);
-  acl_test_setenv(envvar_program_lib, ".acltest_builtin_prog");
-  system_ret = system("rm -rf .acltest_builtin_prog");
-  assert(system_ret != -1);
-
-  ACL_LOCKED(acl_test_setup_generic_system());
-
   // Since this runs before the CppUTest runner is set up, we can't use
   // the CHECK* macros.
   // Just use asserts.
 
-  assert(CL_SUCCESS == clGetPlatformIDs(1, &platform, 0));
-  assert(CL_SUCCESS == clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR,
-                                      MAX_DEVICES, device, 0));
+  const char *envvar_example_binary = "ACL_TEST_EXAMPLE_BINARY";
+  const char *example_binary_root = acl_getenv(envvar_example_binary);
+  if (example_binary_root) {
+    // Precompiled binaries exist, just read its content
+    ACL_LOCKED(acl_test_setup_generic_system());
+#ifdef _WIN32
+    std::string bin_file =
+        std::string(example_binary_root) + "/windows/example.aocr";
+#else
+    std::string bin_file =
+        std::string(example_binary_root) + "/linux/example.aocr";
+#endif
+    FILE *infile = fopen(bin_file.c_str(), "rb");
+    assert(infile && "Cannot open example binary example.aocr, make sure "
+                     "ACL_TEST_EXAMPLE_BINARY is set to the correct path");
 
-  cl_context_properties props[] = {
-      CL_CONTEXT_COMPILER_MODE_INTELFPGA,
-      CL_CONTEXT_COMPILER_MODE_OFFLINE_CREATE_EXE_LIBRARY_INTELFPGA, 0};
-  context = clCreateContext(props, 1, device, acl_test_notify_print, 0, 0);
-  assert(context);
+    // Get binary length
+    assert(fseek(infile, 0, SEEK_END) == 0);
+    long int position = ftell(infile);
+    assert(position != -1L);
+    acl_test_example_binary_len = (size_t)position;
+    // Return to beginning of file
+    assert(fseek(infile, 0, SEEK_SET) == 0);
 
-  const char *src =
-      "kernel void vecaccum(global int*A, global int*B) {\n"
-      "   size_t gid = get_global_id(0);\n"
-      "   A[gid] += B[gid];\n"
-      "};\n"
-      // This one has two constant arguments.
-      "kernel void vecsum(global int*A, constant int*B, constant int*C) {\n"
-      "   size_t gid = get_global_id(0);\n"
-      "   A[gid] = B[gid] + C[gid];\n"
-      "};\n"
+    // Read binary
+    acl_test_example_binary =
+        (unsigned char *)acl_malloc(acl_test_example_binary_len);
+    assert(acl_test_example_binary);
+    assert(fread(acl_test_example_binary, sizeof(char),
+                 acl_test_example_binary_len,
+                 infile) == acl_test_example_binary_len);
+    assert(fclose(infile) == 0);
+  } else {
+    // Precompiled binaries don't exist, do an actual compile with the
+    // aoc compiler and store the binary as test example binary.
+    const char *envvar_offline_device = "CL_CONTEXT_OFFLINE_DEVICE_INTELFPGA";
+    const char *envvar_program_lib =
+        "CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA";
+    const char *offline_old_value = acl_getenv(envvar_offline_device);
+    const char *program_lib_old_value = acl_getenv(envvar_program_lib);
+    int system_ret = -1;
+    enum { MAX_DEVICES = 100 };
+    cl_platform_id platform;
+    cl_device_id device[MAX_DEVICES];
+    cl_context context;
+    cl_program program;
+    cl_int status;
 
-      // This has a printf.
-      "kernel void printit(global int*A) {\n"
-      "   printf(\"Hello world! %d\\n\", A[0]);\n"
-      "};\n";
+    acl_test_setenv(envvar_offline_device, ACLTEST_DEFAULT_BOARD);
+    acl_test_setenv(envvar_program_lib, ".acltest_builtin_prog");
+    system_ret = system("rm -rf .acltest_builtin_prog");
+    assert(system_ret != -1);
 
-  program = clCreateProgramWithSource(context, 1, &src, 0, 0);
-  assert(program);
+    ACL_LOCKED(acl_test_setup_generic_system());
 
-  status = clBuildProgram(program, 1, device, "-cl-kernel-arg-info", 0, 0);
-  if (status != CL_SUCCESS) {
-    printf("Compilation failed.  Kernel source is:\n-----\n%s\n----\n", src);
+    assert(CL_SUCCESS == clGetPlatformIDs(1, &platform, 0));
+    assert(CL_SUCCESS == clGetDeviceIDs(platform, CL_DEVICE_TYPE_ACCELERATOR,
+                                        MAX_DEVICES, device, 0));
+
+    cl_context_properties props[] = {
+        CL_CONTEXT_COMPILER_MODE_INTELFPGA,
+        CL_CONTEXT_COMPILER_MODE_OFFLINE_CREATE_EXE_LIBRARY_INTELFPGA, 0};
+    context = clCreateContext(props, 1, device, acl_test_notify_print, 0, 0);
+    assert(context);
+
+    const char *src =
+        "kernel void vecaccum(global int*A, global int*B) {\n"
+        "   size_t gid = get_global_id(0);\n"
+        "   A[gid] += B[gid];\n"
+        "};\n"
+        // This one has two constant arguments.
+        "kernel void vecsum(global int*A, constant int*B, constant int*C) {\n"
+        "   size_t gid = get_global_id(0);\n"
+        "   A[gid] = B[gid] + C[gid];\n"
+        "};\n"
+
+        // This has a printf.
+        "kernel void printit(global int*A) {\n"
+        "   printf(\"Hello world! %d\\n\", A[0]);\n"
+        "};\n";
+
+    program = clCreateProgramWithSource(context, 1, &src, 0, 0);
+    assert(program);
+
+    status = clBuildProgram(program, 1, device, "-cl-kernel-arg-info", 0, 0);
+    if (status != CL_SUCCESS) {
+      printf("Compilation failed.  Kernel source is:\n-----\n%s\n----\n", src);
+      size_t log_size = 0;
+      clGetProgramBuildInfo(program, device[0], CL_PROGRAM_BUILD_LOG, 0, 0,
+                            &log_size);
+      char *log = (char *)acl_malloc(log_size);
+      clGetProgramBuildInfo(program, device[0], CL_PROGRAM_BUILD_LOG, log_size,
+                            log, 0);
+      if (log)
+        printf("Build log is:\n-----\n%s\n----\n", log);
+      exit(1);
+    }
+
+    // The build log should not be empty
     size_t log_size = 0;
+    size_t empty_log_size = 1;
     clGetProgramBuildInfo(program, device[0], CL_PROGRAM_BUILD_LOG, 0, 0,
                           &log_size);
-    char *log = (char *)acl_malloc(log_size);
-    clGetProgramBuildInfo(program, device[0], CL_PROGRAM_BUILD_LOG, log_size,
-                          log, 0);
-    if (log)
-      printf("Build log is:\n-----\n%s\n----\n", log);
-    exit(1);
+    assert(log_size > empty_log_size);
+
+    acl_test_example_binary_len = 0;
+    assert(CL_SUCCESS == clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
+                                          sizeof(size_t),
+                                          &acl_test_example_binary_len, 0));
+    acl_test_example_binary =
+        (unsigned char *)acl_malloc(acl_test_example_binary_len);
+    assert(acl_test_example_binary);
+    assert(CL_SUCCESS == clGetProgramInfo(program, CL_PROGRAM_BINARIES,
+                                          sizeof(acl_test_example_binary),
+                                          &acl_test_example_binary, 0));
+
+    // Don't leak
+    clReleaseProgram(program);
+    clReleaseContext(context);
+
+    acl_test_unsetenv(envvar_offline_device);
+    if (offline_old_value) {
+      acl_test_setenv(envvar_offline_device, offline_old_value);
+    }
+    acl_test_unsetenv(envvar_program_lib);
+    if (program_lib_old_value) {
+      acl_test_setenv(envvar_program_lib, program_lib_old_value);
+    }
   }
-
-  // The build log should not be empty
-  size_t log_size = 0;
-  size_t empty_log_size = 1;
-  clGetProgramBuildInfo(program, device[0], CL_PROGRAM_BUILD_LOG, 0, 0,
-                        &log_size);
-  assert(log_size > empty_log_size);
-
-  acl_test_example_binary_len = 0;
-  assert(CL_SUCCESS == clGetProgramInfo(program, CL_PROGRAM_BINARY_SIZES,
-                                        sizeof(size_t),
-                                        &acl_test_example_binary_len, 0));
-  acl_test_example_binary =
-      (unsigned char *)acl_malloc(acl_test_example_binary_len);
-  assert(acl_test_example_binary);
-  assert(CL_SUCCESS == clGetProgramInfo(program, CL_PROGRAM_BINARIES,
-                                        sizeof(acl_test_example_binary),
-                                        &acl_test_example_binary, 0));
 
   // Save the derived sysdef for later tests.
   {
@@ -332,19 +381,6 @@ static void l_load_example_binary(void) {
     assert(ACLTEST_DEFAULT_BOARD ==
            acl_test_example_binary_sysdef.device[0].autodiscovery_def.name);
     acl_pkg_close_file(pkg);
-  }
-
-  // Don't leak
-  clReleaseProgram(program);
-  clReleaseContext(context);
-
-  acl_test_unsetenv(envvar_offline_device);
-  if (offline_old_value) {
-    acl_test_setenv(envvar_offline_device, offline_old_value);
-  }
-  acl_test_unsetenv(envvar_program_lib);
-  if (program_lib_old_value) {
-    acl_test_setenv(envvar_program_lib, program_lib_old_value);
   }
 
   ACL_LOCKED(acl_test_teardown_generic_system());
