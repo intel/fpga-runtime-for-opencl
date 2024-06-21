@@ -1443,6 +1443,12 @@ TEST(acl_kernel, enqueue_ndrange) {
 MT_TEST(acl_kernel, test_local_work_group_size_debug_msg) {
   ACL_LOCKED(acl_print_debug_msg("test local wg size debug msg\n"));
 
+  if (acl_getenv(ENV_ACL_CONTEXT_CALLBACK_DEBUG)) {
+    // Skip this test if ACL_CONTEXT_CALLBACK_DEBUG is set as it will
+    // disrupt printed messages.
+    return;
+  }
+
   // Create buffer for debug msg
   std::stringstream msg_buf;
   std::streambuf *cout_ptr = std::cout.rdbuf(msg_buf.rdbuf());
