@@ -40,7 +40,6 @@ RUN apt-get -y update \
   sudo \
   zlib1g-dev \
   && apt-get -y clean \
-  && ./install_aocl.sh /opt/aocl \
   && useradd --system ${uid:+--uid "$uid"} --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
   && rm -rf "$PWD"
@@ -48,6 +47,5 @@ RUN apt-get -y update \
 USER build
 WORKDIR /home/build
 
-ENV PATH="/opt/aocl/hld/bin:/usr/lib/llvm-13/bin:$PATH"
-RUN aoc -version
+ENV PATH="/usr/lib/llvm-13/bin:$PATH"
 RUN clang-format --version

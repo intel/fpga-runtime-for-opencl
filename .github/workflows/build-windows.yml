@@ -140,23 +140,6 @@ jobs:
           cd build
           ninja -v -k0
 
-      - name: cache aocl
-        id: cache-aocl
-        uses: actions/cache@v4
-        with:
-          path: c:\aocl
-          key: aocl-${{ hashFiles('.github/workflows/build-windows.yml', 'scripts/install_aocl.ps1') }}
-
-      - name: install aocl
-        if: ${{ !steps.cache-aocl.outputs.cache-hit }}
-        run: pwsh .\scripts\install_aocl.ps1 -installdir C:\aocl
-
-      - name: add aocl to path
-        run: echo c:\aocl\hld\bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: query aocl version
-        run: aoc -version
-
       - name: test runtime
         run: |
           cd build
