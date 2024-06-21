@@ -36,7 +36,6 @@ on:
       - 'container/opensuse-leap-15-dev/**'
       - 'container/ubuntu-20.04-dev/**'
       - 'container/ubuntu-22.04-dev/**'
-      - 'scripts/install_aocl.sh'
 
   pull_request:
     paths:
@@ -47,7 +46,6 @@ on:
       - 'container/opensuse-leap-15-dev/**'
       - 'container/ubuntu-20.04-dev/**'
       - 'container/ubuntu-22.04-dev/**'
-      - 'scripts/install_aocl.sh'
 
   workflow_dispatch:
 
