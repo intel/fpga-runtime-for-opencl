@@ -36,13 +36,9 @@ RUN zypper -n update \
   which \
   zlib-devel \
   && zypper -n clean \
-  && ./install_aocl.sh /opt/aocl \
   && useradd --system ${uid:+--uid "$uid"} --user-group --shell /sbin/nologin --create-home --home-dir /home/build build \
   && echo 'build ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/build \
   && rm -rf "$PWD"
 
 USER build
 WORKDIR /home/build
-
-ENV PATH="/opt/aocl/hld/bin:$PATH"
-RUN aoc -version
