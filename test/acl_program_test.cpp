@@ -844,7 +844,7 @@ MT_TEST_GROUP(from_source) {
 
   void load(int compiler_mode =
                 CL_CONTEXT_COMPILER_MODE_OFFLINE_CREATE_EXE_LIBRARY_INTELFPGA,
-            const char *compile_command = 0, bool print_notify = true) {
+            std::string compile_command = "", bool print_notify = true) {
     unload();
     CHECK_EQUAL(CL_SUCCESS, clGetPlatformIDs(1, &m_platform, 0));
     CHECK(acl_platform_is_valid(m_platform));
@@ -853,14 +853,31 @@ MT_TEST_GROUP(from_source) {
                                &m_device[0], &m_num_devices));
     CHECK(m_num_devices > 0);
 
+    // Check if there is precompiled binaries, if envvar set, use that instead
+    const char *envvar_example_binary = "ACL_TEST_EXAMPLE_BINARY";
+    const char *example_binary_root = acl_getenv(envvar_example_binary);
+    if (example_binary_root) {
+      // Precompiled binaries exist, emulate the compile by copying the
+      // precompiled binaries to the current directory.
+#ifdef _WIN32
+      std::string bin_file =
+          std::string(example_binary_root) + "/windows/foo.aocr";
+#else
+      std::string bin_file =
+          std::string(example_binary_root) + "/linux/foo.aocr";
+#endif
+      compile_command = "cp " + bin_file + " ./kernels.aocr && echo ";
+    }
+
     cl_int status = CL_INVALID_DEVICE;
     cl_context_properties props[] = {
         CL_CONTEXT_PROGRAM_EXE_LIBRARY_ROOT_INTELFPGA,
         (cl_context_properties)m_basedir.c_str(),
         CL_CONTEXT_COMPILER_MODE_INTELFPGA,
         compiler_mode,
-        (compile_command ? CL_CONTEXT_COMPILE_COMMAND_INTELFPGA : 0),
-        (cl_context_properties)compile_command,
+        (compile_command != "" ? CL_CONTEXT_COMPILE_COMMAND_INTELFPGA : 0),
+        (cl_context_properties)(compile_command != "" ? compile_command.c_str()
+                                                      : 0),
         0,
         0};
     m_context =
@@ -949,7 +966,8 @@ MT_TEST(from_source, make_prog_dir_and_build_command) {
 
   // Default arguments, just turning off printing of errors for invalid calls to
   // be tested below
-  load(CL_CONTEXT_COMPILER_MODE_OFFLINE_CREATE_EXE_LIBRARY_INTELFPGA, 0, false);
+  load(CL_CONTEXT_COMPILER_MODE_OFFLINE_CREATE_EXE_LIBRARY_INTELFPGA, "",
+       false);
   load_program();
 
   // Before build. No executable.
@@ -1082,10 +1100,8 @@ MT_TEST(from_source, online_mode) {
   ACL_LOCKED(CHECK(acl_realpath_existing(check_str) != ""));
   check_str = m_hashdir + std::string("/build.cmd");
   ACL_LOCKED(CHECK(acl_realpath_existing(check_str) != ""));
-  // Since we invoked compiler with -rtl, we only get an .aoco and .aocr
+  // If we have invoked compiler with -rtl, we should get an .aocr
   check_str = m_hashdir + std::string("/kernels.aocr");
-  ACL_LOCKED(CHECK(acl_realpath_existing(check_str) != ""));
-  check_str = m_hashdir + std::string("/kernels/kernels.v");
   ACL_LOCKED(CHECK(acl_realpath_existing(check_str) != ""));
 
   // Check the build log.
