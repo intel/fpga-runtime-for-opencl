@@ -4,10 +4,10 @@
 
 ### Linux
 
--   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8
+-   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8 or 9
 -   SUSE Linux Enterprise Server (SLES)\* or openSUSE Leap\* 15
--   Ubuntu\* 18.04, 20.04, or 22.04 LTS
--   GCC 7.4.0 and higher
+-   Ubuntu\* 20.04, or 22.04 LTS
+-   GCC 7.5.0 and higher
 -   [CMake](https://cmake.org/) 3.10 and higher
 -   [Ninja](https://ninja-build.org/) 1.8.2 and higher
 -   [Git](https://git-scm.com/)
@@ -17,7 +17,7 @@
 ### Windows
 
 -   Windows\* 10 (64 bit)
--   Windows Server\* 2012, 2016, or 2019
+-   Windows Server\* 2019 or 2022
 -   Microsoft Visual C++ (MSVC)\* 2017 and higher
 -   [CMake](https://cmake.org/) 3.10 and higher
 -   [Ninja](https://ninja-build.org/) 1.8.2 and higher
