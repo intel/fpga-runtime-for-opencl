@@ -113,45 +113,6 @@ ctest -V
 
 ### Notes
 
--   To run unit tests, you need the `aoc` executable from the IntelⓇ FPGA SDK
-    for OpenCL™.
-
-    To set the path to `aoc`, change to the IntelⓇ FPGA SDK for OpenCL™
-    installation directory and source the initialization script.
-
-    -   On Linux:
-
-        ```
-        source init_opencl.sh
-        ```
-
-    -   On Windows:
-
-        ```
-        call init_opencl.bat
-        ```
-
--   On Linux, `aoc` requires the `libtinfo.so.5` library, which you can install
-    using one of the following OS-specific commands:
-
-    -   Red Hat Enterprise Linux (RHEL)\* or Rocky Linux\* 8:
-
-        ```
-        sudo yum install ncurses-compat-libs-6.1
-        ```
-
-    -   SUSE Linux Enterprise Server (SLES)\* or openSUSE Leap\* 15:
-
-        ```
-        sudo zypper install libncurses5
-        ```
-
-    -   Ubuntu\* 18.04 or 20.04 LTS:
-
-        ```
-        sudo apt install libtinfo5
-        ```
-
 -   On Windows, you need to set the paths to the libelf and (optionally) zlib libraries.
 
     ```
@@ -186,7 +147,19 @@ Perform these steps if you have the IntelⓇ FPGA SDK for OpenCL™ or
 IntelⓇ FPGA RTE for OpenCL™ installed on your system:
 
 1.  In the IntelⓇ FPGA SDK for OpenCL™ installation directory, source
-    the initialization script (see [Running Unit Tests](#running-unit-tests)).
+    the initialization script.
+
+    -   On Linux:
+
+        ```
+        source init_opencl.sh
+        ```
+
+    -   On Windows:
+
+        ```
+        call init_opencl.bat
+        ```
 
 2.  Update the `/etc/OpenCL/vendors/Altera.icd` file with either the filename
     `libalteracl.so` if `LD_LIBRARY_PATH` contains the full path of the runtime
