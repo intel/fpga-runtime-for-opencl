@@ -947,6 +947,7 @@ typedef struct _cl_mem {
 
   // If this is a heterogeneous buffer, what is the index of the memory it uses
   unsigned int mem_id;
+  bool buffer_location_set;
 
   // Is this buffer an SVM buffer
   int is_svm;
