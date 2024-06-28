@@ -93,6 +93,7 @@ CL_API_ENTRY cl_context CL_API_CALL clCreateContextIntelFPGA(
   }
 
   // Now check the devices.
+  // 
   if (num_devices == 0) {
     acl_context_callback(context, "No devices specified");
     acl_free_cl_context(context);
