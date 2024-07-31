@@ -893,7 +893,7 @@ static size_t l_dump_printf_buffer(cl_event event, cl_kernel kernel,
 #endif
 
       // no data to be printed, end of printing for this printf
-      if (ptr == format_string.cend())
+      if (ptr == format_string.cend() && data_elem._conversion_string.empty())
         break;
 
       // Handle vector types by replicating the conversion string for each
