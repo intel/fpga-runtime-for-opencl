@@ -675,7 +675,6 @@ bool acl_fast_relaunch_kernel(cl_event event) {
     return false;
   event->depend_on.erase(parent);
   parent->depend_on_me.remove(event);
-  event->command_queue->num_commands_submitted++;
   return true;
 }
 
@@ -729,6 +728,7 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
       command_queue->commands.erase(event);
     }
     event->not_popped = false;
+    num_updates++;
     command_queue->num_commands--;
     acl_release(command_queue);
   }
@@ -744,7 +744,6 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
       success = 1;
     else {
       if (event->depend_on.empty()) {
-        command_queue->num_commands_submitted++;
         success = acl_submit_command(event);
       } else {
         success = acl_fast_relaunch_kernel(event);
@@ -754,7 +753,11 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
     // Increment before removal so we don't invalidate the iterator
     event_iter++;
     if (success) {
+      // num_commands_submitted isn't used for ooo queues today
+      // but keep it up-to-date in case someone wants to use it in the future
+      command_queue->num_commands_submitted++;
       command_queue->new_commands.remove(event);
+      num_updates++;
     }
   }
 
