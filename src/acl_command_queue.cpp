@@ -630,93 +630,60 @@ int acl_update_queue(cl_command_queue command_queue) {
   }
 }
 
-void acl_try_FastKernelRelaunch_ooo_queue_event_dependents(cl_event parent) {
+// Try to submit a kernel even if it has unfinished dependences using fast kernel relaunch
+// Returns true on success, false on failure
+bool acl_fast_relaunch_kernel(cl_event event) {
+  if (!(event->command_queue->properties &
+        CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
+    return false;
+  
+  if (event->depend_on.size() != 1)
+    return false;
+
+  cl_event parent = *(event->depend_on.begin());
+  
   if (!(parent->command_queue->properties &
         CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
-    return;
-  if (parent->depend_on_me.empty())
-    return;
+    return false;
+ 
   if (parent->cmd.type != CL_COMMAND_TASK &&
       parent->cmd.type != CL_COMMAND_NDRANGE_KERNEL)
-    return;
+    return false;
+  
   if (parent->execution_status > CL_SUBMITTED ||
       parent->last_device_op->status > CL_SUBMITTED)
-    return;
-
-  // Check if fast kernel relaunch is safe to use, and we can ignore
-  // the explicit dependency
-  for (auto dependent_it = parent->depend_on_me.begin();
-       dependent_it != parent->depend_on_me.end(); dependent_it++) {
-    cl_event dependent = *dependent_it;
-    // Currently we do not handle the case of FKR for mixed queue types
-    if (!(dependent->command_queue->properties &
-          CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
-      continue;
-    // can only FKR if one unresolved dependency
-    if (dependent->depend_on.size() > 1)
-      continue;
-    // can happen if this function gets called twice on same parent
-    // once during submission and once during completion
-    if (dependent->is_on_device_op_queue)
-      continue;
-
-    if (!l_is_same_kernel_event(parent, dependent)) {
-      // dependent on a different kernel than parent,
-      // must wait for dependency to be resolved
-      // OR the dependent is not on the same device,
-      // not safe to preemptively push dependent to device_op_queue
-      continue;
-    }
-
-    // Special case: if subbuffers are present they may(!) cause a
-    // migration while another kernel is using that data.
-    if (acl_kernel_has_unmapped_subbuffers(
-            &(dependent->cmd.info.ndrange_kernel.memory_migration))) {
-      continue;
-    }
-
-    // Fast Kernel Relaunch: submitting is safe even though has dependency
-    // Prior to submitting remove dependency
-    int local_updates = acl_submit_command(dependent);
-    if (local_updates) {
-      dependent->depend_on.erase(parent);
-      dependent_it = parent->depend_on_me.erase(dependent_it);
-      dependent_it--; // decrement it otherwise we will skip an element
-      dependent->command_queue->num_commands_submitted++;
-    }
+    return false;
+  
+  if (!l_is_same_kernel_event(parent, event)) {
+    // dependent on a different kernel than parent,
+    // must wait for dependency to be resolved
+    // OR the dependent is not on the same device,
+    // not safe to preemptively push dependent to device_op_queue
+    return false;
   }
+    
+  // Special case: if subbuffers are present they may(!) cause a
+  // migration while another kernel is using that data.
+  if (acl_kernel_has_unmapped_subbuffers(
+        &(event->cmd.info.ndrange_kernel.memory_migration)))
+    return false;
+
+  // Fast Kernel Relaunch: submitting is safe even though has dependency
+  // If submission succeeds, remove dependency
+  bool success = acl_submit_command(event);
+  if (!success)
+    return false;
+  event->depend_on.erase(parent);
+  parent->depend_on_me.remove(event);
+  event->command_queue->num_commands_submitted++;
+  return true;
 }
 
 int acl_update_ooo_queue(cl_command_queue command_queue) {
   int num_updates = 0;
 
-  // Directly submit the event if it has no dependencies
-  // unless it is a user_event queue which never submits events
-  while (!command_queue->new_commands.empty()) {
-    int success = 1;
-    cl_event event = command_queue->new_commands.front();
-    if (command_queue->submits_commands &&
-        event->execution_status == CL_QUEUED) {
-      if (event->depend_on.empty()) {
-        command_queue->num_commands_submitted++;
-        success = acl_submit_command(event);
-      } else {
-        // This is allowed to fail, so no need to mark success as false
-        // dependent events that fail to be FKRd will still be picked up when
-        // their parent event finishes
-        acl_try_FastKernelRelaunch_ooo_queue_event_dependents(
-            *(event->depend_on.begin()));
-      }
-    }
-
-    if (success) {
-      // safe to pop as there is a master copy in command_queue->commands
-      command_queue->new_commands.pop_front();
-    }
-  }
-
-  // Remove dependencies on completed events, and launch any events
-  // that no longer have dependencies.
+  // First, remove dependencies on completed events, 
+  // as this may unblock other evevnts
   // Completed events should be returned to the free pool
   while (!command_queue->completed_commands.empty()) {
     cl_event event = command_queue->completed_commands.front();
@@ -735,17 +702,7 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
           dependent->command_queue->completed_commands.push_back(
               dependent); // dependent might be on another queue
         }
-      } else if (dependent->depend_on.empty()) {
-        // dependent has no dependencies safe to submit if in OOO queue
-        if ((dependent->command_queue->properties &
-             CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) &&
-            dependent->cmd.type != CL_COMMAND_USER) {
-          int local_updates = acl_submit_command(dependent);
-          dependent->command_queue->num_commands_submitted +=
-              local_updates; // dependent might be on another queue
-          num_updates += local_updates;
-        }
-      }
+      } 
     }
 
     // Return completed event to free pool
@@ -774,6 +731,31 @@ int acl_update_ooo_queue(cl_command_queue command_queue) {
     event->not_popped = false;
     command_queue->num_commands--;
     acl_release(command_queue);
+  }
+
+  // Next try to submit any events with no dependencies
+  // or whose only dependences can be handled by fast kernel relaunch
+  // unless they are on a user_event queue which never submits events
+  for (auto event_iter = command_queue->new_commands.begin(); 
+      event_iter != command_queue->new_commands.end(); ) {
+    cl_event event = *event_iter;
+    int success = 0;
+    if (!command_queue->submits_commands)
+      success = 1;
+    else {
+      if (event->depend_on.empty()) {
+        command_queue->num_commands_submitted++;
+        success = acl_submit_command(event);
+      } else {
+        success = acl_fast_relaunch_kernel(event);
+      }
+    }
+   
+    // Increment before removal so we don't invalidate the iterator
+    event_iter++;
+    if (success) {
+      command_queue->new_commands.remove(event);
+    }
   }
 
   return num_updates;
