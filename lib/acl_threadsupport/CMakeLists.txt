@@ -8,6 +8,8 @@ set_property(TARGET acl_threadsupport PROPERTY PUBLIC_HEADER
   include/acl_threadsupport/acl_threadsupport.h
   )
 
+define_file_basename_for_sources(acl_threadsupport)
+
 install(TARGETS acl_threadsupport
   COMPONENT acl_threadsupport
   EXCLUDE_FROM_ALL

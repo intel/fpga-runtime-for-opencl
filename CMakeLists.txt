@@ -220,6 +220,18 @@ if(ACL_TSAN)
   endforeach()
 endif()
 
+function(define_file_basename_for_sources targetname)
+    get_target_property(source_files "${targetname}" SOURCES)
+    foreach(sourcefile ${source_files})
+        # Add the FILE_BASENAME=filename compile definition to the list.
+        get_filename_component(basename "${sourcefile}" NAME)
+        # Set the updated compile definitions on the source file.
+        set_property(
+            SOURCE "${sourcefile}" APPEND
+            PROPERTY COMPILE_DEFINITIONS "__FILE__=\"${basename}\"")
+    endforeach()
+endfunction()
+
 include(CPack)
 include(CTest)
 
