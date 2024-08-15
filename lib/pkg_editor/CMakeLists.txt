@@ -22,6 +22,8 @@ if(ZLIB_FOUND)
   target_link_libraries(pkg_editor PRIVATE ZLIB::ZLIB)
 endif()
 
+define_file_basename_for_sources(pkg_editor)
+
 install(TARGETS pkg_editor
   COMPONENT pkg_editor
   EXCLUDE_FROM_ALL
