@@ -63,7 +63,7 @@
 void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
                                size_t alignment, mem_properties_t *properties,
                                int *error);
-void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> devices,
+void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> &devices,
                              size_t size, size_t alignment,
                              mem_properties_t *properties, int *error);
 int acl_hal_mmd_free(cl_context context, void *mem);
@@ -3054,7 +3054,7 @@ void *acl_hal_mmd_shared_alloc(cl_device_id device, size_t size,
   return result;
 }
 
-void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> devices,
+void *acl_hal_mmd_host_alloc(const std::vector<cl_device_id> &devices,
                              size_t size, size_t alignment,
                              mem_properties_t *properties, int *error) {
   // Note we do not support devices in the same context with different MMDs

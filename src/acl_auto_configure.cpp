@@ -11,6 +11,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Internal headers.
@@ -402,7 +403,7 @@ read_global_mem_defs(const std::string &config_str,
                counters.back() > 0) {
           std::string temp;
           result = read_string_counters(config_str, curr_pos, temp, counters);
-          can_access.push_back(temp);
+          can_access.push_back(std::move(temp));
         }
       }
 
@@ -427,16 +428,16 @@ read_global_mem_defs(const std::string &config_str,
       global_mem_defs[i].num_global_banks = num_dimms;
       global_mem_defs[i].config_addr =
           static_cast<size_t>(configuration_address);
-      global_mem_defs[i].name = gmem_name;
+      global_mem_defs[i].name = std::move(gmem_name);
       global_mem_defs[i].range.begin = reinterpret_cast<void *>(gmem_start);
       global_mem_defs[i].range.next = reinterpret_cast<void *>(gmem_end);
       global_mem_defs[i].type =
           static_cast<acl_system_global_mem_type_t>(gmem_type);
       global_mem_defs[i].burst_interleaved = burst_interleaved;
       global_mem_defs[i].allocation_type = allocation_type;
-      global_mem_defs[i].primary_interface = primary_interface;
-      global_mem_defs[i].can_access_list = can_access;
-      global_mem_defs[i].id = gmem_id;
+      global_mem_defs[i].primary_interface = std::move(primary_interface);
+      global_mem_defs[i].can_access_list = std::move(can_access);
+      global_mem_defs[i].id = std::move(gmem_id);
     }
 
     // forward compatibility: bypassing remaining fields at the end of global
@@ -474,28 +475,24 @@ read_hostpipe_infos(const std::string &config_str,
     counters.emplace_back(total_fields_hostpipes);
     std::string name;
 
-    auto hostpipe_is_host_to_dev = 0U;
-    auto hostpipe_is_dev_to_host = 0U;
+    bool hostpipe_is_host_to_dev = false;
+    bool hostpipe_is_dev_to_host = false;
     auto hostpipe_width = 0U;
     auto hostpipe_max_buffer_depth = 0U;
     result =
         result && read_string_counters(config_str, curr_pos, name, counters) &&
-        read_uint_counters(config_str, curr_pos, hostpipe_is_host_to_dev,
+        read_bool_counters(config_str, curr_pos, hostpipe_is_host_to_dev,
                            counters) &&
-        read_uint_counters(config_str, curr_pos, hostpipe_is_dev_to_host,
+        read_bool_counters(config_str, curr_pos, hostpipe_is_dev_to_host,
                            counters) &&
         read_uint_counters(config_str, curr_pos, hostpipe_width, counters) &&
         read_uint_counters(config_str, curr_pos, hostpipe_max_buffer_depth,
                            counters);
     // is_host_to_dev and is_dev_to_host are exclusive because of the enum
     // Type
-    acl_hostpipe_info_t acl_hostpipe_info;
-    acl_hostpipe_info.name = name;
-    acl_hostpipe_info.is_host_to_dev = hostpipe_is_host_to_dev;
-    acl_hostpipe_info.is_dev_to_host = hostpipe_is_dev_to_host;
-    acl_hostpipe_info.data_width = hostpipe_width;
-    acl_hostpipe_info.max_buffer_depth = hostpipe_max_buffer_depth;
-    hostpipe_infos.push_back(acl_hostpipe_info);
+    hostpipe_infos.push_back(acl_hostpipe_info_t{
+        std::move(name), hostpipe_is_host_to_dev, hostpipe_is_dev_to_host,
+        hostpipe_width, hostpipe_max_buffer_depth});
 
     /*****************************************************************
       Since the introduction of autodiscovery forwards-compatibility,
@@ -883,7 +880,7 @@ static bool read_kernel_args(const std::string &config_str,
      ****************************************************************/
 
     if (result) {
-      args[j].name = name;
+      args[j].name = std::move(name);
       args[j].addr_space =
           static_cast<acl_kernel_arg_addr_space_t>(addr_space_type);
       args[j].access_qualifier =
@@ -893,14 +890,14 @@ static bool read_kernel_args(const std::string &config_str,
       args[j].alignment = alignment;
       args[j].aspace_number = aspace_id;
       args[j].lmem_size_bytes = lmem_size_bytes;
-      args[j].type_name = type_name;
+      args[j].type_name = std::move(type_name);
       args[j].type_qualifier =
           static_cast<acl_kernel_arg_type_qualifier_t>(type_qualifier);
       args[j].host_accessible = host_accessible;
-      args[j].pipe_channel_id = pipe_channel_id;
-      args[j].buffer_location = buffer_location;
+      args[j].pipe_channel_id = std::move(pipe_channel_id);
+      args[j].buffer_location = std::move(buffer_location);
       args[j].streaming_arg_info_available = streaming_arg_info_available;
-      args[j].streaming_arg_info = streaming_arg_info;
+      args[j].streaming_arg_info = std::move(streaming_arg_info);
     }
     // forward compatibility: bypassing remaining fields at the end of
     // arguments section
