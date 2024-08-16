@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdio.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 // External library headers.
@@ -1372,7 +1373,8 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
     host_pipe_info.m_binded_kernel = NULL;
     host_pipe_info.size_buffered = 0;
 
-    dev_prog->program_hostpipe_map[hostpipe.logical_name] = host_pipe_info;
+    dev_prog->program_hostpipe_map[hostpipe.logical_name] =
+        std::move(host_pipe_info);
   }
 
   // Start from 2024.1, Runtime receives sideband signals information

@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <utility>
 
 #include "pkg_editor/pkg_editor.h"
 #include <assert.h>
@@ -465,7 +466,7 @@ static bool is_same_tmpdir(const std::vector<fs::path> &files,
                            const fs::path &unpack_dir) {
   return std::all_of(files.begin(), files.end(), [&](const fs::path &path) {
     fs::path unpacked_file_path = unpack_dir / path;
-    return files_same(path, unpacked_file_path);
+    return files_same(path, std::move(unpacked_file_path));
   });
 }
 

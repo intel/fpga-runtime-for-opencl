@@ -94,7 +94,7 @@ int acl_test_hal_close_devices(cl_uint num_devices,
 void *acl_test_hal_shared_alloc(cl_device_id device, size_t size,
                                 size_t alignment, mem_properties_t *properties,
                                 int *error);
-void *acl_test_hal_host_alloc(const std::vector<cl_device_id> devices,
+void *acl_test_hal_host_alloc(const std::vector<cl_device_id> &devices,
                               size_t size, size_t alignment,
                               mem_properties_t *properties, int *error);
 int acl_test_hal_free(cl_context context, void *ptr);
@@ -652,7 +652,7 @@ void *acl_test_hal_shared_alloc(cl_device_id device, size_t size,
   return (void *)0xdeadbeefdeadbeef;
 }
 
-void *acl_test_hal_host_alloc(const std::vector<cl_device_id>, size_t, size_t,
+void *acl_test_hal_host_alloc(const std::vector<cl_device_id> &, size_t, size_t,
                               mem_properties_t *, int *) {
   return (void *)0xdeadbeefdeadbeef;
 }
