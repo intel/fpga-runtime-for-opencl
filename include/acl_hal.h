@@ -231,7 +231,7 @@ typedef struct {
   int (*close_devices)(cl_uint num_devices, const cl_device_id *devices);
 
   /// Allocates USM host memory
-  void *(*host_alloc)(const std::vector<cl_device_id> devices, size_t size,
+  void *(*host_alloc)(const std::vector<cl_device_id> &devices, size_t size,
                       size_t alignment, mem_properties_t *properties,
                       int *error);
 
