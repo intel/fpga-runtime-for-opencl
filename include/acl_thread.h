@@ -125,6 +125,10 @@ public:
   };
   ~acl_suspend_lock_guard() { mutex.resume_lock(lock_count); }
 
+  // Delete copy constructor and copy assignment
+  acl_suspend_lock_guard(const acl_suspend_lock_guard &) = delete;
+  acl_suspend_lock_guard &operator=(const acl_suspend_lock_guard &) = delete;
+
 private:
   int lock_count;
   acl_mutex_wrapper_t &mutex;
