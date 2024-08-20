@@ -294,24 +294,32 @@ TEST(auto_configure, simple) {
   const auto kernel15_dev_global2 =
       m_device_def.autodiscovery_def.device_global_mem_defs.find(
           "kernel15_dev_global2");
-  CHECK(kernel15_dev_global !=
-        m_device_def.autodiscovery_def.device_global_mem_defs.end());
-  CHECK(kernel15_dev_global2 !=
-        m_device_def.autodiscovery_def.device_global_mem_defs.end());
-  CHECK_EQUAL(4096, kernel15_dev_global->second.address);
-  CHECK_EQUAL(2048, kernel15_dev_global->second.size);
-  CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_NONE,
-              kernel15_dev_global->second.host_access);
-  CHECK_EQUAL(false, kernel15_dev_global->second.can_skip_programming);
-  CHECK_EQUAL(false, kernel15_dev_global->second.implement_in_csr);
-  CHECK_EQUAL(false, kernel15_dev_global->second.reset_on_reuse);
-  CHECK_EQUAL(2048, kernel15_dev_global2->second.address);
-  CHECK_EQUAL(1024, kernel15_dev_global2->second.size);
-  CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_WRITE_ONLY,
-              kernel15_dev_global2->second.host_access);
-  CHECK_EQUAL(false, kernel15_dev_global2->second.can_skip_programming);
-  CHECK_EQUAL(true, kernel15_dev_global2->second.implement_in_csr);
-  CHECK_EQUAL(false, kernel15_dev_global2->second.reset_on_reuse);
+  bool kernel15_dev_global_found =
+      kernel15_dev_global !=
+      m_device_def.autodiscovery_def.device_global_mem_defs.end();
+  bool kernel15_dev_global2_found =
+      kernel15_dev_global2 !=
+      m_device_def.autodiscovery_def.device_global_mem_defs.end();
+  CHECK(kernel15_dev_global_found);
+  CHECK(kernel15_dev_global2_found);
+  if (kernel15_dev_global_found) {
+    CHECK_EQUAL(4096, kernel15_dev_global->second.address);
+    CHECK_EQUAL(2048, kernel15_dev_global->second.size);
+    CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_NONE,
+                kernel15_dev_global->second.host_access);
+    CHECK_EQUAL(false, kernel15_dev_global->second.can_skip_programming);
+    CHECK_EQUAL(false, kernel15_dev_global->second.implement_in_csr);
+    CHECK_EQUAL(false, kernel15_dev_global->second.reset_on_reuse);
+  }
+  if (kernel15_dev_global2_found) {
+    CHECK_EQUAL(2048, kernel15_dev_global2->second.address);
+    CHECK_EQUAL(1024, kernel15_dev_global2->second.size);
+    CHECK_EQUAL(ACL_DEVICE_GLOBAL_HOST_ACCESS_WRITE_ONLY,
+                kernel15_dev_global2->second.host_access);
+    CHECK_EQUAL(false, kernel15_dev_global2->second.can_skip_programming);
+    CHECK_EQUAL(true, kernel15_dev_global2->second.implement_in_csr);
+    CHECK_EQUAL(false, kernel15_dev_global2->second.reset_on_reuse);
+  }
 
   // Check a second parsing.
   // It should allocate a new string for the name.
