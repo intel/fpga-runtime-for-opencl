@@ -365,6 +365,11 @@ public:
 
   ~acl_device_program_info_t();
 
+  // Delete copy constructor and copy assignment
+  acl_device_program_info_t(const acl_device_program_info_t &) = delete;
+  acl_device_program_info_t &
+  operator=(const acl_device_program_info_t &) = delete;
+
   cl_program program = nullptr;  // Back pointer.
   cl_device_id device = nullptr; // For what device?  Shortcut only.
 
