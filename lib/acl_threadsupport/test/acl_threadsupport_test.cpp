@@ -103,7 +103,10 @@ void *test_thread(void *) {
         break;
       acl_thread_yield();
     }
-    if (threadtest_state == END_STATE) {
+    acl_mutex_lock(&mymutex);
+    const bool is_end_state = (threadtest_state == END_STATE);
+    acl_mutex_unlock(&mymutex);
+    if (is_end_state) {
       return 0;
     }
     // CLIENT_STATE
