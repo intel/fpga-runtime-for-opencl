@@ -1483,6 +1483,7 @@ int acl_pkg_pack(const char *out_file, const char **input_files_dirs) {
     fprintf(stderr, "acl_pkg_pack: Unable to initialize zlib for writing %s\n",
             out_file);
     fclose(of);
+    deflateEnd(&z_info.strm);
     return 0;
   }
 
