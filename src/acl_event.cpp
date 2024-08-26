@@ -1078,16 +1078,6 @@ int acl_notify_dependent_events(cl_event event) {
     if (event->cmd.type == CL_COMMAND_USER && event->execution_status < 0) {
       acl_set_execution_status(dependent, event->execution_status);
     }
-
-    // Submit the event if it has no dependencies and is partt of an
-    // Out-of-order queue
-    if (dependent->command_queue->properties &
-            CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE &&
-        dependent->depend_on.empty() &&
-        dependent->cmd.type != CL_COMMAND_USER) {
-      dependent->command_queue->num_commands_submitted++;
-      acl_submit_command(dependent);
-    }
   }
 
   int num_updates = static_cast<int>(event->depend_on_me.size());
