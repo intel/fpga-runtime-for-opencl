@@ -387,6 +387,7 @@ void *waiter_func(void *ccv) {
     }
 
     wait_count++;
+    // coverity[lock_order : FALSE]
     acl_wait_condvar(cc);
 
     acl_release_condvar(cc);
