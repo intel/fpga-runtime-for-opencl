@@ -1474,10 +1474,6 @@ void acl_post_status_to_owning_event(acl_device_op_t *op, int new_status) {
     command_queue->num_commands_submitted--;
   } else {
     event->timestamp[new_status] = op->timestamp[new_status];
-
-    if (command_queue->properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE) {
-      acl_try_FastKernelRelaunch_ooo_queue_event_dependents(event);
-    }
   }
 }
 
