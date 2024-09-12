@@ -630,9 +630,13 @@ int acl_update_queue(cl_command_queue command_queue) {
   }
 }
 
-// Try to submit a kernel even if it has unfinished dependences using fast
-// kernel relaunch
-// Returns true on success, false on failure
+/**
+ * Tries to fast relaunch a kernel event
+ * @param event is the kernel event to be launched, where its only parent
+ * event is a kernel event that tracks previous launch of the same kernel
+ * and is submitted, running, or completed
+ * @return true if the fast-kernel-launch succeeded, else false
+ */
 bool acl_fast_relaunch_kernel(cl_event event) {
   if (!(event->command_queue->properties &
         CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE))
