@@ -50,6 +50,7 @@ jobs:
         ls
         cd fuzz_testing/script
         export AOCL_BOARD_PACKAGE_ROOT="$(git rev-parse --show-toplevel)/test/board/a10_ref"
+        export ACL_TEST_EXAMPLE_BINARY="$(git rev-parse --show-toplevel)/test/example_binary"
         NUM_OF_ITERATIONS=${{ github.event.inputs.num_of_iterations }}
         # This if block is only used during testing, because if this workflow is triggered via pull_request, ${{ github.event.inputs.num_of_iterations }} would be empty
         if [ -z "${NUM_OF_ITERATIONS}" ]; then
