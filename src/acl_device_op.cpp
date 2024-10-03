@@ -107,67 +107,38 @@ static int l_is_mem_in_use(acl_device_op_t *op, acl_device_op_queue_t *doq);
 
 static unsigned char conflict_matrix_half_duplex
     [ACL_NUM_CONFLICT_TYPES][ACL_NUM_CONFLICT_TYPES] = {
-
-        //                      NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
-        //                      PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE,
-        //                      DEVICE_GLOBAL_READ, DEVICE_GLOBAL_WRITE
-        // NONE vs.
-        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}
-        // MEM_READ  vs.
-        ,
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}
-        // MEM_WRITE  vs.
-        ,
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}
-        // MEM_RW  vs.
-        ,
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}
-        // KERNEL vs.
-        ,
-        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}
-        // PROGRAM vs.
-        ,
-        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-        // HOSTPIPE_READ vs.
-        {0, 1, 1, 1, 0, 1, 0, 0, 1, 1},
-        // HOSTPIPE_WRITE vs.
-        {0, 1, 1, 1, 0, 1, 0, 0, 1, 1},
-        // DEVICE_GLOBAL_READ vs.
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1},
-        // DEVICE_GLOBAL_WRITE vs.
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}};
+        // NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
+        //   PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE,
+        //     DEVICE_GLOBAL_READ, DEVICE_GLOBAL_WRITE
+        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}, // vs. None
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}, // vs. MEM_READ
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}, // vs. MEM_WRITE
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}, // vs. MEM_RW
+        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}, // vs. KERNEL
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // vs. PROGRAM
+        {0, 1, 1, 1, 0, 1, 0, 0, 1, 1}, // vs. HOSTPIPE_READ
+        {0, 1, 1, 1, 0, 1, 0, 0, 1, 1}, // vs. HOSTPIPE_WRITE
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}, // vs. DEVICE_GLOBAL_READ
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}  // vs. DEVICE_GLOBAL_WRITE
+};
 
 static unsigned char conflict_matrix_full_duplex
     [ACL_NUM_CONFLICT_TYPES][ACL_NUM_CONFLICT_TYPES] = {
 
-        //                      NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
-        //                      PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE
-        //                      DEVICE_GLOBAL_READ, DEVICE_GLOBAL_WRITE
-        // NONE vs.
-        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}
-        // MEM_READ  vs.
-        ,
-        {0, 1, 0, 1, 0, 1, 1, 1, 1, 0}
-        // MEM_WRITE  vs.
-        ,
-        {0, 0, 1, 1, 0, 1, 1, 1, 0, 1}
-        // MEM_RW  vs.
-        ,
-        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}
-        // KERNEL vs.
-        ,
-        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}
-        // PROGRAM vs.
-        ,
-        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
-        // HOSTPIPE_READ vs.
-        {0, 1, 1, 1, 0, 1, 0, 0, 0, 0},
-        // HOSTPIPE_WRITE vs.
-        {0, 1, 1, 1, 0, 1, 0, 0, 0, 0},
-        // DEVICE_GLOBAL_READ vs.
-        {0, 1, 0, 1, 0, 1, 1, 1, 1, 0},
-        // DEVICE_GLOBAL_WRITE vs.
-        {0, 0, 1, 1, 0, 1, 1, 1, 0, 1}};
+        // NONE, MEM_READ, MEM_WRITE, MEM_RW, KERNEL,
+        //   PROGRAM, HOSTPIPE_READ, HOSTPIPE_WRITE
+        //     DEVICE_GLOBAL_READ, DEVICE_GLOBAL_WRITE
+        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}, // vs. None
+        {0, 1, 0, 1, 0, 1, 1, 1, 1, 0}, // vs. MEM_READ
+        {0, 0, 1, 1, 0, 1, 1, 1, 0, 1}, // vs. MEM_WRITE
+        {0, 1, 1, 1, 0, 1, 1, 1, 1, 1}, // vs. MEM_RW
+        {0, 0, 0, 0, 0, 1, 0, 0, 0, 0}, // vs. KERNEL
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, // vs. PROGRAM
+        {0, 1, 1, 1, 0, 1, 0, 0, 0, 0}, // vs. HOSTPIPE_READ
+        {0, 1, 1, 1, 0, 1, 0, 0, 0, 0}, // vs. HOSTPIPE_WRITE
+        {0, 1, 0, 1, 0, 1, 1, 1, 1, 0}, // vs. DEVICE_GLOBAL_READ
+        {0, 0, 1, 1, 0, 1, 1, 1, 0, 1}  // vs. DEVICE_GLOBAL_WRITE
+};
 
 static const char *l_type_name(int op_type) {
   switch (op_type) {
