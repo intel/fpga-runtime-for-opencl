@@ -1374,9 +1374,6 @@ static int src_dev_done;
 static int dst_dev_done;
 static void l_dev_to_dev_copy_handler(int handle, void *user_data,
                                       aocl_mmd_op_t op, int status) {
-  acl_sig_started();
-  // NOTE: all exit points of this function must first call acl_sig_finished()
-
   // Removing Windows warning
   user_data = user_data;
   handle = handle;
@@ -1387,8 +1384,6 @@ static void l_dev_to_dev_copy_handler(int handle, void *user_data,
     dst_dev_done = 1;
   } else
     assert(0 && "dev_to_dev_copy got unexpected event");
-
-  acl_sig_finished();
 }
 
 // **************************************************************************
