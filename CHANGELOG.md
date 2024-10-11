@@ -2,15 +2,47 @@
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [2025.0] 2024-10-15
+
 ### Added
+
+- Added glibc_wrap to provide Linux OS backwards compatibility ([#362])
+
 ### Changed
-### Deprecated
-### Removed
+
+- Update aocl_mmd.h version to 2024.2 ([#342])
+- Set default values for kernel image static part and skip CSR write if no change ([#349])
+- Update kernel invocation image debug print ([#349])
+- Use a RAII approach for linux signal blocking ([#363])
+- Remove runtime unit test dependency on aoc ([#368])
+
 ### Fixed
+
+- Update loaded_bin if the same binary is wrapped with different cl_program ([#351])
+- Fix USM mem blocking free corruption ([#360])
+- Use mutex to ensure segment update and CRA read/write happens atomically ([#363])
+- Return the global memory with enough capacity as default mem_id ([#361])
+- Handle printf format as the last item in the format string ([#372])
+- Refactor queue submission to resolve a hang ([#379])
+- Various Coverity fixes ([#380])
+
 ### Security
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.2...HEAD
+- Remove hardcoded paths being built into libraries ([#375])
+
+[2025.0]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.2...v2025.0
+[#342]: https://github.com/intel/fpga-runtime-for-opencl/pull/342
+[#349]: https://github.com/intel/fpga-runtime-for-opencl/pull/349
+[#351]: https://github.com/intel/fpga-runtime-for-opencl/pull/351
+[#360]: https://github.com/intel/fpga-runtime-for-opencl/pull/360
+[#361]: https://github.com/intel/fpga-runtime-for-opencl/pull/361
+[#362]: https://github.com/intel/fpga-runtime-for-opencl/pull/362
+[#363]: https://github.com/intel/fpga-runtime-for-opencl/pull/363
+[#368]: https://github.com/intel/fpga-runtime-for-opencl/pull/368
+[#372]: https://github.com/intel/fpga-runtime-for-opencl/pull/372
+[#375]: https://github.com/intel/fpga-runtime-for-opencl/pull/375
+[#379]: https://github.com/intel/fpga-runtime-for-opencl/pull/379
+[#380]: https://github.com/intel/fpga-runtime-for-opencl/pull/380
 
 ## [2024.2] - 2024-06-14
 
