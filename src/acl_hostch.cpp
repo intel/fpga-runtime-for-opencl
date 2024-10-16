@@ -364,28 +364,24 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   // Error checking
   if (!(pipe->flags & CL_MEM_HOST_READ_ONLY)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This host pipe is not read-only pipe");
   }
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
   if (ptr == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "Invalid pointer was provided to host data");
   }
 
   // Is the pipe bound to a channel yet? If not then return unsuccessfully
   if (!pipe->host_pipe_info->binded) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_EMPTY;
   }
 
@@ -404,7 +400,6 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
     // If there's no space left, return unsuccessfully
     if (buffer_size < pipe->host_pipe_info->size_buffered +
                           pipe->fields.pipe_objs.pipe_packet_size) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       return CL_PIPE_EMPTY;
     }
 
@@ -426,7 +421,6 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
     // Save the host operation for later in the operation queue
     pipe->host_pipe_info->m_host_op_queue.push_back(host_op);
 
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_SUCCESS;
   }
 
@@ -437,13 +431,11 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
   assert(status == 0);
 
   if (pulled_data == pipe->fields.pipe_objs.pipe_packet_size) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_SUCCESS;
   } else {
     // A packet of data is the smallest size this channel can receive. If it
     // didn't receive a packet, it shouldn't have received anything at all.
     assert(pulled_data == 0);
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_EMPTY;
   }
 }
@@ -466,20 +458,17 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   if (!(pipe->flags & CL_MEM_HOST_WRITE_ONLY)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This host pipe is not write-only pipe");
   }
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
   if (ptr == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "Invalid pointer was provided to host data");
   }
@@ -491,8 +480,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
     ret = l_push_packet(pipe->host_pipe_info->m_physical_device_id,
                         pipe->host_pipe_info->m_channel_handle, ptr,
                         pipe->fields.pipe_objs.pipe_packet_size);
-
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return ret;
   }
 
@@ -518,7 +505,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   // If there's no space left, return unsuccessfully
   if (buffer_size < pipe->host_pipe_info->size_buffered +
                         pipe->fields.pipe_objs.pipe_packet_size) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_FULL;
   }
 
@@ -539,7 +525,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   } else {
     buffer = malloc(pipe->fields.pipe_objs.pipe_packet_size);
     if (buffer == NULL) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       ERR_RET(CL_OUT_OF_HOST_MEMORY, pipe->context,
               "Could not allocate memory for internal data structure");
     }
@@ -557,7 +542,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   // Save the host operation for later in the operation queue
   pipe->host_pipe_info->m_host_op_queue.push_back(host_op);
 
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
   return CL_SUCCESS;
 }
 
@@ -581,7 +565,7 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
               "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
@@ -589,14 +573,12 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
 
   // Error checking
   if (mapped_size == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     BAIL_INFO(CL_INVALID_VALUE, pipe->context,
               "Invalid pointer was provided for mapped_size argument");
   }
   *mapped_size = 0;
 
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     BAIL_INFO(CL_INVALID_KERNEL, pipe->context,
               "This host pipe has not been bound to a kernel yet");
   }
@@ -618,7 +600,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   else {
     // Obviously can't buffer read operations
     if (pipe->flags & CL_MEM_HOST_READ_ONLY) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the map operation");
     }
@@ -634,11 +615,9 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   // If there's no space left, return unsuccessfully
   if (buffer_size == pipe->host_pipe_info->size_buffered) {
     if (pipe->flags & CL_MEM_HOST_READ_ONLY) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the read map operation");
     } else {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the write map operation");
     }
@@ -665,7 +644,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   } else {
     buffer = malloc(buffer_size);
     if (buffer == NULL) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_HOST_MEMORY, pipe->context,
                 "Could not allocate memory for internal data structure");
     }
@@ -684,8 +662,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   } else {
     buffer = host_op.m_host_buffer;
   }
-
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
 
   return buffer;
 }
@@ -710,11 +686,10 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   // Error checking
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
@@ -735,7 +710,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
     ++it;
   }
   if (it == pipe->host_pipe_info->m_host_op_queue.end()) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "This is not a valid mapped pointer");
   }
@@ -743,7 +717,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
 
   // You shouldn't be trying to send over more data than you have mapped
   if (size_to_unmap > (it->m_op_size - it->m_size_sent)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(
         CL_INVALID_VALUE, pipe->context,
         "You are trying to upmap more mapped buffer space than you have left");
@@ -788,7 +761,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
       l_clean_up_pending_pipe_ops(pipe);
     }
   }
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
 
   return CL_SUCCESS;
 }
@@ -820,7 +792,7 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
          "No loaded binary for read hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
-  auto host_pipe_info = dev_prog->program_hostpipe_map.at(
+  auto &host_pipe_info = dev_prog->program_hostpipe_map.at(
       std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
@@ -977,7 +949,7 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
          "No loaded binary for write hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
-  auto host_pipe_info = dev_prog->program_hostpipe_map.at(
+  auto &host_pipe_info = dev_prog->program_hostpipe_map.at(
       std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
