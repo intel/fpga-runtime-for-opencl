@@ -8,6 +8,7 @@
 #include <cassert>
 #include <deque>
 #include <list>
+#include <mutex>
 #include <set>
 #include <string>
 #include <typeinfo>
@@ -326,7 +327,7 @@ typedef struct host_pipe_struct {
   std::string host_pipe_channel_id;
 
   // Pipe specific lock. Obtained every time we do an operation on the pipe
-  acl_mutex_t m_lock;
+  std::mutex m_lock;
 
   // The following are the new entries introduced by the program scoped
   // hostpipes
