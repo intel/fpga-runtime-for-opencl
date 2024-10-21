@@ -82,9 +82,6 @@ void acl_signal_device_update();
 
 static inline int acl_is_locked() { return (acl_global_lock_count > 0); }
 
-// Used by dynamically loaded libs to check lock status.
-int acl_is_locked_callback(void);
-
 static inline void acl_assert_locked() { assert(acl_is_locked()); }
 
 static inline void acl_assert_locked_or_sig() {

@@ -36,8 +36,6 @@ void acl_mutex_wrapper_t::unlock() {
   }
 }
 
-int acl_is_locked_callback(void) { return (acl_global_lock_count > 0); }
-
 int acl_mutex_wrapper_t::suspend_lock() {
   int old_lock_count = acl_global_lock_count;
   acl_global_lock_count = 0;
