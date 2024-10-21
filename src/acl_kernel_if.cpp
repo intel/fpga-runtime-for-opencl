@@ -56,9 +56,6 @@ acl_process_autorun_profiler_scan_chain(unsigned int physical_device_id,
       k->io.printf((m), ##__VA_ARGS__);                                        \
   } while (0)
 
-//#define POLLING
-//#define POLLING_PERIOD (10000) // polling period in ns
-
 typedef time_ns time_us;
 
 // Function declarations
@@ -1489,11 +1486,7 @@ static void acl_kernel_if_update_status_finish(acl_kernel_if *kern,
 void acl_kernel_if_update_status(acl_kernel_if *kern) {
   acl_assert_locked_or_sig();
 
-#ifdef POLLING
-  ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(kern, 10, ":: Updating kernel status.\n");
-#else
   ACL_KERNEL_IF_DEBUG_MSG_VERBOSE(kern, 5, ":: Updating kernel status.\n");
-#endif
 
   // Check which accelerators are done and update their status appropriately
   for (unsigned int accel_id = 0; accel_id < kern->num_accel; ++accel_id) {
@@ -1674,9 +1667,6 @@ void acl_kernel_if_dump_status(acl_kernel_if *kern) {
 // Called by the host program when there are spare cycles or
 // if the host has been waiting for a while in debug mode.
 void acl_kernel_if_check_kernel_status(acl_kernel_if *kern) {
-#ifdef POLLING
-  static time_ns last_update;
-#endif
   acl_assert_locked();
 
   if (kern->last_kern_update != 0 &&
@@ -1698,14 +1688,6 @@ void acl_kernel_if_check_kernel_status(acl_kernel_if *kern) {
       acl_kernel_if_dump_status(kern);
     }
   }
-
-#ifdef POLLING
-  time_ns time = kern->io.get_time_ns();
-  if (time > last_update + POLLING_PERIOD || time < last_update) {
-    last_update = time;
-    acl_kernel_if_update_status(kern);
-  }
-#endif
 }
 
 // Called when a printf buffer processing is done for kernel, and
