@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2024.2...HEAD
+[Unreleased]: https://github.com/intel/fpga-runtime-for-opencl/compare/v2025.0...HEAD
 
 ## [2025.0] 2024-10-22
 
