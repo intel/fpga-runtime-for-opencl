@@ -364,28 +364,24 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   // Error checking
   if (!(pipe->flags & CL_MEM_HOST_READ_ONLY)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This host pipe is not read-only pipe");
   }
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
   if (ptr == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "Invalid pointer was provided to host data");
   }
 
   // Is the pipe bound to a channel yet? If not then return unsuccessfully
   if (!pipe->host_pipe_info->binded) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_EMPTY;
   }
 
@@ -404,7 +400,6 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
     // If there's no space left, return unsuccessfully
     if (buffer_size < pipe->host_pipe_info->size_buffered +
                           pipe->fields.pipe_objs.pipe_packet_size) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       return CL_PIPE_EMPTY;
     }
 
@@ -426,7 +421,6 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
     // Save the host operation for later in the operation queue
     pipe->host_pipe_info->m_host_op_queue.push_back(host_op);
 
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_SUCCESS;
   }
 
@@ -437,13 +431,11 @@ CL_API_ENTRY cl_int CL_API_CALL clReadPipeIntelFPGA(cl_mem pipe, void *ptr) {
   assert(status == 0);
 
   if (pulled_data == pipe->fields.pipe_objs.pipe_packet_size) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_SUCCESS;
   } else {
     // A packet of data is the smallest size this channel can receive. If it
     // didn't receive a packet, it shouldn't have received anything at all.
     assert(pulled_data == 0);
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_EMPTY;
   }
 }
@@ -466,20 +458,17 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   if (!(pipe->flags & CL_MEM_HOST_WRITE_ONLY)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_MEM_OBJECT, pipe->context,
             "This host pipe is not write-only pipe");
   }
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
   if (ptr == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "Invalid pointer was provided to host data");
   }
@@ -491,8 +480,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
     ret = l_push_packet(pipe->host_pipe_info->m_physical_device_id,
                         pipe->host_pipe_info->m_channel_handle, ptr,
                         pipe->fields.pipe_objs.pipe_packet_size);
-
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return ret;
   }
 
@@ -518,7 +505,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   // If there's no space left, return unsuccessfully
   if (buffer_size < pipe->host_pipe_info->size_buffered +
                         pipe->fields.pipe_objs.pipe_packet_size) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     return CL_PIPE_FULL;
   }
 
@@ -539,7 +525,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   } else {
     buffer = malloc(pipe->fields.pipe_objs.pipe_packet_size);
     if (buffer == NULL) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       ERR_RET(CL_OUT_OF_HOST_MEMORY, pipe->context,
               "Could not allocate memory for internal data structure");
     }
@@ -557,7 +542,6 @@ CL_API_ENTRY cl_int CL_API_CALL clWritePipeIntelFPGA(cl_mem pipe, void *ptr) {
   // Save the host operation for later in the operation queue
   pipe->host_pipe_info->m_host_op_queue.push_back(host_op);
 
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
   return CL_SUCCESS;
 }
 
@@ -581,7 +565,7 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
               "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   if (errcode_ret) {
     *errcode_ret = CL_SUCCESS;
@@ -589,14 +573,12 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
 
   // Error checking
   if (mapped_size == NULL) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     BAIL_INFO(CL_INVALID_VALUE, pipe->context,
               "Invalid pointer was provided for mapped_size argument");
   }
   *mapped_size = 0;
 
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     BAIL_INFO(CL_INVALID_KERNEL, pipe->context,
               "This host pipe has not been bound to a kernel yet");
   }
@@ -618,7 +600,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   else {
     // Obviously can't buffer read operations
     if (pipe->flags & CL_MEM_HOST_READ_ONLY) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the map operation");
     }
@@ -634,11 +615,9 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   // If there's no space left, return unsuccessfully
   if (buffer_size == pipe->host_pipe_info->size_buffered) {
     if (pipe->flags & CL_MEM_HOST_READ_ONLY) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the read map operation");
     } else {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_RESOURCES, pipe->context,
                 "No buffer space for the write map operation");
     }
@@ -665,7 +644,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   } else {
     buffer = malloc(buffer_size);
     if (buffer == NULL) {
-      acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
       BAIL_INFO(CL_OUT_OF_HOST_MEMORY, pipe->context,
                 "Could not allocate memory for internal data structure");
     }
@@ -684,8 +662,6 @@ CL_API_ENTRY void *CL_API_CALL clMapHostPipeIntelFPGA(cl_mem pipe,
   } else {
     buffer = host_op.m_host_buffer;
   }
-
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
 
   return buffer;
 }
@@ -710,11 +686,10 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
             "This pipe is not a host pipe");
   }
 
-  acl_mutex_lock(&(pipe->host_pipe_info->m_lock));
+  std::scoped_lock lock{pipe->host_pipe_info->m_lock};
 
   // Error checking
   if (!pipe->host_pipe_info->m_binded_kernel) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_KERNEL, pipe->context,
             "This host pipe has not been bound to a kernel yet");
   }
@@ -735,7 +710,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
     ++it;
   }
   if (it == pipe->host_pipe_info->m_host_op_queue.end()) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(CL_INVALID_VALUE, pipe->context,
             "This is not a valid mapped pointer");
   }
@@ -743,7 +717,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
 
   // You shouldn't be trying to send over more data than you have mapped
   if (size_to_unmap > (it->m_op_size - it->m_size_sent)) {
-    acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
     ERR_RET(
         CL_INVALID_VALUE, pipe->context,
         "You are trying to upmap more mapped buffer space than you have left");
@@ -788,7 +761,6 @@ clUnmapHostPipeIntelFPGA(cl_mem pipe, void *mapped_ptr, size_t size_to_unmap,
       l_clean_up_pending_pipe_ops(pipe);
     }
   }
-  acl_mutex_unlock(&(pipe->host_pipe_info->m_lock));
 
   return CL_SUCCESS;
 }
@@ -798,9 +770,9 @@ static constexpr unsigned csr_pipe_address_offet = 8;
 
 void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
 
-  cl_event event = op->info.event;
-  cl_int status = 0;
   size_t pulled_data = 0;
+  cl_int status = 0;
+  cl_event event = op->info.event;
   bool blocking = event->cmd.info.host_pipe_dynamic_info.blocking;
   acl_assert_locked();
 
@@ -820,28 +792,26 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
          "No loaded binary for read hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
-  auto host_pipe_info = dev_prog->program_hostpipe_map.at(
+  auto &host_pipe_info = dev_prog->program_hostpipe_map.at(
       std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
-  acl_mutex_lock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
 
   if (host_pipe_info.implement_in_csr) {
-    // Here is the logic for CSR pipe read
+    // CSR pipe read
     // Compiler initializes ready register to 1, if ready register exist
-    // Non-Blocking uses_ready<true>
-    //   1. if ready == 1, fail.
-    //   2. Read data.
-    //   3. write 1 to ready.
-
-    // Blocking uses_ready<true>
-    //   1. wait until ready = 0.
-    //   2. read data.
-    //   3. write 1 to ready.
-
-    // uses_ready<false>
-    // Both Blocking and NonBlocking
-    //   1. Read data (always succeeds)
+    // - uses_ready<true> (is_stall_free == 0)
+    //   - Blocking
+    //     1. read ready reg, wait until ready is 0.
+    //     2. read from the pipe.
+    //     3. write 1 to the ready reg.
+    //   - Non-Blocking
+    //     1. read ready reg once, return failure if ready is 1
+    //     2. read from the pipe.
+    //     3. write 1 to the ready reg.
+    // - uses_ready<false> (is_stall_free == 1)
+    //   - Both Blocking and NonBlocking
+    //     1. Read data (always succeeds).
 
     unsigned long long parsed;
     uintptr_t data_reg, ready_reg;
@@ -849,52 +819,59 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
     try {
       parsed = std::stoull(host_pipe_info.csr_address, nullptr);
     } catch (const std::exception &) {
-
       acl_set_device_op_execution_status(op, -1);
       return;
     }
-
     data_reg = static_cast<uintptr_t>(parsed);
     ready_reg = static_cast<uintptr_t>(
         parsed +
         csr_pipe_address_offet); // ready reg is data reg shift by 8 byte
-    unsigned ready = 1;
-    unsigned ready_value;
+    unsigned ready_value = 1;
     unsigned *ready_value_pointer = &ready_value;
 
     if (host_pipe_info.is_stall_free == 0) {
-      // If Blocking, wait until the ready register = 0
-      // If Non-blocking, just read once and report failure if ready == 1
-      do {
+      if (blocking) {
+        // Blocking, wait until the ready register = 0
+        while (ready_value != 0) {
+          acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id,
+                                  ready_reg, (void *)ready_value_pointer,
+                                  (size_t)sizeof(uintptr_t));
+          // If pipe is written from another thread, release the global lock
+          // and yield so that other threads could make progress
+          acl_yield_lock_and_thread();
+        }
+      } else {
+        // Non-blocking, just read once and report failure if ready reg is 1
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, ready_reg,
                                 (void *)ready_value_pointer,
                                 (size_t)sizeof(uintptr_t));
-      } while (blocking && ready_value != 0);
-
-      // If non-blocking and ready bit is 1, set the op to fail.
-      if (!blocking && ready_value == 1) {
-        acl_mutex_unlock(&(host_pipe_info.m_lock));
-        acl_set_device_op_execution_status(op, -1);
-        return;
+        if (ready_value == 1) {
+          acl_set_device_op_execution_status(op, -1);
+          return;
+        }
       }
     }
+
     // start the CSR read
     auto status =
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, data_reg,
                                 event->cmd.info.host_pipe_dynamic_info.ptr,
                                 event->cmd.info.host_pipe_dynamic_info.size);
     if (status != 0) {
-      acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
       return;
     }
+
     // Tell CSR it's ready if ready register exist
     if (host_pipe_info.is_stall_free == 0) {
+      const unsigned ready = 1;
       acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, ready_reg,
                                (void *)&ready, (size_t)sizeof(uintptr_t));
     }
   } else {
-    // Non CSR Case
+    // Non CSR, regular hostpipe read
+
+    // Attempt to read once first
     if (host_pipe_info.num_side_band_signals == 0) {
       pulled_data = acl_get_hal()->hostchannel_pull(
           host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
@@ -915,17 +892,19 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
       // are fully implemented. Right now we consider the result is good as long
       // as pulled_data > 0.
       if (status != 0 || pulled_data == 0) {
-        acl_mutex_unlock(&(host_pipe_info.m_lock));
         acl_set_device_op_execution_status(op, -1);
         return;
       }
     } else {
       // If it is a blocking read, this call won't return until the kernel
-      // writes the data into the pipe.
+      // writes the data into the pipe (device-to-host).
       // TODO: Change to pulled_data == pipe.width when sideband signals pipe
       // are fully implemented. Right now we consider the result is good as long
       // as pulled_data > 0.
       while (status != 0 || pulled_data == 0) {
+        // If pipe is read from another thread, release the global lock and
+        // yield so that other threads could make progress
+        acl_yield_lock_and_thread();
         if (host_pipe_info.num_side_band_signals == 0) {
           pulled_data = acl_get_hal()->hostchannel_pull(
               host_pipe_info.m_physical_device_id,
@@ -944,8 +923,6 @@ void acl_read_program_hostpipe(void *user_data, acl_device_op_t *op) {
       }
     }
   }
-
-  acl_mutex_unlock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_COMPLETE);
 }
 
@@ -972,32 +949,29 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
          "No loaded binary for write hostpipe");
   acl_device_program_info_t *dev_prog =
       event->command_queue->device->loaded_bin->get_dev_prog();
-  auto host_pipe_info = dev_prog->program_hostpipe_map.at(
+  auto &host_pipe_info = dev_prog->program_hostpipe_map.at(
       std::string(event->cmd.info.host_pipe_dynamic_info.logical_name));
-  acl_mutex_lock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_SUBMITTED);
   acl_set_device_op_execution_status(op, CL_RUNNING);
 
   if (host_pipe_info.implement_in_csr) {
-    // Get CSR address
-
-    // Here is the logic for CSR pipe write
-    // Blocking uses_valid<true>:
-    //   1. read valid reg, wait until valid is 0
-    //   2. write to the pipe.
-    //   3. write 1 to the valid.
-
-    // Non-blocking uses_valid<true>
-    //   1. read valid reg once ->return failure if valid is 1
-    //   2. write to the pipe.
-    //   3. write 1 to the valid.
-
-    // uses_valid<false>
-    // Both Blocking and NonBlocking
-    //   1. Write data (always succeeds)
+    // CSR pipe write
+    // - uses_valid<true> (is_stall_free == 0)
+    //   - Blocking
+    //     1. read valid reg, wait until valid is 0.
+    //     2. write to the pipe.
+    //     3. write 1 to the valid reg.
+    //   - Non-blocking
+    //     1. read valid reg once, return failure if valid is 1.
+    //     2. write to the pipe.
+    //     3. write 1 to the valid reg.
+    // - uses_valid<false> (is_stall_free == 1)
+    //   - Both Blocking and NonBlocking
+    //     1. Write data (always succeeds).
 
     unsigned long long parsed;
     uintptr_t data_reg, valid_reg;
+    // Convert the CSR address to a pointer
     try {
       parsed = std::stoull(host_pipe_info.csr_address, nullptr);
     } catch (const std::exception &) {
@@ -1009,43 +983,43 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
         parsed +
         csr_pipe_address_offet); // valid reg is data reg shift by 8 byte, move
                                  // this to the autodiscovery string maybe
-
     unsigned valid_value = 1;
     unsigned *valid_value_pointer = &valid_value;
 
     if (host_pipe_info.is_stall_free == 0) {
       if (blocking) {
+        // Blocking, wait until the valid register = 0
         while (valid_value != 0) {
           acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id,
                                   valid_reg, (void *)valid_value_pointer,
                                   (size_t)sizeof(uintptr_t));
+          // If pipe is written from another thread, release the global lock
+          // and yield so that other threads could make progress
+          acl_yield_lock_and_thread();
         }
       } else {
-        // Non-blocking, if valid reg is 1, return failure.
+        // Non-blocking, just read once and report failure if valid reg is 1
         acl_get_hal()->read_csr(host_pipe_info.m_physical_device_id, valid_reg,
                                 (void *)valid_value_pointer,
                                 (size_t)sizeof(uintptr_t));
-
         if (valid_value == 1) {
-          acl_mutex_unlock(&(host_pipe_info.m_lock));
           acl_set_device_op_execution_status(op, -1);
           return;
         }
       }
     }
 
-    // start the write
+    // start the CSR write
     auto status = acl_get_hal()->write_csr(
         host_pipe_info.m_physical_device_id, data_reg,
         event->cmd.info.host_pipe_dynamic_info.write_ptr,
         event->cmd.info.host_pipe_dynamic_info.size);
-
     if (status != 0) {
-      acl_mutex_unlock(&(host_pipe_info.m_lock));
       acl_set_device_op_execution_status(op, -1);
       return;
     }
 
+    // Tell CSR it's valid if valid register exist
     if (host_pipe_info.is_stall_free == 0) {
       const unsigned valid = 1;
       acl_get_hal()->write_csr(host_pipe_info.m_physical_device_id, valid_reg,
@@ -1053,31 +1027,37 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
     }
 
   } else {
-    // Regular hostpipe
-    // Attempt to write once
+    // Non CSR, regular hostpipe write
+
+    // Attempt to write once first
     if (host_pipe_info.num_side_band_signals == 0) {
       status = l_push_packet(host_pipe_info.m_physical_device_id,
                              host_pipe_info.m_channel_handle,
                              event->cmd.info.host_pipe_dynamic_info.write_ptr,
                              event->cmd.info.host_pipe_dynamic_info.size);
     } else {
+      // This pipe has sideband signals, need to break into data section and
+      // sideband signal sections
       status = l_push_sideband_packet(
           host_pipe_info.m_physical_device_id, host_pipe_info.m_channel_handle,
           event->cmd.info.host_pipe_dynamic_info.write_ptr,
           event->cmd.info.host_pipe_dynamic_info.size, host_pipe_info);
     }
+
     if (!blocking) {
-      // If it is non-blocking write, we return with the success/failure code
-      // right away
+      // If it is non-blocking write, we return with the success code right
+      // away
       if (status != CL_SUCCESS) {
-        acl_mutex_unlock(&(host_pipe_info.m_lock));
         acl_set_device_op_execution_status(op, -1);
         return;
       }
     } else {
-      // If it's a blocking write, this function won't return until the write
-      // success.
+      // If it's a blocking write, this function won't return until the host
+      // writes the data into the pipe (host-to-device).
       while (status != CL_SUCCESS) {
+        // If pipe is written from another thread, release the global lock and
+        // yield so that other threads could make progress
+        acl_yield_lock_and_thread();
         if (host_pipe_info.num_side_band_signals == 0) {
           status =
               l_push_packet(host_pipe_info.m_physical_device_id,
@@ -1095,7 +1075,6 @@ void acl_write_program_hostpipe(void *user_data, acl_device_op_t *op) {
       }
     }
   }
-  acl_mutex_unlock(&(host_pipe_info.m_lock));
   acl_set_device_op_execution_status(op, CL_COMPLETE);
 }
 

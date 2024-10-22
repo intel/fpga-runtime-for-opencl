@@ -8,7 +8,6 @@
 #include <sstream>
 #include <stdio.h>
 #include <string>
-#include <utility>
 #include <vector>
 
 // External library headers.
@@ -1319,9 +1318,6 @@ static cl_int
 l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
                                 unsigned int physical_device_id,
                                 cl_context context) {
-
-  host_pipe_t host_pipe_info;
-
   for (const auto &hostpipe : dev_prog->device_binary.get_devdef()
                                   .autodiscovery_def.hostpipe_mappings) {
     // Skip if the hostpipe doesn't have a logical name.
@@ -1334,7 +1330,13 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
     if (search != dev_prog->program_hostpipe_map.end()) {
       continue;
     }
-    host_pipe_t host_pipe_info;
+
+    // Construct program host pipe info in place
+    dev_prog->program_hostpipe_map.emplace(
+        std::piecewise_construct, std::forward_as_tuple(hostpipe.logical_name),
+        std::forward_as_tuple());
+    auto &host_pipe_info =
+        dev_prog->program_hostpipe_map.at(hostpipe.logical_name);
     host_pipe_info.m_physical_device_id = physical_device_id;
     if (hostpipe.is_read && hostpipe.is_write) {
       ERR_RET(CL_INVALID_OPERATION, context,
@@ -1366,15 +1368,11 @@ l_register_hostpipes_to_program(acl_device_program_info_t *dev_prog,
     }
     host_pipe_info.protocol = hostpipe.protocol;
     host_pipe_info.is_stall_free = hostpipe.is_stall_free;
-    acl_mutex_init(&(host_pipe_info.m_lock), NULL);
     // The following property is not used by the program scoped hostpipe but we
     // don't want to leave it uninitialized
     host_pipe_info.binded = false;
     host_pipe_info.m_binded_kernel = NULL;
     host_pipe_info.size_buffered = 0;
-
-    dev_prog->program_hostpipe_map[hostpipe.logical_name] =
-        std::move(host_pipe_info);
   }
 
   // Start from 2024.1, Runtime receives sideband signals information
