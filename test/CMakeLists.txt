@@ -31,7 +31,6 @@ add_executable(acl_test
 set_target_properties(acl_test PROPERTIES CXX_EXTENSIONS OFF)
 target_compile_features(acl_test PRIVATE cxx_std_11)
 target_compile_definitions(acl_test PRIVATE
-  _GLIBCXX_USE_CXX11_ABI=0
   "ACL_TARGET_BIT=${ACL_TARGET_BIT}"
   CL_USE_DEPRECATED_OPENCL_1_0_APIS=1
   CL_USE_DEPRECATED_OPENCL_1_1_APIS=1
